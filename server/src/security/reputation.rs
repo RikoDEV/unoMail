@@ -95,6 +95,28 @@ pub fn note_untrusted_private_peer(ip: IpAddr) {
     }
 }
 
+/// Whether a blocklist answer lists the address: blocklists answer in 127.0.0.0/8 (anything
+/// else is a hijacked or expired zone), but 127.255.255.0/24 reports an error instead, such as
+/// Spamhaus refusing queries that come through a public resolver.
+fn is_dnsbl_listing(answer: IpAddr) -> bool {
+    matches!(answer, IpAddr::V4(v4) if v4.octets()[0] == 127) && !is_dnsbl_error(answer)
+}
+
+fn is_dnsbl_error(answer: IpAddr) -> bool {
+    matches!(answer, IpAddr::V4(v4) if v4.octets()[..3] == [127, 255, 255])
+}
+
+/// Warns once that a blocklist refuses to answer, which leaves it without effect.
+fn note_refused_dnsbl(zone: &str) {
+    static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        tracing::warn!(
+            zone,
+            "the DNS blocklist refuses queries from this server, usually because they reach it through a public resolver (8.8.8.8, 1.1.1.1,              a cloud provider's); its answers are ignored. Use a resolver of your own, e.g. Docker's `dns:` option, or a key-based mirror"
+        );
+    }
+}
+
 /// Zones (from the configured list) that list `ip`. DNS failures count as "not listed".
 pub async fn dnsbl_listings(app: &App, ip: IpAddr) -> Vec<String> {
     let Some(resolver) = &app.authenticator else { return Vec::new() };
@@ -104,8 +126,12 @@ pub async fn dnsbl_listings(app: &App, ip: IpAddr) -> Vec<String> {
     let settings = app.rt();
     let lookups = settings.dnsbl_zones.iter().map(|zone| async move {
         let listed = match crate::dns::ips(resolver, &dnsbl_query(ip, zone)).await {
-            // Blocklists answer in 127.0.0.0/8; anything else is a hijacked or expired zone.
-            Ok(answers) => answers.iter().any(|a| matches!(a, IpAddr::V4(v4) if v4.octets()[0] == 127)),
+            Ok(answers) => {
+                if answers.iter().any(|a| is_dnsbl_error(*a)) {
+                    note_refused_dnsbl(zone);
+                }
+                answers.iter().any(|a| is_dnsbl_listing(*a))
+            }
             Err(_) => false,
         };
         listed.then(|| zone.clone())
@@ -248,6 +274,17 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn blocklist_answers() {
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+        assert!(is_dnsbl_listing(ip("127.0.0.2")) && is_dnsbl_listing(ip("127.0.0.11")));
+        // Spamhaus error codes (public resolver, excessive queries) and answers outside 127/8.
+        for refused in ["127.255.255.254", "127.255.255.255", "127.255.255.252", "192.0.2.1"] {
+            assert!(!is_dnsbl_listing(ip(refused)), "{refused}");
+        }
+        assert!(is_dnsbl_error(ip("127.255.255.254")) && !is_dnsbl_error(ip("127.0.0.2")));
+    }
 
     #[test]
     fn query_names() {

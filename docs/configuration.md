@@ -11,7 +11,7 @@ Everything is configured through environment variables; the full list with defau
 | `UNOMAIL_OUTBOUND_RELAY` | – | `host:port` smarthost for hosts with port 25 blocked; switches on *Server settings → Default SMTP route* with this server, where sign-in can be added |
 | `UNOMAIL_OUTBOUND_REQUIRE_TLS` | `false` | Refuse to deliver over unverified or plaintext links |
 | `UNOMAIL_GREYLIST` | `true` | Greylisting of unknown senders |
-| `UNOMAIL_DNSBL_ZONES` | `zen.spamhaus.org` | DNS blocklists checked on connect; set it empty to check none |
+| `UNOMAIL_DNSBL_ZONES` | `zen.spamhaus.org` | DNS blocklists checked on connect; set it empty to check none. Spamhaus refuses queries through public resolvers (8.8.8.8, 1.1.1.1, most cloud providers'), so the container needs a resolver of its own; refusals are ignored and logged once |
 | `UNOMAIL_ABUSEIPDB_KEY`, `UNOMAIL_ABUSEIPDB_THRESHOLD` | –, `90` | AbuseIPDB reputation check |
 | `UNOMAIL_RSPAMD_URL` | – (image: local Rspamd) | Rspamd scanner endpoint |
 | `UNOMAIL_RSPAMD_FAIL_OPEN` | `false` | Accept mail unscanned when the filter is down (default: defer with 451) |
