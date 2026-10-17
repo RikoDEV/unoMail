@@ -148,7 +148,7 @@ jobs:
           image-ref: unomail:ci
           format: cyclonedx
           output: unomail-sbom.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: unomail-sbom
           path: unomail-sbom.json

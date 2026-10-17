@@ -30,7 +30,7 @@ jobs:
           node-version: 24
       - run: pnpm install --frozen-lockfile && pnpm run build
         working-directory: web
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: web/dist
@@ -73,7 +73,7 @@ jobs:
           cp README.md SECURITY.md "$name/"
           tar -czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bin-${{ matrix.target }}
           path: unomail-*.tar.gz*
@@ -116,7 +116,7 @@ jobs:
           touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: digest-${{ strategy.job-index }}
           path: ${{ runner.temp }}/digests/*
@@ -173,7 +173,7 @@ jobs:
           image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
           format: cyclonedx
           output: unomail-${{ env.TAG }}-sbom.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: unomail-*-sbom.json
