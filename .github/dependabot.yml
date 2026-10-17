@@ -6,10 +6,23 @@ updates:
     groups:
       cargo: { patterns: ["*"], update-types: [minor, patch] }
     ignore:
-      # der 0.8 needs the whole RustCrypto stack (cms 0.3, x509-cert 0.3, rsa/spki) to move together;
-      # upgrade them in one change once cms 0.3 is released.
+      # The RustCrypto stack has to move together: rsa 0.9 (latest stable) is built on der 0.7,
+      # digest 0.10 (sha1/sha2 0.10) and rand_core 0.6 (rand 0.8), and cms 0.2 / x509-cert 0.2
+      # share those types. Upgrade them in one change once rsa 0.10 and cms 0.3 are released.
       - dependency-name: der
-        update-types: [version-update:semver-major]
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: x509-cert
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: cms
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: rsa
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: sha1
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: sha2
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: rand
+        update-types: [version-update:semver-major, version-update:semver-minor]
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
