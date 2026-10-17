@@ -50,10 +50,11 @@
 - **LDAP** is used for recipient suggestions only (read-only); contacts are not synchronised.
 - **Internationalized addresses** can only be delivered to servers that support SMTPUTF8;
   otherwise the message bounces with an explanation.
-- **Dependency audit:** `./audit.sh` (also a weekly CI job). One advisory is ignored with a
+- **Dependency audit:** `./audit.sh` (also a weekly CI job). Some advisories are ignored, each with a
   written justification in `server/.cargo/audit.toml`: the `rsa` crate's timing side channel,
   which needs a decryption oracle that the S/MIME code does not offer (only the key's owner
-  causes, and sees, a decryption).
+  causes, and sees, a decryption), and three `zip` 8 extraction flaws in a copy pulled in by
+  `mail-auth`, which reads report archives in memory and never extracts to disk.
 - **One server, one database.** unoMail runs as a single node on SQLite. Message contents can
   live in S3 and backups go off-site, but several servers sharing one mail store (and a
   PostgreSQL database) are not supported: that would need a different data layer.
