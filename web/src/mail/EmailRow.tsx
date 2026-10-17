@@ -26,6 +26,8 @@ export interface RowHandlers {
   dragStart: (email: EmailSummary, event: React.DragEvent) => void;
   dragEnd: () => void;
   preview: (file: PreviewFile) => void;
+  /** A right click (or a long press) on the row. */
+  contextMenu: (email: EmailSummary, event: React.MouseEvent) => void;
 }
 
 export interface EmailRowProps {
@@ -132,6 +134,7 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
     <ListItemButton
       selected={chosen || highlighted}
       onClick={() => handlers.open(email, index)}
+      onContextMenu={(event) => handlers.contextMenu(email, event)}
       draggable
       onDragStart={(event) => handlers.dragStart(email, event)}
       onDragEnd={handlers.dragEnd}

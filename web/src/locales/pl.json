@@ -1788,5 +1788,11 @@
   "With a user name and password: TLS on port 465, STARTTLS on other ports": "Nazwą użytkownika i hasłem: TLS na porcie 465, STARTTLS na pozostałych",
   "The login at the relay server": "Login na serwerze przekazującym",
   "Enter the server. Until then mail is delivered directly.": "Wpisz serwer. Do tego czasu poczta jest dostarczana bezpośrednio.",
-  "Enter the user name. Until then mail is handed over without signing in.": "Wpisz nazwę użytkownika. Do tego czasu poczta jest przekazywana bez logowania."
+  "Enter the user name. Until then mail is handed over without signing in.": "Wpisz nazwę użytkownika. Do tego czasu poczta jest przekazywana bez logowania.",
+  "Actions for the conversation": "Działania dla wątku",
+  "Label as": "Dodaj etykietę",
+  "Find emails from {{name}}": "Znajdź wiadomości od: {{name}}",
+  "Open in a new tab": "Otwórz w nowej karcie",
+  "No other folders": "Brak innych folderów",
+  "Label “{{name}}” removed": "Usunięto etykietę „{{name}}”"
 }

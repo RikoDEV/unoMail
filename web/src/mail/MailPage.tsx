@@ -51,6 +51,7 @@ import { ShareDialog } from './ShareDialog';
 import { escapeHtml } from './sanitize';
 import { AdvancedSearch } from './AdvancedSearch';
 import { EmailRow, type RowHandlers } from './EmailRow';
+import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
 import { AttachmentPreview, type PreviewFile } from './Preview';
 import { parseQuery, withScope } from './searchQuery';
 
@@ -137,6 +138,7 @@ export default function MailPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allInFolder, setAllInFolder] = useState(false);
   const [bulkMenu, setBulkMenu] = useState<{ anchor: HTMLElement; kind: 'move' | 'label' } | null>(null);
+  const [rowMenu, setRowMenu] = useState<RowMenuTarget | null>(null);
   const [threadVersion, setThreadVersion] = useState(0);
   const [offline, setOffline] = useState(false);
   const [pending, setPending] = useState(0);
@@ -504,8 +506,8 @@ export default function MailPage() {
 
   /** Drops the dragged conversation on a folder (move), a label (apply) or a category tab. */
   const dropOn = useCallback(
-    async (target: { mailbox?: Mailbox; label?: string; category?: CategoryName }) => {
-      const email = dragged.current;
+    async (target: { mailbox?: Mailbox; label?: string; category?: CategoryName }, chosen?: EmailSummary) => {
+      const email = chosen ?? dragged.current;
       dragged.current = null;
       setDropTarget(null);
       if (!email) return;
@@ -723,9 +725,76 @@ export default function MailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor]);
   const labelColors = useMemo(() => Object.fromEntries(labelDetails.map((detail) => [detail.name, detail.color])), [labelDetails]);
+  /** Opens the row menu; on a row of the selection it acts on the whole selection. */
+  function openRowMenu(email: EmailSummary, x: number, y: number) {
+    const count = allInFolder ? total : selected.has(email.id) ? selected.size : 1;
+    setRowMenu({ email, x, y, count });
+  }
+
+  /** Carries out what was chosen in the row menu. */
+  async function rowMenuPick(pick: RowMenuPick, { email, count }: RowMenuTarget) {
+    if (count > 1) {
+      if (pick.kind === 'move') void bulk('move', pick.mailbox.id);
+      else if (pick.kind === 'label') void bulk('label', pick.name);
+      else if (pick.kind === 'archive' || pick.kind === 'trash' || pick.kind === 'junk' || pick.kind === 'inbox' || pick.kind === 'read' || pick.kind === 'unread') void bulk(pick.kind);
+      return;
+    }
+    try {
+      switch (pick.kind) {
+        case 'reply':
+        case 'replyAll':
+        case 'forward': {
+          if (!account) return;
+          const messages = (await getThread(email.threadId)).filter((e) => !e.keywords.$draft);
+          const last = messages[messages.length - 1];
+          if (last) compose(draftFor(pick.kind, last, account.email, accountId));
+          return;
+        }
+        case 'move':
+          return void dropOn({ mailbox: pick.mailbox }, email);
+        case 'label': {
+          const ids = await conversationIds(email);
+          const { name, on } = pick;
+          setEmails((current) => current.map((e) => (e.threadId === email.threadId ? { ...e, keywords: { ...e.keywords, [name]: on } } : e)));
+          if (await performOrQueue({ type: 'keyword', ids, keyword: name, value: on })) {
+            setOffline(true);
+            setPending(pendingCount());
+          }
+          setNotice(on ? t('Labelled “{{name}}”', { name }) : t('Label “{{name}}” removed', { name }));
+          void refreshLabels();
+          return;
+        }
+        case 'snooze': {
+          const ids = await conversationIds(email);
+          await snooze(ids, pick.until);
+          setEmails((current) => current.filter((e) => e.threadId !== email.threadId));
+          if (threadId === email.threadId) closeThread();
+          setNotice(t('Snoozed until {{value}}', { value: pick.until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+          void refreshMailboxes();
+          return;
+        }
+        case 'findFrom': {
+          const sender = email.from?.[0]?.email;
+          if (!sender) return;
+          const query = `from:${sender}`;
+          setSearch(query);
+          setServerSearch(query);
+          return;
+        }
+        case 'newTab':
+          window.open(`/mail/${slug}/${email.threadId}`, '_blank', 'noopener');
+          return;
+        default:
+          return void act(email, pick.kind);
+      }
+    } catch (err) {
+      setNotice(errorText(err, t('The action failed')));
+    }
+  }
+
   // Rows get one unchanging object of callbacks; it reaches the latest page state through a ref.
-  const rowState = useRef({ act, open, toggleSelected });
-  rowState.current = { act, open, toggleSelected };
+  const rowState = useRef({ act, open, toggleSelected, openRowMenu });
+  rowState.current = { act, open, toggleSelected, openRowMenu };
   const rowHandlers = useMemo<RowHandlers>(
     () => ({
       open: (email, index) => {
@@ -744,6 +813,12 @@ export default function MailPage() {
         setDropTarget(null);
       },
       preview: (file) => setPreview(file),
+      contextMenu: (email, event) => {
+        // Shift keeps the browser's own menu within reach, as in Gmail.
+        if (event.shiftKey) return;
+        event.preventDefault();
+        rowState.current.openRowMenu(email, event.clientX, event.clientY);
+      },
     }),
     [],
   );
@@ -1127,6 +1202,17 @@ export default function MailPage() {
           <Button variant="contained" onClick={() => void addFolder()}>{t('Create')}</Button>
         </DialogActions>
       </Dialog>
+      <RowMenu
+        target={rowMenu}
+        folders={mailboxes.filter((m) => m.id !== mailbox?.id && (!m.shareOwner || m.myRights?.mayAddItems))}
+        labels={labels}
+        labelColor={labelColor}
+        canArchive={mailbox?.role !== 'archive' && Boolean(byRole('archive'))}
+        inTrash={mailbox?.role === 'trash'}
+        inJunk={mailbox?.role === 'junk'}
+        onPick={(pick, target) => void rowMenuPick(pick, target)}
+        onClose={() => setRowMenu(null)}
+      />
       <Menu anchorEl={bulkMenu?.anchor} open={Boolean(bulkMenu)} onClose={() => setBulkMenu(null)} slotProps={{ paper: { sx: { maxHeight: 360, minWidth: 200 } } }}>
         {bulkMenu?.kind === 'move' &&
           mailboxes
