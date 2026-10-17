@@ -13,6 +13,7 @@ Everything is configured through environment variables; the full list with defau
 | `UNOMAIL_GREYLIST` | `true` | Greylisting of unknown senders |
 | `UNOMAIL_DNSBL_ZONES` | `zen.spamhaus.org` | DNS blocklists checked on connect; set it empty to check none. Spamhaus refuses queries through public resolvers (8.8.8.8, 1.1.1.1, most cloud providers'), so the container needs a resolver of its own; refusals are ignored and logged once |
 | `UNOMAIL_ABUSEIPDB_KEY`, `UNOMAIL_ABUSEIPDB_THRESHOLD` | –, `90` | AbuseIPDB reputation check |
+| `UNOMAIL_ABUSEIPDB_REPORT` | `false` | Also report addresses caught guessing passwords (5 failed sign-ins on any protocol) to AbuseIPDB as brute force, at most once per 15 minutes each. The report names the protocol, not the accounts tried; private and trusted addresses are never reported |
 | `UNOMAIL_RSPAMD_URL` | – (image: local Rspamd) | Rspamd scanner endpoint |
 | `UNOMAIL_RSPAMD_FAIL_OPEN` | `false` | Accept mail unscanned when the filter is down (default: defer with 451) |
 | `UNOMAIL_CLAMAV_ADDR` | – (image: local clamd) | `host:port` of clamd for scanning complete messages |

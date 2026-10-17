@@ -210,6 +210,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(unomail::sysstat::run(app.clone()));
     tokio::spawn(unomail::dailystats::run(app.clone()));
     tokio::spawn(unomail::security::reputation::monitor(app.clone()));
+    tokio::spawn(unomail::security::reputation::report_offenders(app.clone()));
 
     let router = api::router(app.clone());
     let plain = if cfg.http_redirect { api::redirect_router(app.clone()) } else { router.clone() };

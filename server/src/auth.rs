@@ -277,6 +277,9 @@ const MAX_LOCK_SECS: i64 = 24 * 3600;
 const MAX_LIMITER_ENTRIES: usize = 50_000;
 /// From this many recent failures on, every further failure is answered slowly.
 const TARPIT_AFTER: u32 = 3;
+/// A network with this many recent failures is guessing passwords: it is offered for reporting.
+const REPORT_AFTER: u32 = 5;
+const MAX_PENDING_REPORTS: usize = 1000;
 
 #[derive(Default)]
 struct Attempts {
@@ -296,6 +299,8 @@ struct Attempts {
 #[derive(Default)]
 pub struct LoginLimiter {
     entries: Mutex<HashMap<String, Attempts>>,
+    /// Addresses that went past [`REPORT_AFTER`], with the protocol they guessed on.
+    offenders: Mutex<Vec<(IpAddr, &'static str)>>,
 }
 
 /// The network an address belongs to for rate limiting: the address itself for IPv4, the /64
@@ -379,6 +384,22 @@ impl LoginLimiter {
         if let Some(entry) = entries.get_mut(&by_ip) {
             entry.failures = entry.failures.saturating_sub(1);
         }
+    }
+
+    /// Notes a failed login; a network that just went past [`REPORT_AFTER`] is kept for
+    /// [`take_offenders`](Self::take_offenders).
+    fn note_failure(&self, ip: IpAddr, protocol: Protocol) {
+        if self.failures_from(ip) == REPORT_AFTER {
+            let mut offenders = self.offenders.lock();
+            if offenders.len() < MAX_PENDING_REPORTS {
+                offenders.push((ip, protocol.as_str()));
+            }
+        }
+    }
+
+    /// The addresses caught guessing passwords since the last call.
+    pub fn take_offenders(&self) -> Vec<(IpAddr, &'static str)> {
+        std::mem::take(&mut *self.offenders.lock())
     }
 
     /// Recent failures from the network of `ip`.
@@ -490,6 +511,7 @@ pub async fn authenticate_with(
             tokio::time::sleep(limiter.tarpit(ip)).await;
             crate::db::audit(db, &crate::util::sanitize_line(&email), "login.failed", protocol.as_str(), &ip.to_string(), "")
                 .await;
+            limiter.note_failure(ip, protocol);
             Err(AuthError::Invalid)
         }
     }
@@ -572,6 +594,23 @@ mod tests {
             assert!(limiter.attempt("victim@example.com", format!("198.51.100.{i}").parse().unwrap()));
         }
         assert!(!limiter.attempt("victim@example.com", "192.0.2.77".parse().unwrap()));
+    }
+
+    #[test]
+    fn limiter_offers_guessing_networks_for_reporting_once() {
+        let limiter = LoginLimiter::default();
+        let ip: IpAddr = "203.0.113.40".parse().unwrap();
+        for _ in 0..REPORT_AFTER - 1 {
+            limiter.attempt("a@example.com", ip);
+            limiter.note_failure(ip, Protocol::Imap);
+        }
+        assert!(limiter.take_offenders().is_empty(), "a few typos are not an attack");
+        for _ in 0..3 {
+            limiter.attempt("b@example.com", ip);
+            limiter.note_failure(ip, Protocol::Imap);
+        }
+        assert_eq!(limiter.take_offenders(), [(ip, "imap")]);
+        assert!(limiter.take_offenders().is_empty());
     }
 
     #[test]

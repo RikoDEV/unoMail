@@ -104,6 +104,8 @@ pub struct Config {
     pub abuseipdb_url: String,
     /// AbuseIPDB confidence score at or above which inbound connections are refused.
     pub abuseipdb_threshold: u8,
+    /// Report addresses caught guessing passwords to AbuseIPDB (needs the key).
+    pub abuseipdb_report: bool,
 
     /// Deliver all outbound mail through this `host:port` instead of MX lookups.
     pub outbound_relay: Option<String>,
@@ -253,6 +255,7 @@ impl Config {
             abuseipdb_key: var("UNOMAIL_ABUSEIPDB_KEY"),
             abuseipdb_url: var("UNOMAIL_ABUSEIPDB_URL").unwrap_or_else(|| "https://api.abuseipdb.com".into()),
             abuseipdb_threshold: parse("UNOMAIL_ABUSEIPDB_THRESHOLD", 90)?,
+            abuseipdb_report: parse_bool("UNOMAIL_ABUSEIPDB_REPORT", false)?,
             outbound_relay: var("UNOMAIL_OUTBOUND_RELAY"),
             allow_private_destinations: parse("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
             identity_relay_allow_private: parse("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
@@ -336,6 +339,7 @@ impl Config {
             abuseipdb_key: None,
             abuseipdb_url: "http://127.0.0.1:9".into(),
             abuseipdb_threshold: 90,
+            abuseipdb_report: false,
             outbound_relay: None,
             allow_private_destinations: true,
             identity_relay_allow_private: true,

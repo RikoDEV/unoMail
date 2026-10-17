@@ -42,6 +42,7 @@ services:
       #                                                 # point `dns:` at a resolver of your own
       # UNOMAIL_ABUSEIPDB_KEY: ""
       # UNOMAIL_ABUSEIPDB_THRESHOLD: "90"
+      # UNOMAIL_ABUSEIPDB_REPORT: "false"               # also report password guessers (needs the key)
       # UNOMAIL_TRUSTED_NETWORKS: ""                    # CIDRs of relays trusted like the server
       # UNOMAIL_ARC_TRUSTED_SEALERS: ""                 # default: Google, Microsoft, Yahoo, Apple, Fastmail, Zoho, Proton
       # UNOMAIL_RSPAMD_FAIL_OPEN: "false"               # accept mail unscanned when Rspamd is down

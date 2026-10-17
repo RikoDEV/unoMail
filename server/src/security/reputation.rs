@@ -223,6 +223,53 @@ pub async fn stored_status(app: &App) -> Option<Status> {
     crate::db::get_setting(&app.db, SETTING_STATUS).await.ok().flatten().and_then(|json| serde_json::from_str(&json).ok())
 }
 
+/// AbuseIPDB accepts one report of an address per 15 minutes from each reporter.
+const REPORT_INTERVAL_SECS: i64 = 15 * 60;
+/// AbuseIPDB category "Brute-Force".
+const CATEGORY_BRUTE_FORCE: &str = "18";
+
+/// Reports addresses caught guessing passwords to AbuseIPDB, when `UNOMAIL_ABUSEIPDB_REPORT`
+/// is on. Never private or trusted addresses; the report names the protocol, not the accounts.
+pub async fn report_offenders(app: crate::app::AppState) {
+    if app.cfg.abuseipdb_key.is_none() || !app.cfg.abuseipdb_report {
+        return;
+    }
+    let mut reported = std::collections::HashMap::new();
+    let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+    loop {
+        tick.tick().await;
+        report_pending(&app, &mut reported).await;
+    }
+}
+
+/// One round of [`report_offenders`]: reports what the login limiter caught since the last
+/// round. `reported` remembers when each address was last reported.
+pub async fn report_pending(app: &App, reported: &mut std::collections::HashMap<IpAddr, i64>) {
+    let Some(key) = app.cfg.abuseipdb_key.as_deref() else { return };
+    let now = now();
+    reported.retain(|_, at| now - *at < REPORT_INTERVAL_SECS);
+    for (ip, protocol) in app.limiter.take_offenders() {
+        if is_private(ip) || is_trusted_source(&app.cfg, ip) || reported.contains_key(&ip) {
+            continue;
+        }
+        reported.insert(ip, now);
+        let comment = format!("Password guessing ({protocol} sign-in) on {}", app.cfg.hostname);
+        let sent = app
+            .http
+            .post(format!("{}/api/v2/report", app.cfg.abuseipdb_url.trim_end_matches('/')))
+            .header("Key", key)
+            .header("Accept", "application/json")
+            .query(&[("ip", ip.to_string().as_str()), ("categories", CATEGORY_BRUTE_FORCE), ("comment", comment.as_str())])
+            .send()
+            .await
+            .and_then(reqwest::Response::error_for_status);
+        match sent {
+            Ok(_) => crate::db::audit(&app.db, "system", "abuseipdb.reported", &ip.to_string(), &ip.to_string(), protocol).await,
+            Err(err) => tracing::warn!(%ip, error = %err, "AbuseIPDB report failed"),
+        }
+    }
+}
+
 /// Checks every public address of the server hostname against the configured blocklists and
 /// records the result. A new listing is written to the audit log.
 pub async fn check_now(app: &App) -> Option<Status> {
