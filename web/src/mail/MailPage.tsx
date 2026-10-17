@@ -336,23 +336,35 @@ export default function MailPage() {
   const ownEmail = account?.email ?? '';
   const notifyNewMail = useMemo(() => pageNotifier(ownEmail, (thread) => navigate(`/mail/inbox/${thread}`)), [ownEmail, navigate]);
 
-  // Push: the server announces changes; refresh folder counts and the first page.
+  // Push: the server announces changes; refresh folder counts and the first page. One stream
+  // for the life of the page: reopening it whenever the folder or the open conversation
+  // changes would lose what the server announced in between. The handlers it calls are the
+  // current ones, through a ref.
+  const onPush = useRef<() => void>(() => {});
+  onPush.current = () => {
+    void refreshMailboxes();
+    void load(0);
+    notifyNewMail();
+  };
   useEffect(() => {
     const source = new EventSource('/jmap/eventsource');
     let timer: ReturnType<typeof setTimeout> | undefined;
-    source.addEventListener('state', () => {
+    let connected = false;
+    const refresh = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => {
-        void refreshMailboxes();
-        void load(0);
-        notifyNewMail();
-      }, 400);
+      timer = setTimeout(() => onPush.current(), 400);
+    };
+    source.addEventListener('state', refresh);
+    // After a reconnect (the browser retries a dropped stream), catch up on what was missed.
+    source.addEventListener('open', () => {
+      if (connected) refresh();
+      connected = true;
     });
     return () => {
       clearTimeout(timer);
       source.close();
     };
-  }, [load, refreshMailboxes, notifyNewMail]);
+  }, []);
 
   // A click on a push notification (public/sw.js) while unoMail is open shows that conversation here.
   useEffect(() => {

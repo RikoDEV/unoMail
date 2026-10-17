@@ -37,7 +37,7 @@ test.describe('message list, reader and search', () => {
     await dialog.getByLabel('E-mail address').fill(IVY);
     await dialog.getByLabel('Password', { exact: true }).fill(USER_PASSWORD);
     await dialog.getByRole('button', { name: 'Create' }).click();
-    const exists = dialog.getByRole('alert').filter({ hasText: 'already exists' });
+    const exists = dialog.getByText(/already exists/).first();
     await expect(page.getByText('Mailbox created').or(exists)).toBeVisible();
     // A failed test starts this hook over; the mail then is there already.
     if (!(await exists.isVisible())) {

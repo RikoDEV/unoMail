@@ -27,7 +27,7 @@ async function createMailboxes(browser: Browser, addresses: string[]) {
     await dialog.getByLabel('Password', { exact: true }).fill(USER_PASSWORD);
     await dialog.getByRole('button', { name: 'Create' }).click();
     // After a failed test the worker (and this hook) starts over; the mailbox may exist already.
-    const exists = dialog.getByRole('alert').filter({ hasText: 'already exists' });
+    const exists = dialog.getByText(/already exists/).first();
     await expect(page.getByText('Mailbox created').or(exists)).toBeVisible();
     if (await exists.isVisible()) await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toHaveCount(0);

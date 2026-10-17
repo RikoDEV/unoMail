@@ -29,7 +29,8 @@ test.describe('inbox tools', () => {
     await dialog.getByLabel('Password', { exact: true }).fill(USER_PASSWORD);
     await dialog.getByRole('button', { name: 'Create' }).click();
     // After a failed test the worker (and this hook) starts over; the mailbox may exist already.
-    await expect(page.getByText('Mailbox created').or(dialog.getByRole('alert').filter({ hasText: 'already exists' }))).toBeVisible();
+    // (The form itself may already say so, before anything is sent.)
+    await expect(page.getByText('Mailbox created').or(dialog.getByText(/already exists/).first())).toBeVisible({ timeout: 15_000 });
     await page.close();
   });
 
@@ -185,10 +186,11 @@ test.describe('inbox tools', () => {
     await smtpDeliver('pest@pushy.test', CAROL, mail('Pushy Sales <pest@pushy.test>', 'Did you see my last mail?'));
     await smtpDeliver('ann@remote.test', CAROL, mail('Ann <ann@remote.test>', 'Not blocked'));
     await page.getByRole('button', { name: 'Back to list' }).click();
-    await expect(row(page, 'Not blocked')).toBeVisible();
+    // New mail shows up with the next push update, which a busy CI runner may take a while to send.
+    await expect(row(page, 'Not blocked')).toBeVisible({ timeout: 20_000 });
     await expect(row(page, 'Did you see my last mail?')).toHaveCount(0);
     await page.getByRole('navigation', { name: 'Folders' }).getByText('Junk', { exact: true }).click();
-    await expect(row(page, 'Did you see my last mail?')).toBeVisible();
+    await expect(row(page, 'Did you see my last mail?')).toBeVisible({ timeout: 20_000 });
 
     // The menu now offers to unblock; the list is managed in Settings too.
     await row(page, 'Did you see my last mail?').click();
@@ -208,7 +210,7 @@ test.describe('inbox tools', () => {
     await expect(blocked.getByText('pest@pushy.test')).toHaveCount(0);
     await smtpDeliver('pest@pushy.test', CAROL, mail('Pushy Sales <pest@pushy.test>', 'Welcome back'));
     await page.goto('/mail');
-    await expect(row(page, 'Welcome back')).toBeVisible();
+    await expect(row(page, 'Welcome back')).toBeVisible({ timeout: 20_000 });
   });
 
   test('accent colours stay readable on the dark theme', async ({ page }) => {

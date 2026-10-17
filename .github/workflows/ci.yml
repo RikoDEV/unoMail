@@ -6,6 +6,7 @@ on:
   schedule:
     # Weekly dependency audit, so new advisories surface even without code changes.
     - cron: "17 4 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -130,6 +131,10 @@ jobs:
         working-directory: e2e
 
   image:
+    # The image takes long to build from scratch, and the server and web jobs test the code
+    # already: it is built and scanned for releases (v* tags), by the weekly run (new
+    # advisories against the base image) and on request.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

@@ -1,8 +1,11 @@
 // Readable mail in the dark theme. A message shown on the dark page may set its own text
-// colours (black, dark grey, a dark brand colour) that vanish there. After it loads, each
-// element's text is checked against the background really behind it, and only text too faint
-// to read is lightened, keeping its hue. Text on the message's own light backgrounds (a white
-// newsletter card) already reads well and stays as it was designed.
+// colours (black, dark grey, a dark brand colour) that vanish there; and a message that sets
+// only a light background (a white newsletter card) relies on default black text, while the
+// dark page makes the default light. After it loads, each element's text is checked against
+// the background really behind it, and only text too faint to read is changed, keeping its
+// hue: lightened on dark backgrounds, darkened on light ones. Text that already reads well
+// stays as it was designed, and nothing changes under a background image, whose colours
+// cannot be known.
 
 export type Rgb = [number, number, number];
 
@@ -35,6 +38,15 @@ export function contrast(a: Rgb, b: Rgb): number {
 
 /** `color` lightened (hue and saturation kept) until it reads on the dark `background`. */
 export function lighten(color: Rgb, background: Rgb): Rgb {
+  return shift(color, background, 'lighter');
+}
+
+/** `color` darkened (hue and saturation kept) until it reads on the light `background`. */
+export function darken(color: Rgb, background: Rgb): Rgb {
+  return shift(color, background, 'darker');
+}
+
+function shift(color: Rgb, background: Rgb, direction: 'lighter' | 'darker'): Rgb {
   const [r, g, b] = color.map((c) => c / 255);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -54,35 +66,53 @@ export function lighten(color: Rgb, background: Rgb): Rgb {
     const [r1, g1, b1] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
     return [r1, g1, b1].map((v) => Math.round((v + m) * 255)) as Rgb;
   };
-  // Mirror the lightness first (black becomes near white), then go lighter as far as needed.
-  for (let lightness = Math.max(1 - l, 0.6); lightness <= 1; lightness += 0.05) {
+  // Mirror the lightness first (black becomes near white and the other way round), then go
+  // further as far as needed.
+  if (direction === 'lighter') {
+    for (let lightness = Math.max(1 - l, 0.6); lightness <= 1; lightness += 0.05) {
+      const candidate = fromHsl(lightness);
+      if (contrast(candidate, background) >= MIN_CONTRAST) return candidate;
+    }
+    return [230, 224, 233];
+  }
+  for (let lightness = Math.min(1 - l, 0.4); lightness >= 0; lightness -= 0.05) {
     const candidate = fromHsl(lightness);
     if (contrast(candidate, background) >= MIN_CONTRAST) return candidate;
   }
-  return [230, 224, 233];
+  return [29, 27, 32];
+}
+
+/** A readable replacement for `color` on `background`, or null when it reads already. */
+export function readable(color: Rgb, background: Rgb): Rgb | null {
+  if (contrast(color, background) >= MIN_CONTRAST) return null;
+  // On a mid-tone background light text may read as well as dark; take the better one.
+  const light = lighten(color, background);
+  const dark = darken(color, background);
+  return contrast(light, background) >= contrast(dark, background) ? light : dark;
 }
 
 /**
- * Lightens faint text in a message shown on the dark `pageBackground`. Elements whose own
- * background the message set are judged against that background, so light designs keep
- * their dark text.
+ * Fixes faint text in a message shown on the dark `pageBackground`. Every element is judged
+ * against the background really behind it: dark text on the page is lightened, and text left
+ * light by the page's defaults on the message's own light backgrounds is darkened.
  */
 export function adaptForDark(doc: Document, pageBackground: Rgb): void {
   const view = doc.defaultView;
   if (!view || !doc.body) return;
   // The background behind each element, inherited down the tree as it is walked.
-  const walk = (element: Element, background: Rgb, budget: { left: number }) => {
+  // `background` is null below a background image: its colours are unknown, so text there is
+  // left as the message designed it.
+  const walk = (element: Element, background: Rgb | null, budget: { left: number }) => {
     if (budget.left-- <= 0) return;
     const style = view.getComputedStyle(element);
     const own = parseColor(style.backgroundColor);
-    const behind = own ?? background;
+    const image = Boolean(style.backgroundImage) && style.backgroundImage !== 'none';
+    const behind = own ?? (image ? null : background);
     const color = parseColor(style.color);
     // Only elements with text of their own; a wrapper's colour matters through its children.
     const hasText = Array.from(element.childNodes).some((node) => node.nodeType === 3 && node.textContent?.trim());
-    if (color && hasText && contrast(color, behind) < MIN_CONTRAST && luminance(behind) < 0.2) {
-      const [r, g, b] = lighten(color, behind);
-      (element as HTMLElement).style.setProperty('color', `rgb(${r}, ${g}, ${b})`, 'important');
-    }
+    const better = color && behind && hasText ? readable(color, behind) : null;
+    if (better) (element as HTMLElement).style.setProperty('color', `rgb(${better[0]}, ${better[1]}, ${better[2]})`, 'important');
     for (const child of Array.from(element.children)) walk(child, behind, budget);
   };
   walk(doc.body, parseColor(view.getComputedStyle(doc.body).backgroundColor) ?? pageBackground, { left: MAX_ELEMENTS });

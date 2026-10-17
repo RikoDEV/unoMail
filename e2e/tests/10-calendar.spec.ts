@@ -31,7 +31,7 @@ test.describe('calendar', () => {
     await dialog.getByLabel('E-mail address').fill(DAVE);
     await dialog.getByLabel('Password', { exact: true }).fill(USER_PASSWORD);
     await dialog.getByRole('button', { name: 'Create' }).click();
-    await expect(page.getByText('Mailbox created').or(dialog.getByRole('alert').filter({ hasText: 'already exists' }))).toBeVisible();
+    await expect(page.getByText('Mailbox created').or(dialog.getByText(/already exists/).first())).toBeVisible();
     await page.close();
   });
 
