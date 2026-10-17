@@ -13,6 +13,10 @@ and built-in spam and virus filtering. Written in Rust and React.
 
 [Quick start](#quick-start) · [Features](#features) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
+| <img width="2560" height="1308" alt="chrome_8qYBMqJqk8" src="https://github.com/user-attachments/assets/c94b102f-faa5-4527-8fe9-5d6b117597aa" /> | <img width="2560" height="1308" alt="chrome_uCfniMMI6q" src="https://github.com/user-attachments/assets/016033c0-91f9-4a8b-b54c-3c2a50deafe4" />  | <img width="2559" height="1304" alt="chrome_sbYsQllvUS" src="https://github.com/user-attachments/assets/490a9373-63c5-423a-8e89-c5c266680307" /> | <img width="2560" height="1308" alt="chrome_MJLOfmXXLU" src="https://github.com/user-attachments/assets/5b47c808-c302-426f-a475-e90a45403226" /> |
+|---|---|---|---|
+| <img width="2560" height="1308" alt="chrome_8RIEgoK5CD" src="https://github.com/user-attachments/assets/f27b2618-6dd5-442b-9bd3-35dbca8b9464" /> | <img width="2560" height="1308" alt="chrome_4rjY4rFzDj" src="https://github.com/user-attachments/assets/fec91be4-155b-4c2c-8662-181a071c0103" /> | <img width="2560" height="1308" alt="chrome_1pSjcGWGT0" src="https://github.com/user-attachments/assets/fc55d2ea-40d0-4501-8d96-33315c7b5f2e" /> | <img width="2560" height="1308" alt="chrome_MiLhp4DKPi" src="https://github.com/user-attachments/assets/ae88d6c9-4803-4d6e-8fdc-59cdbb2b398b" /> |
+
 </div>
 
 ---
