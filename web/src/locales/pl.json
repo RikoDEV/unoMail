@@ -1803,5 +1803,7 @@
   "The browser did not accept unoMail for mail links": "Przeglądarka nie przyjęła unoMail do obsługi linków pocztowych",
   "Open mail links with unoMail": "Otwieraj linki pocztowe w unoMail",
   "Confirm in the browser (look for a prompt near the address bar).": "Potwierdź w przeglądarce (szukaj pytania przy pasku adresu).",
-  "mailto: links on other sites will open a new message here.": "Linki mailto: na innych stronach otworzą tutaj nową wiadomość."
+  "mailto: links on other sites will open a new message here.": "Linki mailto: na innych stronach otworzą tutaj nową wiadomość.",
+  "Blocked automatically: {{reason}}": "Zablokowano automatycznie: {{reason}}",
+  "The mailbox can no longer send mail; incoming mail still arrives. Set automatically when it goes over its sending limits.": "Skrzynka nie może wysyłać poczty; poczta przychodząca nadal dociera. Włączane automatycznie po przekroczeniu limitów wysyłania."
 }

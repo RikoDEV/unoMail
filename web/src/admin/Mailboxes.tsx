@@ -162,6 +162,8 @@ interface FormState {
   pop3_enabled: boolean;
   smtp_enabled: boolean;
   outbound_blocked: boolean;
+  /** Why the server blocked sending by itself (shown while the block lasts). */
+  outbound_blocked_reason?: string | null;
   send_only: boolean;
 }
 
@@ -360,8 +362,22 @@ export function Mailboxes() {
                   <FormControlLabel control={<Switch checked={form.imap_enabled} onChange={(e) => set({ imap_enabled: e.target.checked })} />} label="IMAP" />
                   <FormControlLabel control={<Switch checked={form.pop3_enabled} onChange={(e) => set({ pop3_enabled: e.target.checked })} />} label="POP3" />
                   <FormControlLabel control={<Switch checked={form.smtp_enabled} onChange={(e) => set({ smtp_enabled: e.target.checked })} />} label="SMTP" />
-                  <FormControlLabel control={<Switch color="error" checked={form.outbound_blocked} onChange={(e) => set({ outbound_blocked: e.target.checked })} />} label={t('Block sending')} />
                 </Stack>
+              )}
+              {editing && (
+                <FormControlLabel
+                  control={<Switch color="error" checked={form.outbound_blocked} onChange={(e) => set({ outbound_blocked: e.target.checked })} />}
+                  label={
+                    <>
+                      {t('Block sending')}
+                      <Typography variant="body2" color="text.secondary">
+                        {form.outbound_blocked && form.outbound_blocked_reason
+                          ? t('Blocked automatically: {{reason}}', { reason: form.outbound_blocked_reason })
+                          : t('The mailbox can no longer send mail; incoming mail still arrives. Set automatically when it goes over its sending limits.')}
+                      </Typography>
+                    </>
+                  }
+                />
               )}
               {editing && (
                 <FormControlLabel
