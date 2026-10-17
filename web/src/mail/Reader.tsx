@@ -264,6 +264,13 @@ function MessageBody({ email, accountId, ownEmail }: { email: EmailFull; account
     fit();
     // A suspicious link (marked by the sanitizer) asks before it opens.
     doc?.addEventListener('click', (event) => {
+      // mailto: links write a new message here instead of in another mail program.
+      const mailto = (event.target as Element | null)?.closest?.('a[href^="mailto:" i]');
+      if (mailto && !(event as MouseEvent).ctrlKey && !(event as MouseEvent).metaKey) {
+        event.preventDefault();
+        window.dispatchEvent(new CustomEvent('unomail:mailto', { detail: mailto.getAttribute('href') }));
+        return;
+      }
       const link = (event.target as Element | null)?.closest?.('a[data-unomail-warning]');
       if (!link) return;
       event.preventDefault();

@@ -98,7 +98,8 @@ function LoginRoute() {
 function RequireAuth({ children, admin }: { children: ReactNode; admin?: boolean }) {
   const { account } = useAuth();
   const location = useLocation();
-  if (!account) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  // The query comes along: a mailto: link opened while signed out still writes its message.
+  if (!account) return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   if (admin && account.role === 'user') return <Navigate to="/mail" replace />;
   return <>{children}</>;
 }

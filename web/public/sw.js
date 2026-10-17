@@ -24,24 +24,58 @@ self.addEventListener('push', (event) => {
       if (!delivered) return;
       // Someone looking at the mail already sees it arrive.
       if (windows.some((client) => client.focused && client.visibilityState === 'visible')) return;
-      await self.registration.showNotification('New mail', {
-        body: 'A new message has arrived.',
-        tag: 'unomail-new-mail',
-        renotify: true,
-        data: { url: '/mail' },
-      });
+      await showNewest(Object.keys(data.changed || {}));
     })(),
   );
 });
+
+/**
+ * Shows the newest unread message. The signed-in account is asked with its session cookie;
+ * when the push is for another account of this browser (or the question fails), a plain
+ * notice is shown instead of another account's mail.
+ */
+async function showNewest(accounts) {
+  let newest = null;
+  try {
+    const response = await fetch('/api/me/newest-unread', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (response.ok) newest = await response.json();
+  } catch {
+    // Offline or signed out: the plain notice below.
+  }
+  if (newest && accounts.includes(newest.account)) {
+    if (self.navigator.setAppBadge) self.navigator.setAppBadge(newest.unread).catch(() => {});
+    const message = newest.message;
+    if (!message) return;
+    await self.registration.showNotification(message.from || 'New mail', {
+      body: [message.subject || '(no subject)', message.preview].filter(Boolean).join('\n'),
+      tag: `unomail-${message.threadId}`,
+      icon: '/favicon.svg',
+      data: { url: `/mail/inbox/${message.threadId}` },
+    });
+    return;
+  }
+  await self.registration.showNotification('New mail', {
+    body: 'A new message has arrived.',
+    tag: 'unomail-new-mail',
+    renotify: true,
+    icon: '/favicon.svg',
+    data: { url: '/mail' },
+  });
+}
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const url = (event.notification.data && event.notification.data.url) || '/mail';
       const open = windows.find((client) => new URL(client.url).pathname.startsWith('/mail'));
-      if (open) return open.focus();
-      return self.clients.openWindow((event.notification.data && event.notification.data.url) || '/mail');
+      if (open) {
+        // The open tab shows the conversation itself (MailPage), without loading again.
+        open.postMessage({ type: 'open', url });
+        return open.focus();
+      }
+      return self.clients.openWindow(url);
     })(),
   );
 });

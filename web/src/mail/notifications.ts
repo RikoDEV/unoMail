@@ -1,6 +1,9 @@
 // New-mail notifications through Web Push: the browser subscribes with the server's VAPID
 // key, the subscription is registered as a JMAP PushSubscription, and the service worker
 // (public/sw.js) shows a notification when a message arrives, even with no tab open.
+//
+// Where Web Push is missing (the browser lacks it, or the server has no push key), an open
+// unoMail tab shows the notifications itself while it is in the background.
 
 import { get, jmap } from '../api';
 
@@ -8,9 +11,22 @@ import { t } from '../i18n';
 import { readLocal, writeLocal } from '../storage';
 /** Each signed-in account registers this browser on its own. */
 const storageKey = (account: string) => `unomail.pushSubscription.${account}`;
+/** Notifications from the open tab only, for an account without Web Push. */
+const pageKey = (account: string) => `unomail.pageNotifications.${account}`;
 
-export function notificationsSupported(): boolean {
+/** Web Push: notifications also when unoMail is closed. */
+export function pushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
+}
+
+/** Any kind of notification: at least from an open tab. */
+export function notificationsSupported(): boolean {
+  return typeof window !== 'undefined' && typeof Notification !== 'undefined';
+}
+
+/** Whether the open tab is the one to show notifications for `account` (no Web Push). */
+export function pageNotificationsOn(account: string): boolean {
+  return notificationsSupported() && Notification.permission === 'granted' && readLocal(pageKey(account)) === '1';
 }
 
 const storedId = (account: string) => readLocal(storageKey(account));
@@ -19,7 +35,8 @@ const store = (account: string, id: string | null) => void writeLocal(storageKey
 
 /** Whether this browser currently receives new-mail notifications. */
 export async function notificationsEnabled(account: string): Promise<boolean> {
-  if (!notificationsSupported() || Notification.permission !== 'granted' || !storedId(account)) return false;
+  if (pageNotificationsOn(account)) return true;
+  if (!pushSupported() || Notification.permission !== 'granted' || !storedId(account)) return false;
   const registration = await navigator.serviceWorker.getRegistration('/');
   return Boolean(await registration?.pushManager.getSubscription());
 }
@@ -32,13 +49,20 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-/** Asks for permission, subscribes this browser and registers it with the server. */
-export async function enableNotifications(account: string): Promise<void> {
+/**
+ * Asks for permission, subscribes this browser and registers it with the server. Returns
+ * 'push', or 'page' when only an open tab can notify (no Web Push here or on the server).
+ */
+export async function enableNotifications(account: string): Promise<'push' | 'page'> {
   if (!notificationsSupported()) throw new Error(t('This browser cannot show notifications'));
   if ((await Notification.requestPermission()) !== 'granted') throw new Error(t('Notifications are blocked for this site in the browser settings'));
   const session = await get<{ capabilities: Record<string, { applicationServerKey?: string | null }> }>('/jmap/session');
   const key = session.capabilities['urn:ietf:params:jmap:webpush-vapid']?.applicationServerKey;
-  if (!key) throw new Error(t('The server does not offer push notifications'));
+  if (!key || !pushSupported()) {
+    writeLocal(pageKey(account), '1');
+    return 'page';
+  }
+  writeLocal(pageKey(account), null);
   const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   await navigator.serviceWorker.ready;
   const existing = await registration.pushManager.getSubscription();
@@ -66,9 +90,12 @@ export async function enableNotifications(account: string): Promise<void> {
   const previous = storedId(account);
   store(account, id);
   if (previous && previous !== id) await jmap([['PushSubscription/set', { destroy: [previous] }, '0']]).catch(() => {});
+  return 'push';
 }
 
 export async function disableNotifications(account: string): Promise<void> {
+  writeLocal(pageKey(account), null);
+  if (!pushSupported()) return;
   const id = storedId(account);
   store(account, null);
   // The browser's subscription is shared by its accounts: kept while another one uses it.
@@ -78,4 +105,43 @@ export async function disableNotifications(account: string): Promise<void> {
     await (await registration?.pushManager.getSubscription())?.unsubscribe();
   }
   if (id) await jmap([['PushSubscription/set', { destroy: [id] }, '0']]).catch(() => {});
+}
+
+export interface NewestUnread {
+  account: string;
+  unread: number;
+  message: { from: string; subject: string; preview: string; threadId: string } | null;
+}
+
+/** The newest unread message in the inbox (also what the service worker asks for). */
+export const newestUnread = () => get<NewestUnread>('/api/me/newest-unread');
+
+/**
+ * Notifications shown by the open tab, for accounts without Web Push: after each change it
+ * looks at the newest unread message, and announces it if it is new and nobody is looking.
+ * Returns a function to call on every change the server reports.
+ */
+export function pageNotifier(account: string, open: (threadId: string) => void): () => void {
+  let last: string | null | undefined;
+  // What is unread now is not news; only what arrives from here on.
+  void newestUnread().then((now) => (last = now.message?.threadId ?? null), () => (last = null));
+  return () => {
+    if (!pageNotificationsOn(account) || last === undefined) return;
+    void newestUnread().then((now) => {
+      const message = now.message;
+      const known = last;
+      last = message?.threadId ?? null;
+      if (!message || message.threadId === known || document.visibilityState === 'visible') return;
+      const notification = new Notification(message.from || t('New mail'), {
+        body: [message.subject || t('(no subject)'), message.preview].filter(Boolean).join('\n'),
+        tag: `unomail-${message.threadId}`,
+        icon: '/favicon.svg',
+      });
+      notification.onclick = () => {
+        window.focus();
+        open(message.threadId);
+        notification.close();
+      };
+    }, () => {});
+  };
 }

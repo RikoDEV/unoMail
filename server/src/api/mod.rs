@@ -481,6 +481,7 @@ pub fn router(state: AppState) -> Router {
         .route("/me/blocked-senders", get(mailtools::blocked_list).post(mailtools::blocked_add).delete(mailtools::blocked_remove))
         .route("/me/label-details", get(mailtools::label_details).put(mailtools::label_put))
         .route("/me/categories", get(mailtools::category_counts))
+        .route("/me/newest-unread", get(mailtools::newest_unread))
         .route("/me/categories/learning", get(mailtools::category_learning).delete(mailtools::category_learning_reset))
         .route("/me/unsubscribe", post(mailtools::unsubscribe))
         .route("/me/calendars", get(calendar::list).post(calendar::create))

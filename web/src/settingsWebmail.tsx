@@ -14,7 +14,8 @@ import { blockSender, CATEGORIES, categoryLearning, type CategoryLearning, delet
 import { updatePrefs, usePrefs } from './prefs';
 import { get, put, errorText } from './api';
 import { type CertInfo, fetchSmime, importSmime, removeSmime } from './mail/Smime';
-import { disableNotifications, enableNotifications, notificationsEnabled, notificationsSupported } from './mail/notifications';
+import { mailtoHandlerSupported, registerMailtoHandler } from './mail/mailto';
+import { disableNotifications, enableNotifications, notificationsEnabled, notificationsSupported, pageNotificationsOn } from './mail/notifications';
 import { htmlToText } from './mail/jmapClient';
 import { persistentCacheEnabled, setPersistentCache } from './mail/cache';
 import { fetchKeys, fingerprint, generateKeys, importKeys, isUnlocked, localPrivateKey, lock, removeKeys, type StoredKeys, unlock } from './mail/pgp';
@@ -382,21 +383,25 @@ export function SmimeCard() {
   );
 }
 
-/** New-mail notifications in this browser, through Web Push. */
+/** New-mail notifications in this browser (Web Push, or from the open tab), and mailto: links. */
 export function NotificationsCard() {
   const { account } = useAuth();
   const email = account?.email ?? '';
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [pageOnly, setPageOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [mailtoAsked, setMailtoAsked] = useState(false);
   useEffect(() => {
     notificationsEnabled(email).then(setEnabled, () => setEnabled(false));
+    setPageOnly(pageNotificationsOn(email));
   }, [email]);
   const toggle = async (on: boolean) => {
     setBusy(true);
     setError('');
     try {
-      await (on ? enableNotifications(email) : disableNotifications(email));
+      if (on) setPageOnly((await enableNotifications(email)) === 'page');
+      else await disableNotifications(email);
       setEnabled(on);
     } catch (err) {
       setError(errorText(err, t('Notifications could not be changed')));
@@ -418,7 +423,30 @@ export function NotificationsCard() {
         ) : (
           <Typography color="text.secondary">{t('This browser cannot show notifications.')}</Typography>
         )}
+        {enabled && pageOnly && (
+          <Typography variant="body2" color="text.secondary">{t('Push notifications are not available here, so they appear only while unoMail is open in a tab.')}</Typography>
+        )}
         {error && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError('')}>{error}</Alert>}
+        {mailtoHandlerSupported() && (
+          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                try {
+                  registerMailtoHandler();
+                  setMailtoAsked(true);
+                } catch (err) {
+                  setError(errorText(err, t('The browser did not accept unoMail for mail links')));
+                }
+              }}
+            >
+              {t('Open mail links with unoMail')}
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              {mailtoAsked ? t('Confirm in the browser (look for a prompt near the address bar).') : t('mailto: links on other sites will open a new message here.')}
+            </Typography>
+          </Stack>
+        )}
       </CardContent>
     </Card>
   );

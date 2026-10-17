@@ -53,6 +53,8 @@ import { AdvancedSearch } from './AdvancedSearch';
 import { EmailRow, type RowHandlers } from './EmailRow';
 import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
 import { AttachmentPreview, type PreviewFile } from './Preview';
+import { parseMailto } from './mailto';
+import { pageNotifier } from './notifications';
 import { parseQuery, withScope } from './searchQuery';
 
 import { t, uiLocale } from '../i18n';
@@ -330,6 +332,10 @@ export default function MailPage() {
     return () => window.removeEventListener('unomail:refresh', onRefresh);
   }, [load]);
 
+  // Without Web Push, this tab announces new mail while it is in the background.
+  const ownEmail = account?.email ?? '';
+  const notifyNewMail = useMemo(() => pageNotifier(ownEmail, (thread) => navigate(`/mail/inbox/${thread}`)), [ownEmail, navigate]);
+
   // Push: the server announces changes; refresh folder counts and the first page.
   useEffect(() => {
     const source = new EventSource('/jmap/eventsource');
@@ -339,13 +345,25 @@ export default function MailPage() {
       timer = setTimeout(() => {
         void refreshMailboxes();
         void load(0);
+        notifyNewMail();
       }, 400);
     });
     return () => {
       clearTimeout(timer);
       source.close();
     };
-  }, [load, refreshMailboxes]);
+  }, [load, refreshMailboxes, notifyNewMail]);
+
+  // A click on a push notification (public/sw.js) while unoMail is open shows that conversation here.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const url = event.data?.type === 'open' ? String(event.data.url ?? '') : '';
+      if (url.startsWith('/mail/')) navigate(url);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [navigate]);
 
   const open = useCallback((email: EmailSummary) => navigate(`/mail/${slug}/${email.threadId}`), [navigate, slug]);
   const closeThread = useCallback(() => navigate(`/mail/${slug}`), [navigate, slug]);
@@ -423,13 +441,27 @@ export default function MailPage() {
     return () => setPluginNotifier(() => {});
   }, []);
 
-  // "/mail/inbox?compose=address" opens a new message, e.g. from the address book.
+  // "/mail/inbox?compose=address" opens a new message, e.g. from the address book, and
+  // "?mailto=<url>" one described by a mailto: link (unoMail as the browser's mail handler).
   useEffect(() => {
     const recipient = searchParams.get('compose');
-    if (recipient === null) return;
-    compose({ ...EMPTY_DRAFT, to: recipient });
+    const link = searchParams.get('mailto');
+    if (recipient === null && link === null) return;
+    const fromLink = link === null ? null : parseMailto(link);
+    if (recipient !== null) compose({ ...EMPTY_DRAFT, to: recipient });
+    else if (fromLink) compose({ ...EMPTY_DRAFT, ...fromLink });
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams, compose]);
+
+  // mailto: links clicked in a message.
+  useEffect(() => {
+    const onMailto = (event: Event) => {
+      const draft = parseMailto(String((event as CustomEvent<string>).detail ?? ''));
+      if (draft) compose({ ...EMPTY_DRAFT, ...draft });
+    };
+    window.addEventListener('unomail:mailto', onMailto);
+    return () => window.removeEventListener('unomail:mailto', onMailto);
+  }, [compose]);
 
   /** Every message of a conversation that lives in the folder it is listed in. */
   const conversationIds = useCallback(async (email: EmailSummary): Promise<string[]> => {

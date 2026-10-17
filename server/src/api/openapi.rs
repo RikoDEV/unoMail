@@ -195,6 +195,7 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("get", "/api/me/categories", "webmail", "Unread conversations per inbox category", "user"),
     ("get", "/api/me/categories/learning", "webmail", "What the inbox categories have learned from the user's corrections", "user"),
     ("delete", "/api/me/categories/learning", "webmail", "Forget what the inbox categories have learned", "user"),
+    ("get", "/api/me/newest-unread", "webmail", "The newest unread inbox message, for new-mail notifications", "user"),
     ("get", "/api/me/calendars", "calendar", "Calendars of the account and the CalDAV addresses", "user"),
     ("post", "/api/me/calendars", "calendar", "Create a calendar", "user"),
     ("patch", "/api/me/calendars/{id}", "calendar", "Rename or recolour a calendar", "user"),

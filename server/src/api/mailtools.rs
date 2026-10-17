@@ -116,6 +116,32 @@ fn valid_color(color: &str) -> bool {
     color.is_empty() || (color.len() == 7 && color.starts_with('#') && color[1..].bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
+// --- New-mail notifications ---------------------------------------------------------------
+
+/// The newest unread message in the inbox, for the browser's new-mail notification. The
+/// service worker asks with the session cookie alone: a GET that changes nothing, so it needs
+/// no CSRF token. `account` is the JMAP account id, to match the push it answers.
+pub async fn newest_unread(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
+    let newest: Option<(String, String, String, String, i64)> = sqlx::query_as(
+        "SELECT m.from_name, m.from_addr, m.subject, m.snippet, m.thread_id FROM messages m JOIN mailboxes b ON b.id = m.mailbox_id
+         WHERE m.account_id = ? AND b.role = 'inbox' AND m.seen = 0 AND m.deleted = 0 AND m.draft = 0
+         ORDER BY m.internal_date DESC, m.id DESC LIMIT 1",
+    )
+    .bind(session.account.id)
+    .fetch_optional(&state.db)
+    .await?;
+    let unread: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM messages m JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.account_id = ? AND b.role = 'inbox' AND m.seen = 0 AND m.deleted = 0 AND m.draft = 0",
+    )
+    .bind(session.account.id)
+    .fetch_one(&state.db)
+    .await?;
+    let message = newest.map(|(name, address, subject, snippet, thread)| {
+        json!({ "from": if name.is_empty() { address } else { name }, "subject": subject, "preview": snippet, "threadId": format!("t{thread}") })
+    });
+    Ok(Json(json!({ "account": format!("a{}", session.account.id), "unread": unread, "message": message })))
+}
+
 /// Every label of the account with its colour: the defined ones and those merely in use.
 pub async fn label_details(State(state): State<AppState>, session: Session) -> JsonResult<Vec<Value>> {
     let defined: Vec<(String, String)> = sqlx::query_as("SELECT name, color FROM labels WHERE account_id = ?").bind(session.account.id).fetch_all(&state.db).await?;

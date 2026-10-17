@@ -262,3 +262,26 @@ async fn unsubscribing_uses_what_the_sender_offers() {
     assert_eq!(carol.post("/api/me/unsubscribe", json!({ "email_id": id("By mail") })).await.status, StatusCode::NOT_FOUND);
     assert_eq!(sink.received().len(), 2);
 }
+
+#[tokio::test]
+async fn newest_unread_message_for_notifications() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    let bob = env.account("bob@example.org").await;
+    let api = Api::logged_in(&env, "bob@example.org").await;
+    let empty = api.get("/api/me/newest-unread").await;
+    assert_eq!(empty.status, StatusCode::OK);
+    assert_eq!(empty.body, json!({ "account": format!("a{}", bob.id), "unread": 0, "message": null }));
+
+    deliver(&env, "ann@remote.example", "bob@example.org", "", "First").await;
+    deliver(&env, "carl@remote.example", "bob@example.org", "", "Second").await;
+    queue::process_due(&env.app).await;
+    let newest = api.get("/api/me/newest-unread").await.body;
+    assert_eq!(newest["unread"], 2, "{newest}");
+    assert_eq!((newest["message"]["subject"].clone(), newest["message"]["from"].clone()), (json!("Second"), json!("carl@remote.example")));
+    assert!(newest["message"]["threadId"].as_str().unwrap().starts_with('t'));
+
+    // Read mail no longer counts.
+    sqlx::query("UPDATE messages SET seen = 1 WHERE subject = 'Second'").execute(&env.app.db).await.unwrap();
+    assert_eq!(api.get("/api/me/newest-unread").await.body["message"]["subject"], "First");
+}
