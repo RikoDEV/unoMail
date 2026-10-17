@@ -254,7 +254,15 @@ export function App() {
     let result: { next: { account: Account; csrf_token: string } | null };
     try {
       result = await post('/api/auth/logout', { all });
-    } catch {
+    } catch (error) {
+      // 401: the server already ended the session (revoked by an administrator, expired), so
+      // sign-out is confirmed. Anything else may mean the request never reached the server.
+      if (error instanceof Error && 'status' in error && error.status === 401) {
+        writeLocal(LOGOUT_PENDING, null);
+        clearSession();
+        accountChannel?.postMessage('signed-out');
+        return;
+      }
       setLogoutPending(true);
       clearSession();
       accountChannel?.postMessage('signed-out');
