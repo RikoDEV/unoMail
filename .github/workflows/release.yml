@@ -84,8 +84,10 @@ jobs:
       matrix:
         include:
           - platform: linux/amd64
+            arch: amd64
             runner: ubuntu-latest
           - platform: linux/arm64
+            arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -118,11 +120,50 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
       - uses: actions/upload-artifact@v7
         with:
-          name: digest-${{ strategy.job-index }}
+          name: digest-${{ matrix.arch }}
           path: ${{ runner.temp }}/digests/*
 
-  manifest:
+  scan:
+    # The images are scanned by digest before any tag points at them: a vulnerable build never
+    # becomes "latest" or a version tag.
     needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      TRIVY_USERNAME: ${{ github.actor }}
+      TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: digest-${{ matrix.arch }}
+          path: digests
+      - run: echo "REF=ghcr.io/${GITHUB_REPOSITORY,,}@sha256:$(ls digests)" >> "$GITHUB_ENV"
+      - name: Scan the built image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REF }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          scanners: vuln
+      - name: Record image software inventory
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REF }}
+          format: cyclonedx
+          output: unomail-${{ env.TAG }}-${{ matrix.arch }}-sbom.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ matrix.arch }}
+          path: unomail-*-sbom.json
+
+  manifest:
+    needs: [image, scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -154,32 +195,8 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf "$IMAGE@sha256:%s " *)
 
-  scan:
-    needs: manifest
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
-      - name: Scan published image
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
-          format: table
-          exit-code: '1'
-          severity: HIGH,CRITICAL
-          scanners: vuln
-      - name: Record image software inventory
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
-          format: cyclonedx
-          output: unomail-${{ env.TAG }}-sbom.json
-      - uses: actions/upload-artifact@v7
-        with:
-          name: sbom
-          path: unomail-*-sbom.json
-
   release:
-    needs: [binaries, manifest, scan]
+    needs: [binaries, manifest]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -191,7 +208,8 @@ jobs:
           path: dist
       - uses: actions/download-artifact@v8
         with:
-          name: sbom
+          pattern: sbom-*
+          merge-multiple: true
           path: dist
       - name: Create or update GitHub release
         env:
