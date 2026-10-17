@@ -14,7 +14,7 @@ axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.12.6", features = ["cookie", "typed-header"] }
 base64 = "0.23.1"
 bytes = "1.12.1"
-cbc = { version = "0.1.2", features = ["alloc"] }
+cbc = { version = "0.2.1", features = ["alloc"] }
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 chrono-tz = "0.10.4"
 cms = { version = "0.2.3", features = ["builder"] }
