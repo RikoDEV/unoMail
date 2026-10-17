@@ -14,7 +14,6 @@
 use std::{
     collections::HashMap,
     net::IpAddr,
-    sync::LazyLock,
     time::{Duration, Instant},
 };
 
@@ -95,9 +94,9 @@ pub async fn load(app: &App) -> sqlx::Result<Option<OauthConfig>> {
 pub async fn save(app: &App, config: &OauthConfig) -> sqlx::Result<()> {
     crate::db::set_setting(&app.db, SETTING_KEY, &serde_json::to_string(config).unwrap_or_default()).await?;
     // Nothing learned from the previous provider may outlive a change of configuration.
-    DISCOVERY.lock().clear();
-    TOKENS.lock().clear();
-    PENDING.lock().clear();
+    app.oauth.discovery.lock().clear();
+    app.oauth.tokens.lock().clear();
+    app.oauth.pending.lock().clear();
     Ok(())
 }
 
@@ -115,16 +114,22 @@ struct Discovery {
     introspection_endpoint: Option<String>,
 }
 
-static DISCOVERY: LazyLock<Mutex<HashMap<String, (Discovery, Instant)>>> = LazyLock::new(Default::default);
 /// Pending web sign-ins: state -> (PKCE verifier, network of the browser, started).
 type Pending = HashMap<String, (String, String, Instant)>;
-static PENDING: LazyLock<Mutex<Pending>> = LazyLock::new(Default::default);
-/// Recently verified access tokens: sha256(token) -> (e-mail, verified at).
-static TOKENS: LazyLock<Mutex<HashMap<String, (String, Instant)>>> = LazyLock::new(Default::default);
+
+/// What single sign-on keeps in memory, per server instance (one configuration each).
+#[derive(Default)]
+pub struct Caches {
+    /// The provider's discovery document, by issuer.
+    discovery: Mutex<HashMap<String, (Discovery, Instant)>>,
+    pending: Mutex<Pending>,
+    /// Recently verified access tokens: sha256(token) -> (e-mail, verified at).
+    tokens: Mutex<HashMap<String, (String, Instant)>>,
+}
 
 async fn discover(app: &App, config: &OauthConfig) -> Result<Discovery, String> {
     let issuer = config.issuer.trim_end_matches('/').to_owned();
-    if let Some((found, at)) = DISCOVERY.lock().get(&issuer)
+    if let Some((found, at)) = app.oauth.discovery.lock().get(&issuer)
         && at.elapsed() < DISCOVERY_TTL
     {
         return Ok(found.clone());
@@ -141,7 +146,7 @@ async fn discover(app: &App, config: &OauthConfig) -> Result<Discovery, String> 
     {
         return Err("the identity provider advertises endpoints that are not secure".into());
     }
-    DISCOVERY.lock().insert(issuer, (found.clone(), Instant::now()));
+    app.oauth.discovery.lock().insert(issuer, (found.clone(), Instant::now()));
     Ok(found)
 }
 
@@ -158,7 +163,7 @@ pub async fn begin(app: &App, ip: IpAddr) -> Result<(String, String), String> {
     let (state, verifier) = (random_token(), random_token());
     let challenge = URL_SAFE_NO_PAD.encode(sha256(verifier.as_bytes()));
     {
-        let mut pending = PENDING.lock();
+        let mut pending = app.oauth.pending.lock();
         pending.retain(|_, (.., started)| started.elapsed() < STATE_TTL);
         let network = crate::auth::network(ip);
         if pending.len() >= MAX_PENDING || pending.values().filter(|(_, from, _)| *from == network).count() >= MAX_PENDING_PER_NETWORK {
@@ -284,7 +289,7 @@ async fn local_account(app: &App, email: &str) -> Result<Account, String> {
 pub async fn finish(app: &App, state: &str, code: &str, ip: IpAddr) -> Result<Account, String> {
     let config = active(app).await.ok_or("single sign-on is not enabled")?;
     // The state is single use: remove it whatever happens next.
-    let verifier = match PENDING.lock().remove(state) {
+    let verifier = match app.oauth.pending.lock().remove(state) {
         Some((verifier, _, started)) if started.elapsed() < STATE_TTL => verifier,
         _ => return Err("the sign-in attempt has expired, please try again".into()),
     };
@@ -345,7 +350,7 @@ pub async fn authenticate_token(app: &App, user: &str, token: &str, ip: IpAddr, 
     let Some(config) = active(app).await else { return fail().await };
 
     let key = sha256_hex(token.as_bytes());
-    let cached = TOKENS.lock().get(&key).filter(|(_, at)| at.elapsed() < TOKEN_CACHE_TTL).map(|(email, _)| email.clone());
+    let cached = app.oauth.tokens.lock().get(&key).filter(|(_, at)| at.elapsed() < TOKEN_CACHE_TTL).map(|(email, _)| email.clone());
     let email = match cached {
         Some(email) => email,
         None => match identify(app, &config, token).await {
@@ -354,7 +359,7 @@ pub async fn authenticate_token(app: &App, user: &str, token: &str, ip: IpAddr, 
                     tracing::info!(reason, "token sign-in refused");
                     return fail().await;
                 }
-                let mut tokens = TOKENS.lock();
+                let mut tokens = app.oauth.tokens.lock();
                 tokens.retain(|_, (_, at)| at.elapsed() < TOKEN_CACHE_TTL);
                 if tokens.len() < MAX_PENDING {
                     tokens.insert(key, (email.clone(), Instant::now()));

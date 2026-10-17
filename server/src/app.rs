@@ -76,6 +76,8 @@ pub struct App {
     pub limiter: LoginLimiter,
     /// Passkey challenges waiting for an answer.
     pub challenges: crate::twofactor::Challenges,
+    /// Single sign-on discovery, pending sign-ins and verified tokens.
+    pub oauth: crate::oauth::Caches,
     pub metrics: Metrics,
     /// DNS-backed SPF/DKIM/DMARC verifier. `None` disables inbound sender authentication
     /// (used by tests, which must not depend on external DNS).
@@ -158,6 +160,7 @@ impl App {
             tls,
             limiter: LoginLimiter::default(),
             challenges: Default::default(),
+            oauth: Default::default(),
             metrics: Metrics::default(),
             daily: Default::default(),
             authenticator,
