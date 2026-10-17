@@ -424,16 +424,16 @@ async fn accounts_exceeding_the_sending_limit_are_blocked() {
 async fn greylisting_defers_first_contact_only() {
     let env = TestEnv::start_with(|cfg| cfg.greylist_delay_secs = 60).await;
     let ip = "203.0.113.10".parse().unwrap();
-    assert!(!delivery::greylist_pass(&env.app, ip, "a@remote.example", "bob@example.org").await.unwrap());
-    assert!(!delivery::greylist_pass(&env.app, ip, "a@remote.example", "bob@example.org").await.unwrap(), "retry too early");
+    assert!(!delivery::greylist_pass(&env.app, ip, None, "a@remote.example", "bob@example.org").await.unwrap());
+    assert!(!delivery::greylist_pass(&env.app, ip, None, "a@remote.example", "bob@example.org").await.unwrap(), "retry too early");
     // A different triplet has its own timer.
-    assert!(!delivery::greylist_pass(&env.app, ip, "other@remote.example", "bob@example.org").await.unwrap());
+    assert!(!delivery::greylist_pass(&env.app, ip, None, "other@remote.example", "bob@example.org").await.unwrap());
 
     sqlx::query("UPDATE greylist SET first_seen = first_seen - 120").execute(&env.app.db).await.unwrap();
     // Another host in the same /24 retrying counts as the same sender.
     let neighbour = "203.0.113.77".parse().unwrap();
-    assert!(delivery::greylist_pass(&env.app, neighbour, "a@remote.example", "bob@example.org").await.unwrap());
-    assert!(delivery::greylist_pass(&env.app, ip, "a@remote.example", "bob@example.org").await.unwrap(), "known triplets pass immediately");
+    assert!(delivery::greylist_pass(&env.app, neighbour, None, "a@remote.example", "bob@example.org").await.unwrap());
+    assert!(delivery::greylist_pass(&env.app, ip, None, "a@remote.example", "bob@example.org").await.unwrap(), "known triplets pass immediately");
 }
 
 #[tokio::test]
@@ -650,4 +650,18 @@ async fn executable_attachments_are_refused_in_both_directions() {
     let reply = c.send_mail("alice@remote.example", &["bob@example.org"], &with_attachment("alice@remote.example", "bob@example.org", "setup.exe")).await;
     assert!(reply.starts_with("250"), "{reply}");
     assert_eq!(env.inbox(&bob).await.len(), 2);
+}
+
+#[tokio::test]
+async fn greylisting_follows_spf_authorised_senders_across_networks() {
+    let env = TestEnv::start_with(|cfg| cfg.greylist_delay_secs = 60).await;
+    let (first, elsewhere) = ("203.0.113.10".parse().unwrap(), "2001:db8:4860::1".parse().unwrap());
+    assert!(!delivery::greylist_pass(&env.app, first, Some("Gmail.example"), "a@gmail.example", "bob@example.org").await.unwrap());
+    sqlx::query("UPDATE greylist SET first_seen = first_seen - 120").execute(&env.app.db).await.unwrap();
+    // The retry comes from another of the domain's hosts, over IPv6.
+    assert!(delivery::greylist_pass(&env.app, elsewhere, Some("gmail.example"), "a@gmail.example", "bob@example.org").await.unwrap());
+    // Once through, the domain's other senders (and per-message bounce addresses) pass at once.
+    assert!(delivery::greylist_pass(&env.app, first, Some("gmail.example"), "bounce-1234@gmail.example", "bob@example.org").await.unwrap());
+    // Without SPF the network still counts.
+    assert!(!delivery::greylist_pass(&env.app, elsewhere, None, "a@gmail.example", "bob@example.org").await.unwrap());
 }

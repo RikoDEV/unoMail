@@ -71,6 +71,8 @@ struct Session {
     messages: u32,
     /// The peer is on the whitelist: reputation checks and greylisting do not apply.
     whitelisted: bool,
+    /// The SPF-authorised domain of the envelope sender, once looked up for greylisting.
+    spf_domain: Option<(String, Option<String>)>,
 }
 
 enum Flow {
@@ -123,6 +125,28 @@ fn valid_helo(arg: &str, strict: bool) -> bool {
 }
 
 impl Session {
+    /// The envelope sender's domain when SPF authorises the client to send for it. Looked up
+    /// once per sender, not for every recipient.
+    async fn spf_domain(&mut self, sender: &str) -> Option<String> {
+        if let Some((cached, domain)) = &self.spf_domain
+            && cached == sender
+        {
+            return domain.clone();
+        }
+        let domain = match (&self.app.authenticator, sender.rsplit_once('@')) {
+            (Some(authenticator), Some((_, domain))) => {
+                let helo = self.helo.as_deref().unwrap_or(domain);
+                let spf = authenticator
+                    .verify_spf(mail_auth::spf::verify::SpfParameters::verify_mail_from(self.peer.ip(), helo, &self.app.cfg.hostname, sender))
+                    .await;
+                (spf.result() == mail_auth::SpfResult::Pass).then(|| domain.to_owned())
+            }
+            _ => None,
+        };
+        self.spf_domain = Some((sender.to_owned(), domain.clone()));
+        domain
+    }
+
     async fn reply(&mut self, line: &str) -> std::io::Result<()> {
         self.app.activity.reply(self.peer.ip(), line);
         self.conn.write_all(format!("{line}\r\n").as_bytes()).await
@@ -566,7 +590,8 @@ impl Session {
         };
         if self.mode == Mode::Mx && !self.whitelisted && self.app.rt().greylist_enabled && !reputation::is_trusted_source(&self.app.cfg, self.peer.ip()) {
             let sender = self.tx.as_ref().map(|t| t.sender.clone()).unwrap_or_default();
-            match delivery::greylist_pass(&self.app, self.peer.ip(), &sender, &address.to_string()).await {
+            let spf_domain = self.spf_domain(&sender).await;
+            match delivery::greylist_pass(&self.app, self.peer.ip(), spf_domain.as_deref(), &sender, &address.to_string()).await {
                 Ok(true) => {}
                 Ok(false) => {
                     self.reply("451 4.7.1 Greylisted, please try again in a few minutes").await?;
@@ -823,7 +848,7 @@ async fn handle(app: AppState, mode: Mode, mut tcp: TcpStream, peer: SocketAddr)
     } else {
         Conn::plain(tcp, COMMAND_TIMEOUT)
     };
-    let session = Session { app, mode, conn, peer, helo: None, account: None, grant: None, tx: None, errors: 0, messages: 0, whitelisted: false };
+    let session = Session { app, mode, conn, peer, helo: None, account: None, grant: None, tx: None, errors: 0, messages: 0, whitelisted: false, spf_domain: None };
     if let Err(err) = session.run().await {
         tracing::debug!(%err, %peer, "SMTP session ended with an error");
     }

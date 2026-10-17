@@ -126,12 +126,22 @@ pub async fn resolve(app: &App, recipient: &Address) -> sqlx::Result<Resolution>
 
 /// Greylisting: the first delivery attempt for an unknown (network, sender, recipient) triplet
 /// is deferred. Returns true when the message may proceed.
-pub async fn greylist_pass(app: &App, ip: IpAddr, sender: &str, recipient: &str) -> sqlx::Result<bool> {
-    let network = match ip {
-        IpAddr::V4(v4) => format!("{}.{}.{}", v4.octets()[0], v4.octets()[1], v4.octets()[2]),
-        IpAddr::V6(v6) => v6.segments()[..4].iter().map(|s| format!("{s:x}")).collect::<Vec<_>>().join(":"),
+///
+/// `spf_domain` is the sender's domain when SPF authorised the client for it. Large providers
+/// retry from other hosts, often in other networks or over the other IP version; keyed on the
+/// domain instead, any host the domain authorises continues the same attempt, and per-message
+/// envelope senders (VERP, bounce tracking) do not start a new one each time.
+pub async fn greylist_pass(app: &App, ip: IpAddr, spf_domain: Option<&str>, sender: &str, recipient: &str) -> sqlx::Result<bool> {
+    let key = match spf_domain {
+        Some(domain) => sha256_hex(format!("spf:{}\0{recipient}", domain.to_ascii_lowercase()).as_bytes()),
+        None => {
+            let network = match ip {
+                IpAddr::V4(v4) => format!("{}.{}.{}", v4.octets()[0], v4.octets()[1], v4.octets()[2]),
+                IpAddr::V6(v6) => v6.segments()[..4].iter().map(|s| format!("{s:x}")).collect::<Vec<_>>().join(":"),
+            };
+            sha256_hex(format!("{network}\0{sender}\0{recipient}").as_bytes())
+        }
     };
-    let key = sha256_hex(format!("{network}\0{sender}\0{recipient}").as_bytes());
     let now = now();
     let row: Option<(i64, bool)> =
         sqlx::query_as("SELECT first_seen, passed FROM greylist WHERE key = ?").bind(&key).fetch_optional(&app.db).await?;
