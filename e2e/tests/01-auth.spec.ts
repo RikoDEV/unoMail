@@ -60,7 +60,11 @@ test.describe('authentication', () => {
     await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('server sign-out could not be confirmed');
     expect(await page.evaluate(() => localStorage.getItem('unomail.cache.audit'))).toBeNull();
+    // On load the page retries the sign-out by itself; it must have failed before the server is
+    // reachable again, or it succeeds on its own and there is nothing left to click.
+    const retriedOnLoad = page.waitForEvent('requestfailed', (request) => request.url().includes('/api/auth/logout'));
     await page.reload();
+    await retriedOnLoad;
     await expect(page.getByRole('button', { name: 'Retry sign-out' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Folders' })).toHaveCount(0);
     await page.unroute('**/api/auth/logout');
