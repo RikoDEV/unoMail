@@ -160,7 +160,7 @@ jobs:
     steps:
       - run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
       - name: Scan published image
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
           format: table
@@ -168,7 +168,7 @@ jobs:
           severity: HIGH,CRITICAL
           scanners: vuln
       - name: Record image software inventory
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
           format: cyclonedx
