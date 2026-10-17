@@ -10,7 +10,6 @@
 
 use std::{
     collections::HashMap,
-    sync::LazyLock,
     time::{Duration, Instant},
 };
 
@@ -523,25 +522,30 @@ pub fn verify_assertion(
     Ok(Assertion { sign_count: parsed.sign_count, user_verified: parsed.user_verified(), backed_up: parsed.backed_up() })
 }
 
-/// Challenges handed out and not used yet, by purpose and account.
 type Challenge = (Vec<u8>, Instant);
-static CHALLENGES: LazyLock<Mutex<HashMap<String, Challenge>>> = LazyLock::new(Default::default);
 const CHALLENGE_TTL: Duration = Duration::from_secs(300);
 
-pub fn new_challenge(key: &str) -> Vec<u8> {
-    let challenge = random_bytes::<32>().to_vec();
-    let mut map = CHALLENGES.lock();
-    map.retain(|_, (_, at)| at.elapsed() < CHALLENGE_TTL);
-    // Room for the open passkey sign-ins (see api::signin) and the other ceremonies.
-    if map.len() < 250_000 {
-        map.insert(key.to_owned(), (challenge.clone(), Instant::now()));
-    }
-    challenge
-}
+/// Challenges handed out and not used yet, by purpose and account. Kept by each server
+/// instance: account ids only mean something within one database.
+#[derive(Default)]
+pub struct Challenges(Mutex<HashMap<String, Challenge>>);
 
-/// Takes the challenge issued for `key` (each one is good for a single answer).
-pub fn take_challenge(key: &str) -> Option<Vec<u8>> {
-    CHALLENGES.lock().remove(key).filter(|(_, at)| at.elapsed() < CHALLENGE_TTL).map(|(challenge, _)| challenge)
+impl Challenges {
+    pub fn issue(&self, key: &str) -> Vec<u8> {
+        let challenge = random_bytes::<32>().to_vec();
+        let mut map = self.0.lock();
+        map.retain(|_, (_, at)| at.elapsed() < CHALLENGE_TTL);
+        // Room for the open passkey sign-ins (see api::signin) and the other ceremonies.
+        if map.len() < 250_000 {
+            map.insert(key.to_owned(), (challenge.clone(), Instant::now()));
+        }
+        challenge
+    }
+
+    /// Takes the challenge issued for `key` (each one is good for a single answer).
+    pub fn take(&self, key: &str) -> Option<Vec<u8>> {
+        self.0.lock().remove(key).filter(|(_, at)| at.elapsed() < CHALLENGE_TTL).map(|(challenge, _)| challenge)
+    }
 }
 
 pub fn b64url(data: &[u8]) -> String {

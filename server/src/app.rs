@@ -74,6 +74,8 @@ pub struct App {
     pub store: Store,
     pub tls: Arc<TlsManager>,
     pub limiter: LoginLimiter,
+    /// Passkey challenges waiting for an answer.
+    pub challenges: crate::twofactor::Challenges,
     pub metrics: Metrics,
     /// DNS-backed SPF/DKIM/DMARC verifier. `None` disables inbound sender authentication
     /// (used by tests, which must not depend on external DNS).
@@ -155,6 +157,7 @@ impl App {
             store,
             tls,
             limiter: LoginLimiter::default(),
+            challenges: Default::default(),
             metrics: Metrics::default(),
             daily: Default::default(),
             authenticator,

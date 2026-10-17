@@ -64,7 +64,7 @@ async fn assertion_options(state: &AppState, account_id: i64, challenge_key: &st
     if credentials.is_empty() {
         return Ok(None);
     }
-    let challenge = twofactor::new_challenge(challenge_key);
+    let challenge = state.challenges.issue(challenge_key);
     Ok(Some(json!({
         "challenge": b64url(&challenge),
         "rpId": rp.id,
@@ -118,7 +118,7 @@ pub struct PasskeyAnswer {
 /// without, any account's passkey will do, and the authenticator must have verified the user
 /// (the passkey replaces the password).
 async fn check_passkey(state: &AppState, account_id: Option<i64>, answer: &PasskeyAnswer, challenge_key: &str) -> Result<Option<i64>, ApiError> {
-    let (Some(rp), Some(challenge)) = (relying_party(state), twofactor::take_challenge(challenge_key)) else { return Ok(None) };
+    let (Some(rp), Some(challenge)) = (relying_party(state), state.challenges.take(challenge_key)) else { return Ok(None) };
     let stored: Option<(i64, i64, Vec<u8>, i64, bool)> = sqlx::query_as("SELECT id, account_id, public_key, sign_count, backup_eligible FROM passkeys WHERE credential_id = ?").bind(&answer.id).fetch_optional(&state.db).await?;
     let Some((id, owner, key, count, backup_eligible)) = stored else { return Ok(None) };
     if account_id.is_some_and(|wanted| wanted != owner) {
@@ -181,7 +181,7 @@ pub async fn passkey_login_options(State(state): State<AppState>, ClientIp(ip): 
         }
         open.insert(key.clone(), (ip, network, Instant::now()));
     }
-    let challenge = twofactor::new_challenge(&format!("passkey-login:{key}"));
+    let challenge = state.challenges.issue(&format!("passkey-login:{key}"));
     Ok(Json(json!({
         "token": token,
         "options": {
@@ -409,7 +409,7 @@ pub async fn passkey_start(State(state): State<AppState>, session: Session, Json
     if existing.len() as i64 >= MAX_PASSKEYS {
         return Err(ApiError::bad(format!("at most {MAX_PASSKEYS} passkeys")));
     }
-    let challenge = twofactor::new_challenge(&format!("register:{}", session.account.id));
+    let challenge = state.challenges.issue(&format!("register:{}", session.account.id));
     Ok(Json(json!({
         "challenge": b64url(&challenge),
         "rp": { "id": rp.id, "name": "unoMail" },
@@ -444,7 +444,7 @@ const TRANSPORTS: [&str; 6] = ["usb", "nfc", "ble", "smart-card", "hybrid", "int
 
 pub async fn passkey_finish(State(state): State<AppState>, session: Session, Json(input): Json<PasskeyRegistration>) -> JsonResult<Value> {
     let rp = relying_party(&state).ok_or_else(|| ApiError::bad("passkeys are not available here"))?;
-    let challenge = twofactor::take_challenge(&format!("register:{}", session.account.id)).ok_or_else(|| ApiError::bad("the request has expired; try again"))?;
+    let challenge = state.challenges.take(&format!("register:{}", session.account.id)).ok_or_else(|| ApiError::bad("the request has expired; try again"))?;
     let decode = |text: &str| unb64url(text).ok_or_else(|| ApiError::bad("malformed passkey response"));
     let credential = twofactor::verify_registration(&decode(&input.client_data)?, &decode(&input.attestation_object)?, &challenge, &rp).map_err(ApiError::bad)?;
     let name: String = input.name.trim().chars().filter(|c| !c.is_control()).take(100).collect();
