@@ -6,7 +6,7 @@ license = "AGPL-3.0-only"
 default-run = "unomail"
 
 [dependencies]
-aes = "0.8"
+aes = "0.9"
 anyhow = "1.0.104"
 arc-swap = "1.9.2"
 argon2 = "0.6.0"
