@@ -27,6 +27,10 @@ import { imageProxyUrl } from './extra';
 import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel } from './jmapClient';
 import { SmimeBadges } from './Smime';
 import { snoozePresets } from './timePresets';
+import { adaptForDark, type Rgb } from './darkColors';
+
+/** The page behind a message in the dark theme (see buildFrameDocument). */
+const DARK_PAGE: Rgb = [29, 27, 32];
 import { guardedDownload, useRiskConfirm } from './RiskConfirm';
 import { attachmentRisk } from './risk';
 import { AttachmentPreview, type PreviewFile, previewKind } from './Preview';
@@ -261,6 +265,8 @@ function MessageBody({ email, accountId, ownEmail }: { email: EmailFull; account
 
   const resize = () => {
     const doc = frame.current?.contentDocument;
+    // Dark text of the message would vanish on the dark page (buildFrameDocument's background).
+    if (doc && theme.palette.mode === 'dark') adaptForDark(doc, DARK_PAGE);
     fit();
     // A suspicious link (marked by the sanitizer) asks before it opens.
     doc?.addEventListener('click', (event) => {
