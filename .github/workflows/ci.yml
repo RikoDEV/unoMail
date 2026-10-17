@@ -77,7 +77,7 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
       - uses: actions/setup-node@v4
@@ -96,7 +96,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: server
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
       - uses: actions/setup-node@v4
@@ -118,7 +118,7 @@ jobs:
       - run: cargo install cargo-audit --locked
       - run: cargo audit
         working-directory: server
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11
       - uses: actions/setup-node@v4
