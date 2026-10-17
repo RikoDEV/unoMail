@@ -10,8 +10,78 @@ services:
       UNOMAIL_ADMIN_EMAIL: admin@example.com
       # Leave unset to have a random password generated and printed once in the logs.
       # UNOMAIL_ADMIN_PASSWORD: change-me-to-a-long-passphrase
+
+      # Everything below is optional and shows the default. See docs/configuration.md.
+      # Settings marked (runtime) can also be changed under Administration -> Server settings,
+      # which overrides the environment.
+
+      # --- Web and TLS ---
+      # UNOMAIL_PUBLIC_URL: https://mail.example.com    # default https://<hostname>
+      # UNOMAIL_PUBLIC_HTTPS_PORT: "443"                # port users reach HTTPS on, if remapped
+      # UNOMAIL_HTTP_REDIRECT: "true"                   # false only behind a TLS-terminating proxy
+      # UNOMAIL_COOKIE_SECURE: "true"                   # false only for local development
+      # UNOMAIL_TRUSTED_PROXIES: ""                     # CIDRs whose X-Forwarded-For is trusted
+      # UNOMAIL_SESSION_TTL: "43200"                    # web session lifetime, seconds
+      # UNOMAIL_GRAVATAR: "on"                          # on, off, or URL of a compatible service
+      # UNOMAIL_ACME_DIRECTORY: https://acme-v02.api.letsencrypt.org/directory
+      # UNOMAIL_ACME_CA_FILE: ""                        # extra root for a private ACME directory
+      # UNOMAIL_ACME_DNS_WAIT: "20"                     # seconds to wait for DNS-01 records
+
+      # --- Protocols (container ports; 0 turns a service off) ---
+      # UNOMAIL_SIEVE_PORT: "4190"                      # ManageSieve; publish 4190 below to use it
+      # UNOMAIL_LMTP_PORT: "0"
+
+      # --- Inbound mail and spam (runtime) ---
+      # UNOMAIL_MAX_MESSAGE_SIZE: "52428800"            # bytes
+      # UNOMAIL_MAX_RECIPIENTS: "100"
+      # UNOMAIL_SMTP_REQUIRE_TLS: "false"
+      # UNOMAIL_GREYLIST: "true"
+      # UNOMAIL_GREYLIST_DELAY: "60"                    # seconds
+      # UNOMAIL_DNSBL_ZONES: zen.spamhaus.org           # comma-separated; empty checks none. Spamhaus
+      #                                                 # refuses public resolvers (8.8.8.8, 1.1.1.1):
+      #                                                 # point `dns:` at a resolver of your own
       # UNOMAIL_ABUSEIPDB_KEY: ""
-      # CLAMAV_ENABLED: "false"
+      # UNOMAIL_ABUSEIPDB_THRESHOLD: "90"
+      # UNOMAIL_TRUSTED_NETWORKS: ""                    # CIDRs of relays trusted like the server
+      # UNOMAIL_ARC_TRUSTED_SEALERS: ""                 # default: Google, Microsoft, Yahoo, Apple, Fastmail, Zoho, Proton
+      # UNOMAIL_RSPAMD_FAIL_OPEN: "false"               # accept mail unscanned when Rspamd is down
+      # UNOMAIL_RSPAMD_PASSWORD: ""                     # Rspamd controller password, if set
+      # UNOMAIL_MILTERS: ""                             # host:port,... run in order
+      # UNOMAIL_MILTER_FAIL_OPEN: "false"
+
+      # --- Antivirus ---
+      # CLAMAV_ENABLED: "true"                          # false on small hosts: the signature database needs well over 1 GB of memory
+      # UNOMAIL_CLAMAV_ADDR: ""                         # external clamd host:port instead of the bundled one
+      # UNOMAIL_VIRUS_ACTION: reject                    # reject or quarantine (runtime)
+
+      # --- Outbound mail (runtime) ---
+      # UNOMAIL_OUTBOUND_RELAY: ""                      # smarthost host:port when port 25 is blocked
+      # UNOMAIL_OUTBOUND_REQUIRE_TLS: "false"
+      # UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR: "300"
+      # UNOMAIL_OUTBOUND_MAX_RECIPIENTS_PER_HOUR: "1000"
+      # UNOMAIL_QUEUE_MAX_AGE: "432000"                 # give up on delivery after, seconds
+      # UNOMAIL_ALLOW_PRIVATE_DESTINATIONS: "false"     # tests and closed networks only
+
+      # --- Storage ---
+      # UNOMAIL_ENCRYPT_MAIL: "false"                   # encrypt stored mail with <data>/blob.key
+      # UNOMAIL_S3_BUCKET: ""                           # keep message contents in S3 instead of /data
+      # UNOMAIL_S3_ENDPOINT: https://s3.example.com
+      # UNOMAIL_S3_REGION: ""
+      # UNOMAIL_S3_ACCESS_KEY: ""
+      # UNOMAIL_S3_SECRET_KEY: ""
+      # UNOMAIL_S3_PREFIX: ""
+      # UNOMAIL_S3_PATH_STYLE: ""
+
+      # --- Backups (a directory or a bucket, not both) ---
+      # UNOMAIL_BACKUP_DIR: /data/backups
+      # UNOMAIL_BACKUP_S3_BUCKET: ""                    # plus the other UNOMAIL_BACKUP_S3_* like above
+      # UNOMAIL_BACKUP_HOUR: "3"                        # UTC
+      # UNOMAIL_BACKUP_KEEP: "7"
+
+      # --- Monitoring and logs ---
+      # UNOMAIL_METRICS_TOKEN: ""                       # bearer token for /metrics
+      # UNOMAIL_LOG: info                               # tracing filter, e.g. info,unomail=debug
+      # UNOMAIL_LOG_FORMAT: ""                          # json for structured logs
     ports:
       - "25:25"
       - "80:80"
@@ -21,6 +91,7 @@ services:
       - "587:587"
       - "993:993"
       - "995:995"
+      # - "4190:4190"   # ManageSieve
     volumes:
       - unomail-data:/data
     cap_drop: [ALL]
