@@ -22,6 +22,7 @@ interface Mailbox {
   smtp_enabled: boolean;
   outbound_blocked: boolean;
   outbound_blocked_reason: string | null;
+  send_only: boolean;
 }
 
 const MB = 1024 * 1024;
@@ -161,9 +162,10 @@ interface FormState {
   pop3_enabled: boolean;
   smtp_enabled: boolean;
   outbound_blocked: boolean;
+  send_only: boolean;
 }
 
-const EMPTY: FormState = { email: '', display_name: '', password: '', role: 'user', quota_mb: '1024', enabled: true, imap_enabled: true, pop3_enabled: true, smtp_enabled: true, outbound_blocked: false };
+const EMPTY: FormState = { email: '', display_name: '', password: '', role: 'user', quota_mb: '1024', enabled: true, imap_enabled: true, pop3_enabled: true, smtp_enabled: true, outbound_blocked: false, send_only: false };
 
 /** Whether a mailbox uses 2-step sign-in, with a reset for an owner who lost the phone. */
 function TwoStepStatus({ id }: { id: number }) {
@@ -222,7 +224,7 @@ export function Mailboxes() {
     const body: Record<string, unknown> = editing
       ? {
           display_name: form.display_name, quota_bytes, enabled: form.enabled, imap_enabled: form.imap_enabled, pop3_enabled: form.pop3_enabled,
-          smtp_enabled: form.smtp_enabled, outbound_blocked: form.outbound_blocked, ...(form.password ? { password: form.password } : {}), ...(isSuper ? { role: form.role } : {}),
+          smtp_enabled: form.smtp_enabled, outbound_blocked: form.outbound_blocked, send_only: form.send_only, ...(form.password ? { password: form.password } : {}), ...(isSuper ? { role: form.role } : {}),
         }
       : { email: form.email.trim(), password: form.password, display_name: form.display_name, quota_bytes, ...(isSuper ? { role: form.role } : {}) };
     const ok = await saving.run(() => (editing ? patch(`/api/accounts/${form.id}`, body) : post('/api/accounts', body)));
@@ -267,6 +269,7 @@ export function Mailboxes() {
             <TableRow key={box.id} hover sx={{ opacity: box.enabled ? 1 : 0.55 }}>
               <TableCell>
                 {box.email}
+                {box.send_only && <Chip size="small" label={t('send only')} sx={{ ml: 1 }} />}
                 {box.outbound_blocked && <Chip size="small" color="error" label={t('sending blocked')} sx={{ ml: 1 }} />}
                 {!box.enabled && <Chip size="small" label="disabled" sx={{ ml: 1 }} />}
               </TableCell>
@@ -359,6 +362,17 @@ export function Mailboxes() {
                   <FormControlLabel control={<Switch checked={form.smtp_enabled} onChange={(e) => set({ smtp_enabled: e.target.checked })} />} label="SMTP" />
                   <FormControlLabel control={<Switch color="error" checked={form.outbound_blocked} onChange={(e) => set({ outbound_blocked: e.target.checked })} />} label={t('Block sending')} />
                 </Stack>
+              )}
+              {editing && (
+                <FormControlLabel
+                  control={<Switch checked={form.send_only} onChange={(e) => set({ send_only: e.target.checked })} />}
+                  label={
+                    <>
+                      {t('Send only')}
+                      <Typography variant="body2" color="text.secondary">{t('For noreply addresses: the mailbox can send, and all mail sent to it is discarded without a bounce.')}</Typography>
+                    </>
+                  }
+                />
               )}
               {editing && form.id !== undefined && <TwoStepStatus id={form.id} />}
             </Stack>

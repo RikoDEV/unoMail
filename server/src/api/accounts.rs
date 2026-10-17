@@ -31,11 +31,12 @@ pub struct AccountRow {
     smtp_enabled: bool,
     outbound_blocked: bool,
     outbound_blocked_reason: Option<String>,
+    send_only: bool,
     created_at: i64,
 }
 
 const SELECT: &str = "SELECT id, domain_id, email, display_name, role, quota_bytes, used_bytes, enabled, imap_enabled, \
-     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, created_at FROM accounts";
+     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, created_at FROM accounts";
 
 async fn load(state: &AppState, id: i64) -> ApiResult<AccountRow> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?")))
@@ -158,6 +159,7 @@ pub struct UpdateAccount {
     pop3_enabled: Option<bool>,
     smtp_enabled: Option<bool>,
     outbound_blocked: Option<bool>,
+    send_only: Option<bool>,
 }
 
 pub async fn update(
@@ -211,7 +213,7 @@ pub async fn update(
     sqlx::query(
         "UPDATE accounts SET display_name = ?, role = ?, quota_bytes = ?, enabled = ?, imap_enabled = ?, pop3_enabled = ?,
             smtp_enabled = ?, outbound_blocked = ?, outbound_blocked_reason = CASE WHEN ? THEN outbound_blocked_reason ELSE NULL END,
-            password_hash = COALESCE(?, password_hash)
+            send_only = ?, password_hash = COALESCE(?, password_hash)
          WHERE id = ?",
     )
     .bind(&display_name)
@@ -223,6 +225,7 @@ pub async fn update(
     .bind(req.smtp_enabled.unwrap_or(current.smtp_enabled))
     .bind(req.outbound_blocked.unwrap_or(current.outbound_blocked))
     .bind(req.outbound_blocked.unwrap_or(current.outbound_blocked))
+    .bind(req.send_only.unwrap_or(current.send_only))
     .bind(&password_hash)
     .bind(id)
     .execute(&mut *tx)

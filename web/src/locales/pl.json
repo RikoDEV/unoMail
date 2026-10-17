@@ -1794,5 +1794,8 @@
   "Find emails from {{name}}": "Znajdź wiadomości od: {{name}}",
   "Open in a new tab": "Otwórz w nowej karcie",
   "No other folders": "Brak innych folderów",
-  "Label “{{name}}” removed": "Usunięto etykietę „{{name}}”"
+  "Label “{{name}}” removed": "Usunięto etykietę „{{name}}”",
+  "send only": "tylko wysyłanie",
+  "Send only": "Tylko wysyłanie",
+  "For noreply addresses: the mailbox can send, and all mail sent to it is discarded without a bounce.": "Dla adresów noreply: skrzynka może wysyłać, a cała przychodząca do niej poczta jest odrzucana bez zwrotu do nadawcy."
 }

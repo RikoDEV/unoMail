@@ -209,6 +209,25 @@ fn has_delivered_to(raw: &[u8], address: &str) -> bool {
 /// Delivers a message to a local account, applying the account's Sieve script: by default
 /// into the INBOX (or Junk when the message was classified as spam).
 pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreError> {
+    // A send-only mailbox (noreply@) accepts its mail, so senders get no bounce, and drops it.
+    let send_only: bool = sqlx::query_scalar("SELECT send_only FROM accounts WHERE id = ?").bind(d.account_id).fetch_optional(&app.db).await?.unwrap_or(false);
+    if send_only {
+        log_delivery(
+            &app.db,
+            DeliveryEvent {
+                direction: d.direction,
+                sender: d.sender,
+                recipient: d.recipient,
+                status: "discarded",
+                detail: "the mailbox is send-only",
+                remote: d.remote,
+                message_id: &crate::store::parse_metadata(d.raw).message_id,
+                size: d.raw.len() as i64,
+            },
+        )
+        .await;
+        return Ok(());
+    }
     let mut message = Vec::with_capacity(d.raw.len() + 128);
     message.extend_from_slice(format!("Return-Path: <{}>\r\nDelivered-To: {}\r\n", d.sender, d.recipient).as_bytes());
     message.extend_from_slice(d.raw);
