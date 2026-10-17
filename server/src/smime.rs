@@ -11,7 +11,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use aes::cipher::{BlockDecryptMut, KeyIvInit, block_padding::Pkcs7};
+use cbc::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cms::{
     builder::{ContentEncryptionAlgorithm, EnvelopedDataBuilder, KeyEncryptionInfo, KeyTransRecipientInfoBuilder, SignedDataBuilder, SignerInfoBuilder, create_signing_time_attribute},
@@ -425,11 +425,11 @@ pub async fn import_p12_isolated(data: Vec<u8>, password: String) -> Result<Impo
 }
 
 pub fn import_p12(data: &[u8], password: &str) -> Result<Imported, String> {
-    let store = p12_keystore::KeyStore::from_pkcs12(data, password).map_err(|_| "the file could not be opened: wrong password, or not a PKCS #12 (.p12/.pfx) file".to_owned())?;
+    let store = p12_keystore::KeyStore::from_pkcs12(data, password, p12_keystore::Pkcs12ImportPolicy::Strict).map_err(|_| "the file could not be opened: wrong password, or not a PKCS #12 (.p12/.pfx) file".to_owned())?;
     let (_, chain) = store.private_key_chain().ok_or("the file contains no private key")?;
-    let mut certs = chain.chain().iter().map(|c| c.as_der().to_vec());
+    let mut certs = chain.certs().iter().map(|c| c.as_der().to_vec());
     let certificate = certs.next().ok_or("the file contains no certificate")?;
-    let key = chain.key().to_vec();
+    let key = chain.key().as_der().to_vec();
     let rsa = RsaPrivateKey::from_pkcs8_der(&key).map_err(|_| "only RSA keys are supported for S/MIME")?;
     let cert = Certificate::from_der(&certificate).map_err(|_| "the certificate cannot be read")?;
     if rsa_public_key(&cert).as_ref() != Some(&rsa.to_public_key()) {
@@ -544,9 +544,9 @@ pub fn decrypt(der: &[u8], identity: &Identity) -> Result<Vec<u8>, String> {
     let data = enveloped.encrypted_content.encrypted_content.as_ref().ok_or("no encrypted content")?.as_bytes();
     let bad = |_| "the message could not be decrypted".to_owned();
     match algorithm.oid {
-        AES128_CBC => cbc::Decryptor::<aes::Aes128>::new_from_slices(&content_key, iv.as_bytes()).map_err(|_| "bad key".to_owned())?.decrypt_padded_vec_mut::<Pkcs7>(data).map_err(bad),
-        AES192_CBC => cbc::Decryptor::<aes::Aes192>::new_from_slices(&content_key, iv.as_bytes()).map_err(|_| "bad key".to_owned())?.decrypt_padded_vec_mut::<Pkcs7>(data).map_err(bad),
-        AES256_CBC => cbc::Decryptor::<aes::Aes256>::new_from_slices(&content_key, iv.as_bytes()).map_err(|_| "bad key".to_owned())?.decrypt_padded_vec_mut::<Pkcs7>(data).map_err(bad),
+        AES128_CBC => cbc::Decryptor::<aes::Aes128>::new_from_slices(&content_key, iv.as_bytes()).map_err(|_| "bad key".to_owned())?.decrypt_padded_vec::<Pkcs7>(data).map_err(bad),
+        AES192_CBC => cbc::Decryptor::<aes::Aes192>::new_from_slices(&content_key, iv.as_bytes()).map_err(|_| "bad key".to_owned())?.decrypt_padded_vec::<Pkcs7>(data).map_err(bad),
+        AES256_CBC => cbc::Decryptor::<aes::Aes256>::new_from_slices(&content_key, iv.as_bytes()).map_err(|_| "bad key".to_owned())?.decrypt_padded_vec::<Pkcs7>(data).map_err(bad),
         _ => Err("unsupported content encryption (only AES is)".into()),
     }
 }

@@ -6,7 +6,7 @@ license = "AGPL-3.0-only"
 default-run = "unomail"
 
 [dependencies]
-aes = "0.8"
+aes = "0.9"
 anyhow = "1.0.104"
 arc-swap = "1.9.2"
 argon2 = "0.6.0"
@@ -14,7 +14,7 @@ axum = { version = "0.8.9", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.12.6", features = ["cookie", "typed-header"] }
 base64 = "0.23.1"
 bytes = "1.12.1"
-cbc = { version = "0.1.2", features = ["alloc"] }
+cbc = { version = "0.2.1", features = ["alloc"] }
 chrono = { version = "0.4.45", default-features = false, features = ["std"] }
 chrono-tz = "0.10.4"
 cms = { version = "0.2.3", features = ["builder"] }
@@ -34,7 +34,7 @@ mail-auth = { version = "0.13.3", default-features = false, features = ["arc", "
 mail-builder = "1.0.0"
 mail-parser = "0.11.9"
 mime = "0.3.17"
-p12-keystore = "0.1.3"
+p12-keystore = "0.4.1"
 parking_lot = "0.12.5"
 pgp = { version = "0.21.0", default-features = false }
 quick-xml = "0.42.0"
@@ -72,7 +72,7 @@ x509-parser = { version = "0.18.1", features = ["verify"] }
 zip = { version = "9.0.2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(unix)'.dependencies]
-rlimit = "0.10"
+rlimit = "0.11"
 
 [dev-dependencies]
 tempfile = "3.27.0"

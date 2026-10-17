@@ -12,7 +12,7 @@ Thanks for your interest! Bug reports, fixes and improvements are welcome.
 
 - **Server** (`server/`): Rust stable. `cargo test` runs the test suite;
   `cargo clippy --all-targets -- -D warnings` must pass.
-- **Web client** (`web/`): Node 22 and pnpm. `pnpm install`, then `pnpm run typecheck`,
+- **Web client** (`web/`): Node 24 and pnpm. `pnpm install`, then `pnpm run typecheck`,
   `pnpm test` and `pnpm run build`.
 - **End-to-end tests** (`e2e/`): Playwright, run with `pnpm test` after building the web client.
 - **Dependency audit:** `./audit.sh`.

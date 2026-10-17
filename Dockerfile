@@ -2,7 +2,7 @@
 # unoMail: mail server, web client, admin panel, Rspamd and ClamAV in one container.
 
 # --- Web UI -------------------------------------------------------------------------------
-FROM node:22-alpine AS web
+FROM node:24-alpine AS web
 WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 COPY web/package.json web/pnpm-lock.yaml* ./
@@ -22,7 +22,7 @@ COPY server/ ./
 RUN touch src/main.rs src/lib.rs && cargo build --release --locked
 
 # --- Runtime ------------------------------------------------------------------------------
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates clamav clamav-daemon clamav-libunrar curl libcap redis rspamd s6-overlay tzdata \
     && addgroup -S unomail && adduser -S -H -G unomail -h /data/unomail -s /sbin/nologin unomail \
     # Rspamd talks to ClamAV over its Unix socket.

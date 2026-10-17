@@ -5,6 +5,11 @@ updates:
     schedule: { interval: weekly }
     groups:
       cargo: { patterns: ["*"], update-types: [minor, patch] }
+    ignore:
+      # der 0.8 needs the whole RustCrypto stack (cms 0.3, x509-cert 0.3, rsa/spki) to move together;
+      # upgrade them in one change once cms 0.3 is released.
+      - dependency-name: der
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
@@ -21,3 +26,7 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    ignore:
+      # Odd-numbered Node releases are never LTS.
+      - dependency-name: node
+        versions: ["23.x", "25.x", "27.x", "29.x"]

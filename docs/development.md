@@ -1,6 +1,6 @@
 # Development
 
-Requirements: Rust (stable), Node 22+ with pnpm, Docker for the image.
+Requirements: Rust (stable), Node 24+ with pnpm, Docker for the image.
 
 ```sh
 # Backend: unit and integration tests (real sockets, TLS, a fake remote mail server)

@@ -5,7 +5,7 @@ mod common;
 use axum::http::StatusCode;
 use base64::Engine;
 use common::{Api, TestEnv};
-use p12_keystore::{Certificate, KeyStore, KeyStoreEntry, PrivateKeyChain};
+use p12_keystore::{Certificate, KeyStore, KeyStoreEntry, PrivateKey, PrivateKeyChain};
 use rsa::pkcs8::EncodePrivateKey;
 use serde_json::{Value, json};
 
@@ -19,7 +19,7 @@ fn p12(email: &str, password: &str) -> Vec<u8> {
     params.distinguished_name.push(rcgen::DnType::CommonName, email);
     let cert = params.self_signed(&pair).unwrap();
     let mut store = KeyStore::new();
-    store.add_entry("key", KeyStoreEntry::PrivateKeyChain(PrivateKeyChain::new(pkcs8, b"1", [Certificate::from_der(cert.der()).unwrap()])));
+    store.add_entry("key", KeyStoreEntry::PrivateKeyChain(PrivateKeyChain::new(b"1".to_vec(), PrivateKey::from_der(&pkcs8).unwrap(), [Certificate::from_der(cert.der()).unwrap()])));
     store.writer(password).write().unwrap()
 }
 
