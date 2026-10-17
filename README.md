@@ -25,8 +25,10 @@ and built-in spam and virus filtering. Written in Rust and React.
 
 **Mail server**
 - SMTP with DKIM signing, SPF/DKIM/DMARC/ARC verification, SRS, DSN, MTA-STS and DANE
-- IMAP (IDLE, CONDSTORE/QRESYNC, ACL, SORT/THREAD, COMPRESS…), POP3, ManageSieve, LMTP
-- JMAP (RFC 8620/8621) including WebSocket push, delayed send and undo
+- IMAP4rev1 and IMAP4rev2 (IDLE, CONDSTORE/QRESYNC, ACL, SORT/THREAD, BINARY, COMPRESS…), POP3, ManageSieve, LMTP
+- JMAP (RFC 8620/8621) including WebSocket push, delayed send and undo, plus JMAP for
+  quotas, Sieve scripts, contacts and calendars
+- REQUIRETLS (RFC 8689) for mail that must never travel unencrypted
 - CalDAV and CardDAV for Thunderbird, Apple Calendar/Contacts, DAVx⁵ and others
 - Automatic Let's Encrypt certificates (HTTP-01 and Cloudflare DNS-01)
 
@@ -40,7 +42,10 @@ and built-in spam and virus filtering. Written in Rust and React.
 
 **Protection and operations**
 - Rspamd, ClamAV, greylisting, DNS blocklists, karma-based auto-blocking, and a personal Bayes filter for each user
-- Admin dashboard with traffic charts, delivery logs, TLS and DMARC reports
+- A built-in filter for deceptive links, sender reputation (network, provider, domain),
+  penalised countries and networks, and spam traps
+- Admin dashboard with traffic charts, delivery logs, TLS and DMARC reports; Prometheus
+  metrics and OpenTelemetry traces
 - Mailing lists with moderation, webhooks, LDAP lookups, milters
 - Incremental daily backups to a directory or S3, optional encryption of stored mail
 

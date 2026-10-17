@@ -104,3 +104,50 @@ async fn sessions_can_be_compressed() {
     assert!(text.contains("a OK") && text.contains("Subject: Squeezed"), "{text}");
     assert!(text.contains("c NO [COMPRESSIONACTIVE]"), "{text}");
 }
+
+#[tokio::test]
+async fn imap4rev2_names_searches_status_and_binary() {
+    let (env, addr) = setup().await;
+    let raw = "From: carol@remote.example\r\nTo: bob@example.org\r\nSubject: Report\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nSee attached.\r\n--b\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\n\r\naGVsbG8gYmluYXJ5\r\n--b--\r\n";
+    let mut smtp = Client::smtp(env.mx).await;
+    assert!(smtp.send_mail("carol@remote.example", &["bob@example.org"], raw).await.starts_with("250"));
+    let mut c = login(addr).await;
+    assert!(cmd(&mut c, "c", "CAPABILITY").await.contains("IMAP4rev2"));
+    assert!(cmd(&mut c, "e", "ENABLE IMAP4rev2").await.contains("* ENABLED IMAP4rev2"));
+
+    // Mailbox names are UTF-8 now, not modified UTF-7.
+    assert!(cmd(&mut c, "m", "CREATE \"Sprawy różne\"").await.contains("m OK"));
+    let list = cmd(&mut c, "l", "LIST \"\" \"Spr*\"").await;
+    // Quoted or as a literal; either way UTF-8, not "&AXM-".
+    assert!(list.contains("Sprawy różne") && !list.contains("&"), "{list}");
+    let subscribed = cmd(&mut c, "ls", "LIST (SUBSCRIBED) \"\" \"INBOX\"").await;
+    assert!(subscribed.contains("* LIST (") && subscribed.contains("\\Subscribed"), "{subscribed}");
+
+    let status = cmd(&mut c, "st", "STATUS INBOX (MESSAGES SIZE DELETED)").await;
+    assert!(status.contains("MESSAGES 1") && status.contains("DELETED 0") && status.contains("SIZE "), "{status}");
+
+    let select = cmd(&mut c, "s", "SELECT INBOX").await;
+    assert!(!select.contains("RECENT"), "{select}");
+    assert!(select.contains("* LIST () \"/\" \"INBOX\"") || select.contains("* LIST () \"/\" INBOX"), "{select}");
+    let reselect = cmd(&mut c, "s2", "EXAMINE INBOX").await;
+    assert!(reselect.contains("* OK [CLOSED]"), "{reselect}");
+
+    let search = cmd(&mut c, "f", "SEARCH ALL").await;
+    assert!(search.contains("* ESEARCH (TAG \"f\") ALL 1"), "{search}");
+
+    let binary = cmd(&mut c, "b", "FETCH 1 (BINARY.SIZE[2] BINARY.PEEK[2])").await;
+    assert!(binary.contains("BINARY.SIZE[2] 12"), "{binary}");
+    assert!(binary.contains("BINARY[2] ~{12}") && binary.contains("hello binary"), "{binary}");
+    assert!(cmd(&mut c, "b2", "FETCH 1 BINARY[1.HEADER]").await.contains("b2 BAD"));
+
+    // literal8 is accepted where a literal is.
+    c.send_raw(b"a APPEND INBOX ~{20+}\r\nSubject: x\r\n\r\nbody\r\n\r\n").await;
+    let mut appended = String::new();
+    while let Some(line) = c.read_line().await {
+        appended.push_str(&line);
+        if line.starts_with("a ") {
+            break;
+        }
+    }
+    assert!(appended.contains("a OK"), "{appended}");
+}

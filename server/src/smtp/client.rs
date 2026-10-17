@@ -209,6 +209,28 @@ struct Envelope<'a> {
     dsn: Option<&'a crate::smtp::dsn::Dsn>,
     /// Set once the receiving server took over the notifications.
     dsn_passed: std::sync::atomic::AtomicBool,
+    /// REQUIRETLS (RFC 8689): only a verified, encrypted hop that promises the same may take it.
+    require_tls: bool,
+    /// The message says `TLS-Required: No`: policy failures do not hold it back.
+    tls_optional: bool,
+}
+
+impl Envelope<'_> {
+    fn new<'a>(helo: &'a str, sender: &'a str, recipient: &'a str, raw: &'a [u8], data: &'a [u8], dsn: Option<&'a crate::smtp::dsn::Dsn>) -> Envelope<'a> {
+        let require_tls = dsn.is_some_and(|dsn| dsn.require_tls);
+        // RFC 8689 5: the header is ignored when REQUIRETLS was asked for.
+        let tls_optional = !require_tls && tls_required_no(raw);
+        Envelope { helo, sender, recipient, raw, data, dsn, dsn_passed: Default::default(), require_tls, tls_optional }
+    }
+}
+
+/// Whether the header section carries `TLS-Required: No` (RFC 8689 5).
+fn tls_required_no(raw: &[u8]) -> bool {
+    let end = crate::security::authn::find_header_end(raw).min(raw.len());
+    let Ok(message) = std::str::from_utf8(&raw[..end]) else { return false };
+    message.lines().any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| name.trim().eq_ignore_ascii_case("TLS-Required") && value.trim().eq_ignore_ascii_case("no"))
+    })
 }
 
 /// Decides whether a message must or should travel as internationalized mail (RFC 6531).
@@ -260,11 +282,19 @@ async fn transact<S: AsyncRead + AsyncWrite + Unpin>(t: &mut Transport<S>, env: 
         (converted.as_slice(), "")
     };
     let size = if extensions.iter().any(|e| e.starts_with("SIZE")) { format!(" SIZE={}", data.len()) } else { String::new() };
+    let require_tls = if env.require_tls {
+        if !extensions.iter().any(|e| e == "REQUIRETLS") {
+            return Err(SendError::Temporary(REQUIRETLS_UNSUPPORTED.into()));
+        }
+        " REQUIRETLS"
+    } else {
+        ""
+    };
     let (mail_dsn, rcpt_dsn) = match env.dsn.filter(|dsn| !dsn.is_empty()) {
         Some(dsn) if extensions.iter().any(|e| e == "DSN") => crate::smtp::dsn::smtp_parameters(dsn, env.recipient),
         _ => (String::new(), String::new()),
     };
-    t.command(&format!("MAIL FROM:<{}>{size}{body}{utf8}{mail_dsn}", env.sender), 2).await?;
+    t.command(&format!("MAIL FROM:<{}>{size}{body}{utf8}{mail_dsn}{require_tls}", env.sender), 2).await?;
     t.command(&format!("RCPT TO:<{}>{rcpt_dsn}", env.recipient), 2).await?;
     env.dsn_passed.store(!rcpt_dsn.is_empty(), std::sync::atomic::Ordering::Relaxed);
     t.command_within("DATA", 3, DATA_INIT_TIMEOUT).await?;
@@ -274,6 +304,8 @@ async fn transact<S: AsyncRead + AsyncWrite + Unpin>(t: &mut Transport<S>, env: 
     let _ = t.write(b"QUIT\r\n", Duration::from_secs(5)).await;
     Ok(reply.text())
 }
+
+const REQUIRETLS_UNSUPPORTED: &str = "the receiving server does not support REQUIRETLS (5.7.10)";
 
 /// A session's TLS outcome for reporting: the TLS-RPT failure type, if the session (or the
 /// certificate) did not live up to the policy.
@@ -300,7 +332,7 @@ async fn session(tcp: TcpStream, host: &str, check: Option<transport::Check>, en
     };
 
     if !try_tls || !extensions.iter().any(|e| e == "STARTTLS") {
-        if required {
+        if required || env.require_tls {
             return (Err(temp("remote server does not offer STARTTLS and TLS is required")), Some("starttls-not-supported"), false);
         }
         let outcome = (try_tls && check.is_some()).then_some("starttls-not-supported");
@@ -411,6 +443,7 @@ async fn relay_session(tcp: TcpStream, relay: &Relay, env: &Envelope<'_>) -> Res
             authenticate(&mut secure, relay, &extensions).await?;
             transact(&mut secure, env, &extensions).await
         }
+        _ if env.require_tls => Err(SendError::Permanent("the message requires TLS (REQUIRETLS), but the SMTP server is reached without encryption".into())),
         _ => {
             let mut plain = Transport::new(tcp);
             plain.expect(2, COMMAND_TIMEOUT).await?;
@@ -440,7 +473,7 @@ async fn relay_deliver(app: &App, relay: &Relay, trusted: bool, sender: &str, re
     }
     let data = encode_data(raw);
     let recipient_text = recipient.to_string();
-    let env = Envelope { helo: &app.cfg.hostname, sender, recipient: &recipient_text, raw, data: &data, dsn, dsn_passed: Default::default() };
+    let env = Envelope::new(&app.cfg.hostname, sender, &recipient_text, raw, &data, dsn);
     let addrs: Vec<SocketAddr> = tokio::net::lookup_host((relay.host.as_str(), relay.port)).await.map_err(|e| temp(format!("cannot resolve {}: {e}", relay.host)))?.collect();
     // Users choose this host: it must not be a way to reach the server's internal network.
     if !allow_private && addrs.iter().any(|a| is_private(a.ip())) {
@@ -474,7 +507,7 @@ pub async fn deliver(app: &App, sender: &str, recipient: &Address, raw: &[u8]) -
 pub async fn deliver_with(app: &App, sender: &str, recipient: &Address, raw: &[u8], dsn: Option<&crate::smtp::dsn::Dsn>) -> Result<(String, bool), SendError> {
     let data = encode_data(raw);
     let recipient_text = recipient.to_string();
-    let env = Envelope { helo: &app.cfg.hostname, sender, recipient: &recipient_text, raw, data: &data, dsn, dsn_passed: Default::default() };
+    let env = Envelope::new(&app.cfg.hostname, sender, &recipient_text, raw, &data, dsn);
 
     // The administrator's default route takes all outgoing mail. With credentials it is a
     // submission server (implicit TLS on 465, STARTTLS otherwise); without, a smarthost
@@ -561,8 +594,9 @@ pub async fn deliver_with(app: &App, sender: &str, recipient: &Address, raw: &[u
         },
         _ => None,
     };
-    if let Some(policy) = sts.as_ref().filter(|p| p.mode == transport::StsMode::Enforce)
+    if let Some(policy) = sts.as_ref().filter(|p| p.mode == transport::StsMode::Enforce || (env.require_tls && p.mode == transport::StsMode::Testing))
         && !relayed
+        && !env.tls_optional
     {
         candidates.retain(|(host, _)| policy.allows(host));
         if candidates.is_empty() {
@@ -585,13 +619,21 @@ pub async fn deliver_with(app: &App, sender: &str, recipient: &Address, raw: &[u
                 let lines = records.iter().map(|r| format!("{} {} {} {}", r.usage, r.selector, r.matching, r.data.iter().map(|b| format!("{b:02x}")).collect::<String>())).collect();
                 (Some(transport::Check::Dane(records)), transport::Applied { policy_type: "tlsa", policy_string: lines })
             }
+            // RFC 8689 4.2.1: the next hop must be authenticated by DANE or MTA-STS.
+            transport::Dane::None if env.require_tls && sts.is_none() && !relayed => {
+                last_error = SendError::Permanent(format!("{host}: the message requires TLS (REQUIRETLS), but {} publishes neither DANE nor MTA-STS (5.7.10)", recipient.domain));
+                continue;
+            }
             transport::Dane::None => match &sts {
-                Some(policy) if policy.mode == transport::StsMode::Enforce => (Some(transport::Check::WebPki), transport::Applied { policy_type: "sts", policy_string: policy.lines() }),
+                Some(policy) if policy.mode == transport::StsMode::Enforce || env.require_tls => (Some(transport::Check::WebPki), transport::Applied { policy_type: "sts", policy_string: policy.lines() }),
                 Some(policy) => (Some(transport::Check::Observe), transport::Applied { policy_type: "sts", policy_string: policy.lines() }),
-                None if app.rt().outbound_require_tls => (Some(transport::Check::WebPki), transport::Applied { policy_type: "no-policy-found", policy_string: Vec::new() }),
+                None if app.rt().outbound_require_tls || env.require_tls => (Some(transport::Check::WebPki), transport::Applied { policy_type: "no-policy-found", policy_string: Vec::new() }),
                 None => (None, transport::Applied { policy_type: "no-policy-found", policy_string: Vec::new() }),
             },
         };
+        // `TLS-Required: No`: encryption is still used, but a certificate that fails the
+        // policy no longer stops the message (the outcome is recorded all the same).
+        let check = if env.tls_optional { check.map(|_| transport::Check::Observe) } else { check };
         for addr in addrs.into_iter().take(2) {
             let tcp = match tokio::time::timeout(CONNECT_TIMEOUT, TcpStream::connect(addr)).await {
                 Ok(Ok(tcp)) => tcp,
@@ -625,6 +667,13 @@ pub async fn deliver_with(app: &App, sender: &str, recipient: &Address, raw: &[u
             }
         }
     }
+    // A message demanding REQUIRETLS cannot wait for the receiver to learn the extension.
+    if let SendError::Temporary(msg) = &last_error
+        && env.require_tls
+        && msg.ends_with(REQUIRETLS_UNSUPPORTED)
+    {
+        return Err(SendError::Permanent(msg.clone()));
+    }
     Err(last_error)
 }
 
@@ -645,7 +694,7 @@ mod tests {
 
     #[test]
     fn internationalized_mail_needs_the_extension() {
-        let env = |sender: &'static str, recipient: &'static str, data: &'static [u8]| Envelope { helo: "h", sender, recipient, raw: data, data, dsn: None, dsn_passed: Default::default() };
+        let env = |sender: &'static str, recipient: &'static str, data: &'static [u8]| Envelope::new("h", sender, recipient, data, data, None);
         let ascii = env("a@example.org", "b@example.org", b"Subject: plain\r\n\r\nza\xc5\xbc\xc3\xb3\xc5\x82\xc4\x87\r\n.\r\n");
         assert_eq!(smtputf8_parameter(&ascii, true), Ok(""), "a UTF-8 body alone is ordinary 8BITMIME");
         let rcpt = env("a@example.org", "j\u{f3}zef@example.org", b"Subject: x\r\n\r\n.\r\n");

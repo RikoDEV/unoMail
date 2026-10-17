@@ -520,3 +520,31 @@ async fn the_web_client_starts_with_one_request() {
     assert!(start.body["skins"].is_array() && start.body["plugins"].is_array());
     assert_eq!(Api::new(&env).get("/api/me/startup").await.status.as_u16(), 401);
 }
+
+#[tokio::test]
+async fn every_domain_keeps_a_postmaster_mailbox() {
+    let (env, api) = setup().await;
+    let created = api.post("/api/domains", json!({ "name": "reports.example" })).await;
+    assert_eq!(created.status, StatusCode::OK, "{}", created.text);
+    let listed = api.get("/api/accounts?q=postmaster@reports.example").await.body;
+    let postmaster = &listed["items"][0];
+    assert_eq!((postmaster["email"].as_str(), postmaster["system"].as_bool()), (Some("postmaster@reports.example"), Some(true)));
+    let id = postmaster["id"].as_i64().unwrap();
+    let refused = api.delete(&format!("/api/accounts/{id}")).await;
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{}", refused.text);
+
+    // Domains made before (or outside the API) get one at startup; existing mailboxes and
+    // aliases of that name are respected.
+    env.account("postmaster@example.org").await;
+    env.domain("aliased.example").await;
+    env.alias("postmaster@aliased.example", &["admin@example.org"]).await;
+    env.domain("old.example").await;
+    unomail::directory::ensure_postmasters(&env.app).await;
+    let system: Vec<String> = sqlx::query_scalar("SELECT email FROM accounts WHERE system = 1 ORDER BY email").fetch_all(&env.app.db).await.unwrap();
+    assert_eq!(system, ["postmaster@example.org", "postmaster@old.example", "postmaster@reports.example"]);
+
+    // Mail to it is accepted (and a DMARC report in it would feed the dashboard).
+    let mut c = common::Client::smtp(env.mx).await;
+    let reply = c.send_mail("noreply-dmarc@google.example", &["postmaster@old.example"], &common::message("Google <noreply-dmarc@google.example>", "postmaster@old.example", "Report Domain: old.example", "x")).await;
+    assert!(reply.starts_with("250"), "{reply}");
+}

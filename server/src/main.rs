@@ -59,6 +59,9 @@ async fn maintenance(app: AppState) {
         if let Err(err) = app.store.prune_changes(200_000).await {
             tracing::warn!(%err, "change log pruning failed");
         }
+        if let Err(err) = unomail::jmap::objects::prune(&app.db, 200_000).await {
+            tracing::warn!(%err, "JMAP change log pruning failed");
+        }
         let expired = unomail::retention::run(&app).await;
         if expired > 0 {
             tracing::info!(expired, "emptied old messages from Trash and Junk");
@@ -153,7 +156,8 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::fmt::layer().with_ansi(ansi).boxed()
         };
         // The same events also feed the system log viewer of the admin panel.
-        tracing_subscriber::registry().with(filter).with(output).with(unomail::logstream::SystemLogLayer).init();
+        // Spans go to an OpenTelemetry collector when one is configured.
+        tracing_subscriber::registry().with(filter).with(output).with(unomail::logstream::SystemLogLayer).with(unomail::telemetry::from_env()).init();
     }
     // Libraries that build their own TLS configuration use the process-wide provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -171,6 +175,7 @@ async fn main() -> anyhow::Result<()> {
         .context("cannot initialize a DNS resolver")?;
     let app = App::new(cfg, Some(authenticator)).await?;
     directory::bootstrap_admin(&app).await?;
+    directory::ensure_postmasters(&app).await;
     unomail::import::recover(&app).await;
 
     // Bind everything before starting any service so misconfiguration fails fast.

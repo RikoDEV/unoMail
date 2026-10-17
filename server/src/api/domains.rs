@@ -67,6 +67,7 @@ pub async fn create(State(state): State<AppState>, session: Session, Json(req): 
     let id = directory::create_domain(&state.db, &req.name).await?;
     // Every domain starts with a signing key so that outgoing mail is authenticated from day one.
     dkim::create_key(&state.db, id, &default_selector(), Algorithm::Rsa).await?;
+    directory::ensure_postmaster(&state, id).await?;
     let domain = load(&state, id).await?;
     session.audit(&state, "domain.created", &domain.name, "").await;
     Ok(Json(domain))

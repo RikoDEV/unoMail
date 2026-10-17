@@ -51,6 +51,14 @@ are sent "via" the list address, as changing them would break the sender's signa
 
 ## Operations (Administration)
 
+- **Postmaster mailboxes:** every hosted domain has a `postmaster@<domain>` mailbox, created
+  with the domain (and at startup for older domains). Mail domains must accept postmaster
+  (RFC 5321), and the DMARC and TLS-RPT records on the DNS page send reports there: they are
+  read into the DMARC and TLS report pages and also kept in the mailbox. It is marked
+  *system* in Mailboxes and cannot be deleted; set a password to read it, or forward it with
+  a Sieve filter. An existing alias named postmaster@ is used instead, and the mailbox does not
+  count against a domain's mailbox limit.
+
 - **Dashboard** opens with *Daily stats*, a full-width line chart of the last 7, 30 or 90
   days: valid and invalid SMTP connections (blocked by the blacklist, a DNS blocklist or
   reputation; limited by the per-address connection limit), delivered mail (local and remote),
@@ -72,6 +80,17 @@ are sent "via" the list address, as changing them would break the sender's signa
 - **Spam filter** configures the built-in Rspamd: the scores at which mail is marked as spam
   or rejected, the score of every rule, and the latest verdicts. Changes are stored by Rspamd
   and apply immediately.
+- **Built-in spam filter** (Server settings) adds the server's own tests after Rspamd, recorded
+  in an `X-Unomail-Filter` header: links written as IP numbers, look-alike (mixed-script)
+  domains, user names in front of a host, link shorteners, links whose text names another
+  domain, and floods of domains; the reputation of the sending network (/24 or /48), its
+  autonomous system and its verified domain; and countries or autonomous systems you
+  penalise (looked up in Team Cymru's DNS service, `origin.asn.cymru.com`). Mail at the junk
+  score goes to Junk. Reputation is learned from clear verdicts (Rspamd's junk action, the
+  filter's own tests, spam traps), from DMARC-verified mail that was accepted, and from users
+  moving mail into or out of Junk. **Spam traps** are addresses of your domains that nobody
+  uses (publish them where only harvesters look): mail to them is accepted, never delivered,
+  teaches the reputation that its source sends spam, and lowers the sender's karma by 5.
 - **TLS reports** (RFC 8460) received about your domains, and how this server's own outgoing
   sessions fared; domains that ask get the latter as a daily report. Outgoing mail honours
   receivers' **MTA-STS** policies (RFC 8461) and **DANE** TLSA records (RFC 7672, checked with

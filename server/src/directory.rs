@@ -55,7 +55,8 @@ pub async fn create_account(app: &App, new: NewAccount<'_>) -> ApiResult<Account
     if max_mailboxes > 0 {
         let count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM accounts WHERE domain_id = ?").bind(domain_id).fetch_one(&app.db).await?;
-        if count >= max_mailboxes {
+        let system: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM accounts WHERE domain_id = ? AND system = 1").bind(domain_id).fetch_one(&app.db).await?;
+        if count - system >= max_mailboxes {
             return Err(ApiError::Conflict("the domain has reached its mailbox limit".into()));
         }
     }
@@ -88,6 +89,49 @@ pub async fn create_account(app: &App, new: NewAccount<'_>) -> ApiResult<Account
     app.store.create_default_mailboxes(id).await?;
     crate::webhooks::emit(app, "account.created", serde_json::json!({ "email": email }));
     Account::by_id(&app.db, id).await?.ok_or(ApiError::NotFound)
+}
+
+/// Makes sure `postmaster@<domain>` exists: every mail domain must accept it (RFC 5321
+/// 4.5.1), and the DMARC and TLS-RPT records the server suggests send reports there. A system
+/// mailbox is created with a password nobody knows (an administrator sets one to read it); an
+/// existing mailbox of that name becomes the system one, and an alias of that name is left
+/// to do the job. Not counted against the domain's mailbox limit.
+pub async fn ensure_postmaster(app: &App, domain_id: i64) -> ApiResult<()> {
+    let domain: String = sqlx::query_scalar("SELECT name FROM domains WHERE id = ?").bind(domain_id).fetch_optional(&app.db).await?.ok_or(ApiError::NotFound)?;
+    let email = format!("postmaster@{domain}");
+    let marked = sqlx::query("UPDATE accounts SET system = 1 WHERE email = ?").bind(&email).execute(&app.db).await?.rows_affected();
+    let alias: Option<i64> = sqlx::query_scalar("SELECT 1 FROM aliases WHERE source = ?").bind(&email).fetch_optional(&app.db).await?;
+    if marked > 0 || alias.is_some() {
+        return Ok(());
+    }
+    let hash = auth::hash_password(&random_token()).await?;
+    let default_quota: i64 = sqlx::query_scalar("SELECT default_quota_bytes FROM domains WHERE id = ?").bind(domain_id).fetch_one(&app.db).await?;
+    let id = sqlx::query(
+        "INSERT INTO accounts (domain_id, local_part, email, display_name, password_hash, role, quota_bytes, created_at, system)
+         VALUES (?, 'postmaster', ?, 'Postmaster', ?, ?, ?, ?, 1)",
+    )
+    .bind(domain_id)
+    .bind(&email)
+    .bind(hash)
+    .bind(Role::User)
+    .bind(default_quota)
+    .bind(now())
+    .execute(&app.db)
+    .await?
+    .last_insert_rowid();
+    app.store.create_default_mailboxes(id).await?;
+    crate::db::audit(&app.db, "system", "account.postmaster_created", &email, "", "").await;
+    Ok(())
+}
+
+/// [`ensure_postmaster`] for every hosted domain; run at startup.
+pub async fn ensure_postmasters(app: &App) {
+    let domains: Vec<i64> = sqlx::query_scalar("SELECT id FROM domains").fetch_all(&app.db).await.unwrap_or_default();
+    for domain_id in domains {
+        if let Err(err) = ensure_postmaster(app, domain_id).await {
+            tracing::warn!(error = %err, domain_id, "could not create the postmaster mailbox");
+        }
+    }
 }
 
 /// Normalizes and validates alias destinations.

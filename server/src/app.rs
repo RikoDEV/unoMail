@@ -31,6 +31,49 @@ pub struct Metrics {
     pub spam_blocked: AtomicU64,
     pub auth_failures: AtomicU64,
     pub http_requests: AtomicU64,
+    pub deliveries_deferred: AtomicU64,
+    pub jmap_calls: AtomicU64,
+    pub imap_commands: AtomicU64,
+    pub http_duration: Histogram,
+    pub delivery_duration: Histogram,
+}
+
+/// Upper bounds (seconds) of the latency buckets; Prometheus adds `+Inf`.
+pub const LATENCY_BUCKETS: [f64; 11] = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0];
+
+/// A Prometheus histogram over [`LATENCY_BUCKETS`], updated without locks.
+#[derive(Default)]
+pub struct Histogram {
+    /// Observations at or below each bound (not cumulative; summed when rendered).
+    buckets: [AtomicU64; LATENCY_BUCKETS.len()],
+    count: AtomicU64,
+    /// Sum of all observations in microseconds.
+    sum_micros: AtomicU64,
+}
+
+impl Histogram {
+    pub fn observe(&self, elapsed: std::time::Duration) {
+        let secs = elapsed.as_secs_f64();
+        if let Some(index) = LATENCY_BUCKETS.iter().position(|bound| secs <= *bound) {
+            self.buckets[index].fetch_add(1, Ordering::Relaxed);
+        }
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.sum_micros.fetch_add(elapsed.as_micros().min(u128::from(u64::MAX)) as u64, Ordering::Relaxed);
+    }
+
+    /// The histogram in the Prometheus text format, under `name`.
+    pub fn render(&self, name: &str, help: &str) -> String {
+        let mut out = format!("# HELP {name} {help}\n# TYPE {name} histogram\n");
+        let mut cumulative = 0;
+        for (bound, bucket) in LATENCY_BUCKETS.iter().zip(&self.buckets) {
+            cumulative += bucket.load(Ordering::Relaxed);
+            out.push_str(&format!("{name}_bucket{{le=\"{bound}\"}} {cumulative}\n"));
+        }
+        let count = self.count.load(Ordering::Relaxed);
+        out.push_str(&format!("{name}_bucket{{le=\"+Inf\"}} {count}\n"));
+        out.push_str(&format!("{name}_sum {}\n{name}_count {count}\n", self.sum_micros.load(Ordering::Relaxed) as f64 / 1_000_000.0));
+        out
+    }
 }
 
 impl Metrics {
@@ -74,6 +117,8 @@ pub struct App {
     pub store: Store,
     pub tls: Arc<TlsManager>,
     pub limiter: LoginLimiter,
+    /// SMTP abuse waiting to be reported to AbuseIPDB.
+    pub abuse: crate::security::reputation::AbuseQueue,
     /// Passkey challenges waiting for an answer.
     pub challenges: crate::twofactor::Challenges,
     /// Single sign-on discovery, pending sign-ins and verified tokens.
@@ -159,6 +204,7 @@ impl App {
             store,
             tls,
             limiter: LoginLimiter::default(),
+            abuse: Default::default(),
             challenges: Default::default(),
             oauth: Default::default(),
             metrics: Metrics::default(),

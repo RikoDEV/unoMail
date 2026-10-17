@@ -1,6 +1,7 @@
-//! IMAP4rev1 server (RFC 3501) over implicit TLS (port 993) or STARTTLS (port 143), with the IDLE, MOVE, UIDPLUS,
-//! LITERAL+, SASL-IR, NAMESPACE, UNSELECT, SPECIAL-USE, ID, ENABLE, CONDSTORE, QRESYNC, QUOTA, SORT,
-//! THREAD, ESEARCH, LIST-STATUS and COMPRESS=DEFLATE extensions. Mailbox names use modified UTF-7 on the wire (RFC 3501 section 5.1.3).
+//! IMAP4rev1 (RFC 3501) and IMAP4rev2 (RFC 9051) server over implicit TLS (port 993) or STARTTLS (port 143), with the
+//! IDLE, MOVE, UIDPLUS, LITERAL+, SASL-IR, NAMESPACE, UNSELECT, SPECIAL-USE, ID, ENABLE, CONDSTORE, QRESYNC, QUOTA,
+//! SORT, THREAD, ESEARCH, LIST-EXTENDED, LIST-STATUS, STATUS=SIZE, BINARY and COMPRESS=DEFLATE extensions. Mailbox
+//! names use modified UTF-7 on the wire (RFC 3501 section 5.1.3) until a client enables IMAP4rev2, then UTF-8.
 
 use std::{net::SocketAddr, time::Duration};
 
@@ -22,8 +23,8 @@ pub mod parse;
 use fetch::Section;
 use parse::{Arg, SequenceSet, Tokenizer, list_match, string, uid_set, utf7_decode, utf7_encode};
 
-const CAPABILITIES: &str = "IMAP4rev1 LITERAL+ SASL-IR AUTH=PLAIN IDLE NAMESPACE ACL UIDPLUS MOVE UNSELECT CHILDREN SPECIAL-USE ID ENABLE CONDSTORE QRESYNC \
-     QUOTA QUOTA=RES-STORAGE SORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES ESEARCH LIST-STATUS COMPRESS=DEFLATE";
+const CAPABILITIES: &str = "IMAP4rev1 IMAP4rev2 LITERAL+ SASL-IR AUTH=PLAIN IDLE NAMESPACE ACL UIDPLUS MOVE UNSELECT CHILDREN SPECIAL-USE ID ENABLE CONDSTORE QRESYNC \
+     QUOTA QUOTA=RES-STORAGE SORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES ESEARCH LIST-EXTENDED LIST-STATUS STATUS=SIZE BINARY COMPRESS=DEFLATE";
 /// Advertised before STARTTLS: no authentication is possible in plaintext.
 const PLAINTEXT_CAPABILITIES: &str = "IMAP4rev1 STARTTLS LOGINDISABLED";
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(60);
@@ -66,6 +67,8 @@ struct Session {
     qresync: bool,
     /// Single sign-on is configured: token logins are advertised.
     oauth: bool,
+    /// The client enabled IMAP4rev2: UTF-8 mailbox names, ESEARCH replies, no RECENT.
+    rev2: bool,
 }
 
 enum Flow {
@@ -516,7 +519,9 @@ impl Session {
             if !self.still_signed_in().await {
                 return self.line("* BYE the sign-in is no longer valid").await;
             }
-            let (result, flow) = self.execute(&tag, &command, &args[2..]).await?;
+            Metrics::inc(&self.app.metrics.imap_commands);
+            let span = tracing::info_span!("imap.command", imap.command = %command);
+            let (result, flow) = tracing::Instrument::instrument(self.execute(&tag, &command, &args[2..]), span).await?;
             // Untagged updates may not be sent while a FETCH/STORE/SEARCH by sequence number is
             // in progress, because they renumber messages.
             if matches!(flow, Flow::Silent) {
@@ -573,13 +578,14 @@ impl Session {
                 for extension in args.iter().filter_map(Arg::atom_upper) {
                     match extension.as_str() {
                         "CONDSTORE" => self.condstore = true,
+                        "IMAP4REV2" => self.rev2 = true,
                         "QRESYNC" => {
                             self.condstore = true;
                             self.qresync = true;
                         }
                         _ => continue,
                     }
-                    enabled.push(extension);
+                    enabled.push(if extension == "IMAP4REV2" { "IMAP4rev2".to_owned() } else { extension });
                 }
                 self.line(format!("* ENABLED {}", enabled.join(" ")).trim_end()).await?;
                 Ok("ENABLE completed".into())
@@ -724,6 +730,16 @@ impl Session {
         }
     }
 
+    /// A mailbox name as the client sent it: modified UTF-7, or UTF-8 under IMAP4rev2.
+    fn decode_name(&self, name: &str) -> String {
+        if self.rev2 { name.to_owned() } else { utf7_decode(name) }
+    }
+
+    /// A mailbox name as the client expects it.
+    fn encode_name(&self, name: &str) -> String {
+        if self.rev2 { name.to_owned() } else { utf7_encode(name) }
+    }
+
     fn account_id(&self) -> i64 {
         self.account.as_ref().map_or(0, |a| a.id)
     }
@@ -741,7 +757,7 @@ impl Session {
     /// Resolves a mailbox name to one of the account's own mailboxes or, in the `Shared/`
     /// namespace, to a mailbox another user shared with it, together with the rights held.
     async fn find_mailbox_rights(&self, name: Option<String>) -> Result<(Mailbox, String), String> {
-        let name = utf7_decode(&name.ok_or("BAD mailbox name required")?);
+        let name = self.decode_name(&name.ok_or("BAD mailbox name required")?);
         let Some(account) = &self.account else { return Err("BAD authenticate first".into()) };
         if name.starts_with(crate::sharing::SHARED_PREFIX) {
             return match crate::sharing::shared_by_name(&self.app.db, account, &name).await {
@@ -771,12 +787,13 @@ impl Session {
         };
         let display = match (&self.account, mailbox.account_id == self.account_id()) {
             (_, true) => mailbox.name.clone(),
-            _ => args.first().and_then(Arg::text).map(|n| utf7_decode(&n)).unwrap_or_default(),
+            _ => args.first().and_then(Arg::text).map(|n| self.decode_name(&n)).unwrap_or_default(),
         };
+        let display = self.encode_name(&display);
         let mut out = Vec::new();
         let begin = |out: &mut Vec<u8>, keyword: &str| {
             out.extend_from_slice(format!("* {keyword} ").as_bytes());
-            string(out, utf7_encode(&display).as_bytes());
+            string(out, display.as_bytes());
         };
         if command == "MYRIGHTS" {
             begin(&mut out, "MYRIGHTS");
@@ -834,7 +851,10 @@ impl Session {
     }
 
     async fn cmd_select(&mut self, args: &[Arg], read_only: bool) -> std::io::Result<CmdResult> {
-        self.selected = None;
+        // RFC 9051 6.3.2 / RFC 7162 3.2.11: the end of the previous mailbox's responses is marked.
+        if self.selected.take().is_some() && (self.rev2 || self.qresync) {
+            self.line("* OK [CLOSED] previous mailbox is now closed").await?;
+        }
         let (mailbox, rights) = match self.find_mailbox_rights(args.first().and_then(Arg::text)).await {
             Ok(found) => found,
             Err(err) => return Ok(Err(err)),
@@ -846,8 +866,9 @@ impl Session {
             Ok(messages) => messages,
             Err(err) => return Ok(Err(internal(err))),
         };
+        let recent = if self.rev2 { "" } else { "* 0 RECENT\r\n" };
         let mut out = format!(
-            "* {} EXISTS\r\n* 0 RECENT\r\n* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n\
+            "* {} EXISTS\r\n{recent}* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n\
              * OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] flags\r\n\
              * OK [UIDVALIDITY {}] valid\r\n* OK [UIDNEXT {}] next\r\n* OK [HIGHESTMODSEQ {}] modseq\r\n",
             messages.len(),
@@ -855,7 +876,13 @@ impl Session {
             mailbox.uid_next,
             mailbox.highest_modseq
         );
-        if let Some(first) = messages.iter().position(|m| !m.seen) {
+        if self.rev2 {
+            // IMAP4rev2 names the mailbox in its canonical form instead of reporting UNSEEN.
+            let mut list = format!("* LIST ({}) \"/\" ", special_use(mailbox.role.as_deref()).trim_start()).into_bytes();
+            string(&mut list, self.encode_name(&mailbox.name).as_bytes());
+            out.push_str(&String::from_utf8_lossy(&list));
+            out.push_str("\r\n");
+        } else if let Some(first) = messages.iter().position(|m| !m.seen) {
             out.push_str(&format!("* OK [UNSEEN {}] first unseen\r\n", first + 1));
         }
         // Select parameters: (CONDSTORE) and (QRESYNC (uidvalidity modseq [known-uids])).
@@ -908,7 +935,7 @@ impl Session {
         };
         let name = args.first().and_then(Arg::text).map(|n| n.trim_end_matches('/').to_owned());
         if command == "CREATE" {
-            let name = utf7_decode(&name.ok_or("BAD mailbox name required")?);
+            let name = self.decode_name(&name.ok_or("BAD mailbox name required")?);
             store.create_mailbox(account, &name).await.map_err(map)?;
             return Ok("CREATE completed".into());
         }
@@ -926,7 +953,7 @@ impl Session {
             }
             "RENAME" => {
                 let new_name = args.get(1).and_then(Arg::text).ok_or("BAD new name required")?;
-                store.rename_mailbox(account, mailbox.id, utf7_decode(&new_name).trim_end_matches('/')).await.map_err(map)?;
+                store.rename_mailbox(account, mailbox.id, self.decode_name(&new_name).trim_end_matches('/')).await.map_err(map)?;
             }
             _ => {
                 sqlx::query("UPDATE mailboxes SET subscribed = ? WHERE id = ? AND account_id = ?")
@@ -941,11 +968,23 @@ impl Session {
         Ok(format!("{command} completed"))
     }
 
-    async fn cmd_list(&mut self, args: &[Arg], mut subscribed_only: bool) -> std::io::Result<CmdResult> {
-        // LIST-EXTENDED form: LIST (selection options) reference pattern RETURN (options).
+    async fn cmd_list(&mut self, args: &[Arg], lsub: bool) -> std::io::Result<CmdResult> {
+        // LIST-EXTENDED form (RFC 5258): LIST (selection options) reference pattern RETURN (options).
         let mut args = args;
+        let mut subscribed_only = lsub;
+        // Under LIST-EXTENDED the subscription state is reported as \Subscribed.
+        let mut show_subscribed = false;
         if let Some(Arg::List(selection)) = args.first() {
-            subscribed_only |= selection.iter().any(|o| o.atom_upper().as_deref() == Some("SUBSCRIBED"));
+            for option in selection.iter().filter_map(Arg::atom_upper) {
+                match option.as_str() {
+                    "SUBSCRIBED" => {
+                        subscribed_only = true;
+                        show_subscribed = true;
+                    }
+                    "RECURSIVEMATCH" | "SPECIAL-USE" | "REMOTE" => {}
+                    _ => return Ok(bad("unknown LIST selection option")),
+                }
+            }
             args = &args[1..];
         }
         let mut status_items: Vec<Arg> = Vec::new();
@@ -954,23 +993,27 @@ impl Session {
         {
             let mut options = options.iter();
             while let Some(option) = options.next() {
-                if option.atom_upper().as_deref() == Some("STATUS") {
-                    match options.next() {
+                match option.atom_upper().as_deref() {
+                    Some("STATUS") => match options.next() {
                         Some(Arg::List(items)) => status_items = items.clone(),
                         _ => return Ok(bad("usage: RETURN (STATUS (items))")),
-                    }
+                    },
+                    Some("SUBSCRIBED") => show_subscribed = true,
+                    // Children and special use are always reported.
+                    Some("CHILDREN" | "SPECIAL-USE") => {}
+                    _ => return Ok(bad("unknown LIST return option")),
                 }
             }
         }
         let (Some(reference), Some(pattern)) = (args.first().and_then(Arg::text), args.get(1).and_then(Arg::text)) else {
             return Ok(bad("usage: LIST reference pattern"));
         };
-        let name = if subscribed_only { "LSUB" } else { "LIST" };
+        let name = if lsub { "LSUB" } else { "LIST" };
         if pattern.is_empty() {
             self.line(&format!("* {name} (\\Noselect) \"/\" \"\"")).await?;
             return Ok(Ok(format!("{name} completed")));
         }
-        let pattern = utf7_decode(&format!("{reference}{pattern}"));
+        let pattern = self.decode_name(&format!("{reference}{pattern}"));
         let mailboxes = match self.app.store.list_mailboxes(self.account_id()).await {
             Ok(mailboxes) => mailboxes,
             Err(err) => return Ok(Err(internal(err))),
@@ -983,8 +1026,9 @@ impl Session {
             }
             let prefix = format!("{}/", mailbox.name);
             let children = if mailboxes.iter().any(|m| m.name.starts_with(&prefix)) { "\\HasChildren" } else { "\\HasNoChildren" };
-            out.extend_from_slice(format!("* {name} ({children}{}) \"/\" ", special_use(mailbox.role.as_deref())).as_bytes());
-            string(&mut out, utf7_encode(&mailbox.name).as_bytes());
+            let subscribed = if show_subscribed && mailbox.subscribed { " \\Subscribed" } else { "" };
+            out.extend_from_slice(format!("* {name} ({children}{}{subscribed}) \"/\" ", special_use(mailbox.role.as_deref())).as_bytes());
+            string(&mut out, self.encode_name(&mailbox.name).as_bytes());
             out.extend_from_slice(b"\r\n");
             // LIST-STATUS: the counters right after each mailbox.
             if !status_items.is_empty() {
@@ -1004,7 +1048,7 @@ impl Session {
                 let display = entry.display_name();
                 if list_match(&pattern, &display) {
                     out.extend_from_slice(format!("* {name} (\\HasNoChildren) \"/\" ").as_bytes());
-                    string(&mut out, utf7_encode(&display).as_bytes());
+                    string(&mut out, self.encode_name(&display).as_bytes());
                     out.extend_from_slice(b"\r\n");
                 }
             }
@@ -1029,6 +1073,13 @@ impl Session {
     /// One `* STATUS` response.
     async fn status_line(&mut self, mailbox: &Mailbox, items: &[Arg]) -> Result<Vec<u8>, String> {
         let counts = self.app.store.mailbox_counts(mailbox.id).await.map_err(internal)?;
+        // SIZE and DELETED (RFC 9051, RFC 8438) are only counted when asked for.
+        let extra = if items.iter().any(|i| matches!(i.atom_upper().as_deref(), Some("SIZE" | "DELETED"))) {
+            let row: (i64, i64) = sqlx::query_as("SELECT COALESCE(SUM(size), 0), COALESCE(SUM(deleted), 0) FROM messages WHERE mailbox_id = ?").bind(mailbox.id).fetch_one(&self.app.db).await.map_err(internal)?;
+            row
+        } else {
+            (0, 0)
+        };
         let mut parts = Vec::new();
         for item in items {
             let value = match item.atom_upper().as_deref() {
@@ -1037,6 +1088,8 @@ impl Session {
                 Some("UIDNEXT") => mailbox.uid_next,
                 Some("UIDVALIDITY") => mailbox.uid_validity,
                 Some("UNSEEN") => counts.unread,
+                Some("SIZE") => extra.0,
+                Some("DELETED") => extra.1,
                 Some("HIGHESTMODSEQ") => {
                     self.condstore = true;
                     mailbox.highest_modseq
@@ -1046,7 +1099,7 @@ impl Session {
             parts.push(format!("{} {value}", item.atom_upper().unwrap_or_default()));
         }
         let mut out = b"* STATUS ".to_vec();
-        string(&mut out, utf7_encode(&mailbox.name).as_bytes());
+        string(&mut out, self.encode_name(&mailbox.name).as_bytes());
         out.extend_from_slice(format!(" ({})\r\n", parts.join(" ")).as_bytes());
         Ok(out)
     }
@@ -1246,8 +1299,21 @@ impl Session {
         let read_only = self.selected.as_ref().is_none_or(|s| s.read_only);
         // Validate every item before producing any output.
         let mut plan: Vec<(String, Option<(bool, Section)>)> = Vec::new();
+        // BINARY (RFC 3516): (peek, size only, section) of decoded part contents.
+        let mut binary: Vec<(usize, bool, Section)> = Vec::new();
         for item in &items {
             let upper = item.to_ascii_uppercase();
+            let binary_section = [("BINARY.PEEK[", true, false), ("BINARY.SIZE[", true, true), ("BINARY[", false, false)]
+                .into_iter()
+                .find_map(|(prefix, peek, size)| upper.strip_prefix(prefix).map(|rest| (peek, size, rest)));
+            if let Some((peek, size, rest)) = binary_section {
+                let Some(parsed) = rest.split_once(']').and_then(|(spec, partial)| Section::parse(spec, partial)).filter(|s| s.kind == fetch::SectionKind::All && !(size && s.partial.is_some())) else {
+                    return Ok(bad("invalid binary section"));
+                };
+                binary.push((plan.len(), size, parsed));
+                plan.push((upper, Some((peek, Section::parse("", "").expect("static section specification")))));
+                continue;
+            }
             let section = match (upper.strip_prefix("BODY.PEEK["), upper.strip_prefix("BODY[")) {
                 (Some(rest), _) => Some((true, rest)),
                 (None, Some(rest)) => Some((false, rest)),
@@ -1332,8 +1398,37 @@ impl Session {
             let parsed = if needs_content { MessageParser::default().parse(&raw) } else { None };
             let mut parts: Vec<Vec<u8>> = Vec::new();
             let mut mark_seen = false;
-            for (name, section) in &plan {
+            for (position, (name, section)) in plan.iter().enumerate() {
                 let mut out = Vec::new();
+                if let Some((_, size_only, wanted)) = binary.iter().find(|(at, ..)| *at == position) {
+                    let Some(parsed) = &parsed else { continue };
+                    let decoded = match fetch::binary_bytes(&raw, parsed, wanted) {
+                        Ok(decoded) => decoded,
+                        Err(fetch::BinaryError::UnknownEncoding) => return Ok(no("[UNKNOWN-CTE] the part has an unknown transfer encoding")),
+                        Err(fetch::BinaryError::NoSuchPart) => None,
+                    };
+                    let path: Vec<String> = wanted.path.iter().map(u32::to_string).collect();
+                    if *size_only {
+                        out.extend_from_slice(format!("BINARY.SIZE[{}] {}", path.join("."), decoded.as_ref().map_or(0, Vec::len)).as_bytes());
+                    } else {
+                        mark_seen |= !name.starts_with("BINARY.PEEK");
+                        let partial = wanted.partial.map(|(start, _)| format!("<{start}>")).unwrap_or_default();
+                        out.extend_from_slice(format!("BINARY[{}]{partial}", path.join(".")).as_bytes());
+                        match decoded {
+                            Some(bytes) => {
+                                let bytes = match wanted.partial {
+                                    Some((start, len)) => bytes.get(start.min(bytes.len())..start.saturating_add(len).min(bytes.len())).unwrap_or(&[]).to_vec(),
+                                    None => bytes,
+                                };
+                                out.extend_from_slice(format!(" ~{{{}}}\r\n", bytes.len()).as_bytes());
+                                out.extend_from_slice(&bytes);
+                            }
+                            None => out.extend_from_slice(b" NIL"),
+                        }
+                    }
+                    parts.push(out);
+                    continue;
+                }
                 match (name.as_str(), section) {
                     ("FLAGS" | "MODSEQ", _) => continue,
                     ("UID", _) => out.extend_from_slice(format!("UID {}", message.uid).as_bytes()),
@@ -1626,6 +1721,9 @@ impl Session {
             // An empty list means ALL.
             returns = Some(if options.is_empty() { vec!["ALL".into()] } else { options });
             args = &args[2..];
+        } else if self.rev2 {
+            // IMAP4rev2 has no SEARCH response: ESEARCH with ALL takes its place.
+            returns = Some(vec!["ALL".into()]);
         }
         let (hits, highest, uses_modseq) = match self.search_hits(args, false).await {
             Ok(found) => found,
@@ -1854,7 +1952,7 @@ async fn handle(app: AppState, tcp: TcpStream, peer: SocketAddr, starttls: bool)
             }
         }
     };
-    let session = Session { app, conn, peer, account: None, grant: None, selected: None, errors: 0, login_failures: 0, condstore: false, qresync: false, oauth: false };
+    let session = Session { app, conn, peer, account: None, grant: None, selected: None, errors: 0, login_failures: 0, condstore: false, qresync: false, oauth: false, rev2: false };
     if let Err(err) = session.run().await {
         tracing::debug!(%err, %peer, "IMAP session ended with an error");
     }

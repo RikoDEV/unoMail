@@ -665,3 +665,38 @@ async fn greylisting_follows_spf_authorised_senders_across_networks() {
     // Without SPF the network still counts.
     assert!(!delivery::greylist_pass(&env.app, elsewhere, None, "a@gmail.example", "bob@example.org").await.unwrap());
 }
+
+#[tokio::test]
+async fn requiretls_is_offered_over_tls_and_never_downgraded() {
+    // The sink offers no STARTTLS: a REQUIRETLS message must not go there.
+    let sink = Sink::start().await;
+    let relay = sink.relay();
+    let env = TestEnv::start_with(|cfg| cfg.outbound_relay = Some(relay)).await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+
+    let mut plain = Client::smtp(env.mx).await;
+    let ehlo = plain.cmd("EHLO peer.example").await;
+    assert!(!ehlo.contains("REQUIRETLS"), "only offered on encrypted sessions: {ehlo}");
+    assert!(plain.cmd("MAIL FROM:<a@remote.example> REQUIRETLS").await.starts_with("530"));
+
+    let mut c = submission_client(&env, "bob@example.org").await;
+    assert!(c.cmd("EHLO laptop").await.contains("REQUIRETLS"));
+    assert!(c.cmd("MAIL FROM:<bob@example.org> REQUIRETLS").await.starts_with("250"));
+    assert!(c.cmd("RCPT TO:<friend@remote.example>").await.starts_with("250"));
+    assert!(c.cmd("DATA").await.starts_with("354"));
+    assert!(c.cmd("From: bob@example.org\r\nTo: friend@remote.example\r\nSubject: Secret\r\n\r\nonly over TLS\r\n.").await.starts_with("250"));
+    let flagged: i64 = sqlx::query_scalar("SELECT require_tls FROM queue").fetch_one(&env.app.db).await.unwrap();
+    assert_eq!(flagged, 1);
+    assert_eq!(queue::process_due(&env.app).await, 1);
+    assert!(sink.received().is_empty(), "the message was not handed over without TLS");
+    let error: Option<String> = sqlx::query_scalar("SELECT last_error FROM queue").fetch_one(&env.app.db).await.unwrap();
+    assert!(error.unwrap_or_default().contains("STARTTLS"));
+
+    // Without REQUIRETLS the same route takes it.
+    sqlx::query("DELETE FROM queue").execute(&env.app.db).await.unwrap();
+    let mut c = submission_client(&env, "bob@example.org").await;
+    assert!(c.send_mail("bob@example.org", &["friend@remote.example"], "From: bob@example.org\r\nTo: friend@remote.example\r\nSubject: Open\r\n\r\nx\r\n").await.starts_with("250"));
+    assert_eq!(queue::process_due(&env.app).await, 1);
+    assert_eq!(sink.received().len(), 1);
+}

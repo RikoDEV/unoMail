@@ -22,6 +22,8 @@ pub enum Target {
     Remote(Address),
     /// A mailing list, or one of its `-request`, `-owner` and `-bounces` addresses.
     List { list_id: i64, role: crate::lists::Role },
+    /// A spam trap: the message teaches the filter and goes nowhere.
+    Trap,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,6 +65,9 @@ async fn account_id(app: &App, email: &str) -> sqlx::Result<Option<i64>> {
 pub async fn resolve(app: &App, recipient: &Address) -> sqlx::Result<Resolution> {
     if !is_local_domain(app, &recipient.domain).await? {
         return Ok(Resolution::NotLocal);
+    }
+    if crate::security::filter::is_trap(app, &recipient.to_string()) {
+        return Ok(Resolution::Deliver(vec![Target::Trap]));
     }
     // Bounces for mail we forwarded come back to an SRS address; route them to the original sender.
     if srs::is_srs(&recipient.local) {
@@ -427,8 +432,8 @@ pub async fn enqueue_via(
     // Within an SMTP transaction: what its sender asked to be notified about.
     let dsn = if sender.is_empty() { crate::smtp::dsn::Dsn::default() } else { crate::smtp::dsn::current(&recipient.to_string()) };
     let id = sqlx::query(
-        "INSERT INTO queue (sender, recipient, recipient_domain, blob_hash, size, account_id, next_attempt_at, created_at, expires_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO queue (sender, recipient, recipient_domain, blob_hash, size, account_id, next_attempt_at, created_at, expires_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt, require_tls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(sender)
     .bind(recipient.to_string())
@@ -444,6 +449,7 @@ pub async fn enqueue_via(
     .bind(dsn.ret)
     .bind(dsn.envid)
     .bind(dsn.orcpt)
+    .bind(i64::from(dsn.require_tls))
     .execute(&app.db)
     .await?
     .last_insert_rowid();

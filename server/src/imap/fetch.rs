@@ -226,6 +226,65 @@ impl Section {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum BinaryError {
+    NoSuchPart,
+    /// The part uses a Content-Transfer-Encoding we cannot undo (RFC 3516 UNKNOWN-CTE).
+    UnknownEncoding,
+}
+
+/// The contents of a part with its transfer encoding undone (RFC 3516), or the whole message
+/// for an empty path. `Ok(None)` is a part that does not exist (answered with NIL).
+pub fn binary_bytes(raw: &[u8], msg: &Parsed<'_>, section: &Section) -> Result<Option<Vec<u8>>, BinaryError> {
+    if section.path.is_empty() {
+        return Ok(Some(raw.to_vec()));
+    }
+    let Some(part) = resolve_part(msg, &section.path) else { return Ok(None) };
+    if matches!(part.body, mail_parser::PartType::Multipart(_)) {
+        return Err(BinaryError::NoSuchPart);
+    }
+    let Some(body) = raw.get(part.offset_body as usize..part.offset_end as usize) else { return Ok(None) };
+    let encoding = part.content_transfer_encoding().unwrap_or("7bit").trim().to_ascii_lowercase();
+    match encoding.as_str() {
+        "7bit" | "8bit" | "binary" | "" => Ok(Some(body.to_vec())),
+        "base64" => {
+            let clean: Vec<u8> = body.iter().copied().filter(|b| !b.is_ascii_whitespace()).collect();
+            let clean = clean.strip_suffix(b"==").or_else(|| clean.strip_suffix(b"=")).unwrap_or(&clean);
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD_NO_PAD, clean).map(Some).map_err(|_| BinaryError::UnknownEncoding)
+        }
+        "quoted-printable" => Ok(Some(quoted_printable(body))),
+        _ => Err(BinaryError::UnknownEncoding),
+    }
+}
+
+/// Undoes quoted-printable (RFC 2045 6.7); malformed escapes are kept as they are.
+fn quoted_printable(body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(body.len());
+    let hex = |b: u8| (b as char).to_digit(16).map(|d| d as u8);
+    let mut i = 0;
+    while i < body.len() {
+        match body[i] {
+            b'=' if body.get(i + 1) == Some(&b'\r') && body.get(i + 2) == Some(&b'\n') => i += 3,
+            b'=' if body.get(i + 1) == Some(&b'\n') => i += 2,
+            b'=' => match (body.get(i + 1).copied().and_then(hex), body.get(i + 2).copied().and_then(hex)) {
+                (Some(high), Some(low)) => {
+                    out.push(high << 4 | low);
+                    i += 3;
+                }
+                _ => {
+                    out.push(b'=');
+                    i += 1;
+                }
+            },
+            byte => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
 /// Keeps (or drops, with `not`) the named header fields; always ends with the blank line.
 fn filter_headers(headers: &[u8], names: &[String], not: bool) -> Vec<u8> {
     let mut out = Vec::new();

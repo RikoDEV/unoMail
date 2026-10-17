@@ -13,7 +13,7 @@ Everything is configured through environment variables; the full list with defau
 | `UNOMAIL_GREYLIST` | `true` | Greylisting of unknown senders |
 | `UNOMAIL_DNSBL_ZONES` | `zen.spamhaus.org` | DNS blocklists checked on connect; set it empty to check none. Spamhaus refuses queries through public resolvers (8.8.8.8, 1.1.1.1, most cloud providers'), so the container needs a resolver of its own; refusals are ignored and logged once |
 | `UNOMAIL_ABUSEIPDB_KEY`, `UNOMAIL_ABUSEIPDB_THRESHOLD` | –, `90` | AbuseIPDB reputation check |
-| `UNOMAIL_ABUSEIPDB_REPORT` | `false` | Also report addresses caught guessing passwords (5 failed sign-ins on any protocol) to AbuseIPDB as brute force, at most once per 15 minutes each. The report names the protocol, not the accounts tried; private and trusted addresses are never reported |
+| `UNOMAIL_ABUSEIPDB_REPORT` | `false` | Also report abusive addresses to AbuseIPDB: password guessing (5 failed sign-ins on any protocol, category 18 Brute-Force) and SMTP abuse: mail to a spam trap, mail the content filter refuses as spam or that carries a virus, 5 unknown recipients in one connection (directory harvesting) — all category 11 Email Spam — and 3 refused relay attempts in one connection (category 15 Hacking). One report per address per 15 minutes, listing all its reasons. Reports name the protocol or behaviour, never the accounts or recipients; private and trusted addresses are never reported |
 | `UNOMAIL_RSPAMD_URL` | – (image: local Rspamd) | Rspamd scanner endpoint |
 | `UNOMAIL_RSPAMD_FAIL_OPEN` | `false` | Accept mail unscanned when the filter is down (default: defer with 451) |
 | `UNOMAIL_CLAMAV_ADDR` | – (image: local clamd) | `host:port` of clamd for scanning complete messages |
@@ -26,7 +26,10 @@ Everything is configured through environment variables; the full list with defau
 | `UNOMAIL_TRUSTED_PROXIES` | – | Networks whose `X-Forwarded-For` is trusted |
 | `UNOMAIL_TRUSTED_NETWORKS` | – | Mail relays trusted like the server itself on port 25 (no SPF/DKIM/DMARC checks or greylisting) and allowed to read `/metrics` without the token. Only loopback is trusted otherwise; private addresses are **not**, because NAT in front of the server (e.g. Docker's userland proxy, used for IPv6 clients) makes every client look private. The server logs a warning when port 25 sees an untrusted private address |
 | `UNOMAIL_HTTP_REDIRECT`, `UNOMAIL_COOKIE_SECURE` | `true` | Disable only behind a TLS-terminating proxy / for local development |
-| `UNOMAIL_METRICS_TOKEN` | – | Bearer token for `/metrics` (otherwise loopback and `UNOMAIL_TRUSTED_NETWORKS` only) |
+| `UNOMAIL_METRICS_TOKEN` | – | Bearer token for `/metrics` (otherwise loopback and `UNOMAIL_TRUSTED_NETWORKS` only). Besides counters and gauges, it serves latency histograms of HTTP requests and outbound deliveries |
+| `UNOMAIL_OTLP_ENDPOINT` | – | OpenTelemetry collector (OTLP/HTTP), e.g. `http://otel-collector:4318`: spans of HTTP requests, JMAP methods, IMAP commands, received and delivered mail go to `<endpoint>/v1/traces` as JSON |
+| `UNOMAIL_OTLP_HEADERS` | – | Extra headers for the collector, `key=value,key2=value2` (for an API key) |
+| `UNOMAIL_OTLP_SERVICE_NAME` | `unomail` | `service.name` of the exported spans |
 | `UNOMAIL_PUBLIC_URL` | `https://<hostname>` | Address users reach the web interface at (used for the single sign-on redirect) |
 | `UNOMAIL_ALLOW_PRIVATE_DESTINATIONS` | `false` | Lets identity SMTP servers, the image proxy and the identity provider be on private addresses or plain HTTP. For tests and closed networks only |
 | `UNOMAIL_SIEVE_PORT` | `4190` | ManageSieve (STARTTLS); `0` turns it off |

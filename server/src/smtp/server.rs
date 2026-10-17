@@ -57,6 +57,11 @@ struct Transaction {
     chunked: bool,
 }
 
+/// Unknown recipients in one connection from which it counts as a directory harvest.
+const HARVEST_THRESHOLD: u32 = 5;
+/// Refused relay attempts in one connection from which it counts as probing for an open relay.
+const RELAY_PROBE_THRESHOLD: u32 = 3;
+
 struct Session {
     app: AppState,
     mode: Mode,
@@ -71,6 +76,9 @@ struct Session {
     messages: u32,
     /// The peer is on the whitelist: reputation checks and greylisting do not apply.
     whitelisted: bool,
+    /// Unknown recipients and refused relay attempts in this connection (abuse reports).
+    unknown_recipients: u32,
+    relay_attempts: u32,
     /// The SPF-authorised domain of the envelope sender, once looked up for greylisting.
     spf_domain: Option<(String, Option<String>)>,
 }
@@ -296,7 +304,10 @@ impl Session {
             return Ok(Flow::Continue);
         }
         let mut lines = vec![host, format!("SIZE {}", self.app.rt().max_message_size), "8BITMIME".into(), "SMTPUTF8".into(), "PIPELINING".into(), "DSN".into(), "CHUNKING".into()];
-        if !self.tls() {
+        if self.tls() {
+            // RFC 8689: offered only where the session itself is encrypted.
+            lines.push("REQUIRETLS".into());
+        } else {
             lines.push("STARTTLS".into());
         }
         // Credentials are only ever accepted over an encrypted channel.
@@ -478,6 +489,13 @@ impl Session {
                     }
                 }
                 "BODY" if matches!(value.to_ascii_uppercase().as_str(), "7BIT" | "8BITMIME") => {}
+                "REQUIRETLS" if value.is_empty() && !dsn.require_tls => {
+                    if !self.tls() {
+                        self.error("530 5.7.10 REQUIRETLS needs an encrypted session").await?;
+                        return Ok(Flow::Continue);
+                    }
+                    dsn.require_tls = true;
+                }
                 // Where AUTH is offered, the submitter's identity may be named (RFC 4954 5);
                 // relays name it as "<>". It is noted by nobody here: the sign-in decides.
                 "AUTH" if matches!(self.mode, Mode::Submission | Mode::Smtps) => {
@@ -577,12 +595,21 @@ impl Session {
             (Resolution::NoSuchUser, _) => {
                 if self.mode == Mode::Mx {
                     self.karma(-1, "unknown recipient").await;
+                    self.unknown_recipients += 1;
+                    // A few typos are normal; a run of guesses is harvesting addresses.
+                    if self.unknown_recipients == HARVEST_THRESHOLD && !self.whitelisted {
+                        reputation::report_abuse(&self.app, self.peer.ip(), reputation::Abuse::DirectoryHarvest);
+                    }
                 }
                 self.error(&format!("550 5.1.1 <{address}>: Recipient address rejected: User unknown")).await?;
                 return Ok(Flow::Continue);
             }
             // Unauthenticated peers may only reach our own domains: we are not an open relay.
             (Resolution::NotLocal, Mode::Mx | Mode::Lmtp) => {
+                self.relay_attempts += 1;
+                if self.mode == Mode::Mx && self.relay_attempts == RELAY_PROBE_THRESHOLD && !self.whitelisted {
+                    reputation::report_abuse(&self.app, self.peer.ip(), reputation::Abuse::RelayProbe);
+                }
                 self.error(&format!("554 5.7.1 <{address}>: Relay access denied")).await?;
                 return Ok(Flow::Continue);
             }
@@ -777,7 +804,8 @@ impl Session {
             self.conn.write_all(replies.as_bytes()).await?;
             return Ok(Flow::Continue);
         }
-        let outcome = crate::smtp::dsn::REQUEST.scope(request, self.accept(&tx, &raw)).await;
+        let span = tracing::info_span!("smtp.receive", smtp.mode = ?self.mode, smtp.recipients = tx.recipients.len(), smtp.size = raw.len(), smtp.tls = self.tls());
+        let outcome = tracing::Instrument::instrument(crate::smtp::dsn::REQUEST.scope(request, self.accept(&tx, &raw)), span).await;
         if matches!(outcome, Outcome::Rejected(_)) {
             self.errors += 1;
         }
@@ -848,7 +876,7 @@ async fn handle(app: AppState, mode: Mode, mut tcp: TcpStream, peer: SocketAddr)
     } else {
         Conn::plain(tcp, COMMAND_TIMEOUT)
     };
-    let session = Session { app, mode, conn, peer, helo: None, account: None, grant: None, tx: None, errors: 0, messages: 0, whitelisted: false, spf_domain: None };
+    let session = Session { app, mode, conn, peer, helo: None, account: None, grant: None, tx: None, errors: 0, messages: 0, whitelisted: false, spf_domain: None, unknown_recipients: 0, relay_attempts: 0 };
     if let Err(err) = session.run().await {
         tracing::debug!(%err, %peer, "SMTP session ended with an error");
     }

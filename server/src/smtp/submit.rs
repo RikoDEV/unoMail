@@ -13,7 +13,7 @@ use crate::{
         attachments,
         authn::{self, Disposition},
         clamav::{self, Verdict},
-        dkim, outbound,
+        dkim, filter, outbound,
         reputation::is_trusted_source,
         rspamd::{self, Action, ScanRequest},
     },
@@ -255,6 +255,9 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
         Ok(Some(Verdict::Infected(name))) => {
             Metrics::inc(&app.metrics.spam_blocked);
             if !rt.virus_quarantine {
+                if !msg.trusted_relay {
+                    crate::security::reputation::report_abuse(app, msg.ip, crate::security::reputation::Abuse::Virus);
+                }
                 return reject("554 5.7.1 Message rejected: it contains a virus", format!("virus detected: {name}")).await;
             }
             // Kept on the administrator's wish: out of the inbox, and unmistakably marked.
@@ -265,7 +268,13 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
         Err(_) => return Outcome::Deferred("451 4.7.1 Content filter temporarily unavailable, please try again later".into()),
     }
 
+    // Only the server's own filter header is trusted; copies from outside are dropped.
+    if let std::borrow::Cow::Owned(clean) = filter::strip_header(&stripped) {
+        stripped = clean;
+    }
     let recipient_list: Vec<String> = msg.recipients.iter().map(|(a, _)| a.to_string()).collect();
+    // The content filter judged it spam (reputation is not taught from its own opinion).
+    let mut content_spam = false;
     let scan = if rt.spam_check_inbound {
         rspamd::scan(app, ScanRequest { ip: msg.ip, helo: msg.helo, sender: msg.sender, recipients: &recipient_list, user: None, raw: &stripped }).await
     } else {
@@ -287,6 +296,10 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
             Action::Reject if infected => {}
             Action::Reject => {
                 Metrics::inc(&app.metrics.spam_blocked);
+                if !msg.trusted_relay {
+                    let abuse = if scanner_found_virus { crate::security::reputation::Abuse::Virus } else { crate::security::reputation::Abuse::Spam };
+                    crate::security::reputation::report_abuse(app, msg.ip, abuse);
+                }
                 // Tell the sender (and the log) when the reason is malware rather than spam.
                 if scanner_found_virus {
                     return reject("554 5.7.1 Message rejected: it contains a virus", "virus detected".into()).await;
@@ -297,12 +310,44 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
             Action::Junk => {
                 Metrics::inc(&app.metrics.spam_blocked);
                 junk = true;
+                content_spam = true;
             }
             Action::Accept => {}
         }
         // Readers see at a glance what the filter thought of it.
         if rt.spam_subject_enabled && scan.score >= rt.spam_subject_score {
             stripped = prefix_subject(&stripped, rt.spam_subject_prefix.trim());
+        }
+    }
+
+    // The server's own tests, and what spam traps teach.
+    let trapped = msg.recipients.iter().any(|(_, targets)| targets.contains(&Target::Trap));
+    if (rt.native_filter || trapped) && !is_trusted_source(&app.cfg, msg.ip) && !msg.trusted_relay {
+        let author = if author_verified { MessageParser::default().parse_headers(&stripped).and_then(|m| m.from()?.first()?.address.as_deref().and_then(Address::parse)).map(|a| a.domain) } else { None };
+        let envelope = if sender_verified { Address::parse(msg.sender).map(|a| a.domain) } else { None };
+        let verified_domain = author.or(envelope);
+        let assessment = filter::assess(app, &filter::Sender { ip: msg.ip, verified_domain: verified_domain.as_deref() }, &stripped).await;
+        // What the message itself shows, without what is already known about its source.
+        let own_score: f64 = assessment.hits.iter().filter(|hit| !hit.name.starts_with("REP_")).map(|hit| hit.score).sum();
+        if rt.native_filter {
+            extra_headers.push_str(&assessment.header());
+            if assessment.score >= rt.native_filter_score && !junk {
+                Metrics::inc(&app.metrics.spam_blocked);
+                tracing::info!(score = assessment.score, sender = msg.sender, "message filed as junk by the built-in filter");
+                junk = true;
+            }
+        }
+        if rt.sender_reputation {
+            if trapped || content_spam || own_score >= rt.native_filter_score {
+                filter::learn(app, &assessment.keys, true).await;
+            } else if !junk && author_verified {
+                filter::learn(app, &assessment.keys, false).await;
+            }
+        }
+        if trapped {
+            crate::security::access::karma(app, msg.ip, -5, "spam trap").await;
+            crate::security::reputation::report_abuse(app, msg.ip, crate::security::reputation::Abuse::SpamTrap);
+            tracing::info!(ip = %msg.ip, sender = msg.sender, "message to a spam trap");
         }
     }
 
@@ -355,6 +400,8 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
                         Err(err) => return internal("local delivery failed", err),
                     }
                 }
+                // Already learned from above; nobody receives it.
+                Target::Trap => delivered += 1,
                 Target::List { list_id, role } => match crate::lists::receive(app, *list_id, *role, msg.sender, &message, junk).await {
                     Ok(()) => delivered += 1,
                     Err(err) => return internal("mailing list failed", err),
@@ -660,6 +707,8 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
     let mut blob: Option<String> = None;
     for (rcpt, target) in &targets {
         match target {
+            // A user writing to a trap teaches nothing: the trap is for strangers.
+            Target::Trap => {}
             Target::Local { account_id, address } => {
                 let result = delivery::deliver_local(
                     app,

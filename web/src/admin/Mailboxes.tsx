@@ -23,6 +23,8 @@ interface Mailbox {
   outbound_blocked: boolean;
   outbound_blocked_reason: string | null;
   send_only: boolean;
+  /** Kept by the server (postmaster@): cannot be deleted. */
+  system: boolean;
 }
 
 const MB = 1024 * 1024;
@@ -271,6 +273,11 @@ export function Mailboxes() {
             <TableRow key={box.id} hover sx={{ opacity: box.enabled ? 1 : 0.55 }}>
               <TableCell>
                 {box.email}
+                {box.system && (
+                  <Tooltip title={t('Kept by the server for every domain: it receives DMARC and TLS reports and mail to postmaster. Set a password to read it.')}>
+                    <Chip size="small" label={t('system')} sx={{ ml: 1 }} />
+                  </Tooltip>
+                )}
                 {box.send_only && <Chip size="small" label={t('send only')} sx={{ ml: 1 }} />}
                 {box.outbound_blocked && <Chip size="small" color="error" label={t('sending blocked')} sx={{ ml: 1 }} />}
                 {!box.enabled && <Chip size="small" label="disabled" sx={{ ml: 1 }} />}
@@ -300,11 +307,13 @@ export function Mailboxes() {
                     <MoveToInbox />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title={t('Delete')}>
-                  <IconButton aria-label={t('Delete {{email}}', { email: box.email })} onClick={() => setRemoving(box)}>
-                    <Delete />
-                  </IconButton>
-                </Tooltip>
+                {!box.system && (
+                  <Tooltip title={t('Delete')}>
+                    <IconButton aria-label={t('Delete {{email}}', { email: box.email })} onClick={() => setRemoving(box)}>
+                      <Delete />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </TableCell>
             </TableRow>
           ))}

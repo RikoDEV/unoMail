@@ -69,6 +69,25 @@ pub struct Runtime {
     /// unknown recipients) or from an address with a bad record.
     #[serde(default)]
     pub quarantine_misbehaving: bool,
+    /// Run the server's own tests (links, reputation, origin) on incoming mail.
+    #[serde(default = "yes")]
+    pub native_filter: bool,
+    /// Score of those tests at which mail goes to Junk.
+    #[serde(default = "native_filter_score")]
+    pub native_filter_score: f64,
+    /// Learn and use the reputation of sending networks, autonomous systems and domains.
+    #[serde(default = "yes")]
+    pub sender_reputation: bool,
+    /// Addresses nobody uses: mail to them teaches the filter and is not delivered.
+    #[serde(default)]
+    pub spam_traps: Vec<String>,
+    /// Autonomous systems (numbers) and countries (ISO codes) whose mail scores `origin_score`.
+    #[serde(default)]
+    pub penalized_asns: Vec<String>,
+    #[serde(default)]
+    pub penalized_countries: Vec<String>,
+    #[serde(default = "origin_score")]
+    pub origin_score: f64,
 
     // Antivirus.
     #[serde(default = "yes")]
@@ -129,6 +148,14 @@ fn spam_subject_score() -> f64 {
     6.0
 }
 
+fn native_filter_score() -> f64 {
+    5.0
+}
+
+fn origin_score() -> f64 {
+    2.0
+}
+
 fn spam_subject_prefix() -> String {
     "[SPAM]".into()
 }
@@ -172,6 +199,13 @@ impl Runtime {
             spam_subject_score: spam_subject_score(),
             spam_subject_prefix: spam_subject_prefix(),
             quarantine_misbehaving: false,
+            native_filter: true,
+            native_filter_score: native_filter_score(),
+            sender_reputation: true,
+            spam_traps: Vec::new(),
+            penalized_asns: Vec::new(),
+            penalized_countries: Vec::new(),
+            origin_score: origin_score(),
             antivirus_inbound: true,
             antivirus_outbound: true,
             virus_quarantine: cfg.virus_quarantine,
@@ -226,6 +260,24 @@ impl Runtime {
         }
         if !self.spam_subject_score.is_finite() || !(0.0..=1000.0).contains(&self.spam_subject_score) {
             return Err("the spam score for the subject mark must be between 0 and 1000".into());
+        }
+        if !self.native_filter_score.is_finite() || !(0.5..=100.0).contains(&self.native_filter_score) {
+            return Err("the junk score of the built-in filter must be between 0.5 and 100".into());
+        }
+        if !self.origin_score.is_finite() || !(0.0..=100.0).contains(&self.origin_score) {
+            return Err("the score for penalised origins must be between 0 and 100".into());
+        }
+        if self.spam_traps.len() > 100 || self.penalized_asns.len() > 1000 || self.penalized_countries.len() > 250 {
+            return Err("too many spam traps, autonomous systems or countries".into());
+        }
+        if let Some(bad) = self.spam_traps.iter().find(|trap| crate::util::Address::parse(trap).is_none_or(|a| a.to_string() != **trap)) {
+            return Err(format!("invalid spam trap address: {}", crate::util::sanitize_line(bad)));
+        }
+        if let Some(bad) = self.penalized_asns.iter().find(|asn| asn.parse::<u32>().map_or(true, |n| n.to_string() != **asn)) {
+            return Err(format!("autonomous systems are numbers, like 64500: {}", crate::util::sanitize_line(bad)));
+        }
+        if let Some(bad) = self.penalized_countries.iter().find(|c| c.len() != 2 || !c.bytes().all(|b| b.is_ascii_uppercase())) {
+            return Err(format!("countries are two-letter codes in capitals, like DE: {}", crate::util::sanitize_line(bad)));
         }
         let prefix = self.spam_subject_prefix.trim();
         if prefix.is_empty() || prefix.chars().count() > 40 || prefix.chars().any(char::is_control) {
@@ -330,6 +382,9 @@ mod tests {
             json!({ "default_route": "no-port" }),
             json!({ "log_retention_days": 0 }),
             json!({ "stats_retention_days": 4000 }),
+            json!({ "spam_traps": ["not an address"] }),
+            json!({ "penalized_countries": ["pl"] }),
+            json!({ "native_filter_score": 0 }),
         ] {
             assert!(base.with_overrides(bad.as_object().unwrap()).is_err(), "{bad}");
         }

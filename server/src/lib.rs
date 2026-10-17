@@ -47,6 +47,7 @@ pub mod smime;
 pub mod snooze;
 pub mod store;
 pub mod sysstat;
+pub mod telemetry;
 pub mod tls;
 pub mod twofactor;
 pub mod util;

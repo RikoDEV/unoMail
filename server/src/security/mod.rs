@@ -7,6 +7,7 @@ pub mod bimi;
 pub mod clamav;
 pub mod summary;
 pub mod dkim;
+pub mod filter;
 pub mod outbound;
 pub mod reputation;
 pub mod rspamd;

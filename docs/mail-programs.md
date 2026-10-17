@@ -18,14 +18,20 @@
 
 ## Protocols
 
-- **IMAP** extensions besides the basics: `IDLE`, `MOVE`, `UIDPLUS`, `CONDSTORE`, `QRESYNC`,
-  `ACL`, `SPECIAL-USE`, `QUOTA`, `SORT`, `THREAD=ORDEREDSUBJECT`, `THREAD=REFERENCES`,
-  `ESEARCH`, `LIST-STATUS` and `COMPRESS=DEFLATE`.
+- **IMAP** speaks IMAP4rev1 and, for clients that enable it, IMAP4rev2 (RFC 9051: UTF-8
+  mailbox names, `ESEARCH` answers, no `RECENT`). Extensions besides the basics: `IDLE`,
+  `MOVE`, `UIDPLUS`, `CONDSTORE`, `QRESYNC`, `ACL`, `SPECIAL-USE`, `QUOTA`, `SORT`,
+  `THREAD=ORDEREDSUBJECT`, `THREAD=REFERENCES`, `ESEARCH`, `LIST-EXTENDED`, `LIST-STATUS`,
+  `STATUS=SIZE`, `BINARY` (decoded parts and `literal8`) and `COMPRESS=DEFLATE`.
 - **ManageSieve** (RFC 5804, port 4190) manages the filter scripts of the web client's Filters
   page from Thunderbird, Roundcube, K-9 and others.
 - **JMAP** (RFC 8620/8621) at `/.well-known/jmap`, including JMAP over WebSocket (RFC 8887,
   with push), push subscriptions (Web Push with VAPID), `EmailSubmission` with delayed release
-  and undo, and `MDN/send`.
+  and undo, and `MDN/send`. Beyond mail: `Quota` (RFC 9425), `SieveScript` (RFC 9661, the same
+  scripts as ManageSieve; content is uploaded as a blob), `AddressBook` and `ContactCard`
+  (RFC 9610, JSContact) over the CardDAV address book, and `Calendar` and `CalendarEvent`
+  (JMAP Calendars, JSCalendar) over the CalDAV calendars, with `sendSchedulingMessages` for
+  invitations.
 - **SMTP** offers `DSN` (RFC 3461: `NOTIFY`, `RET`, `ENVID`, `ORCPT`; delay, relay and
   delivery notices, passed on to receivers that support them), `CHUNKING` (`BDAT`), `SIZE`,
   `8BITMIME`, `SMTPUTF8` and `PIPELINING`. Mail forwarded through an alias is sealed with ARC.
@@ -37,6 +43,10 @@
   opportunistic (RFC 7435): when a server's encryption cannot be set up, the mail goes
   without it, unless DANE, an enforced MTA-STS policy or `UNOMAIL_OUTBOUND_REQUIRE_TLS`
   demands encryption. The submission ports accept the `AUTH=` parameter of `MAIL FROM`.
+  `REQUIRETLS` (RFC 8689) is offered on encrypted sessions: such a message leaves only over a
+  certificate verified by DANE or MTA-STS (or the default route's certificate), to a server
+  that promises REQUIRETLS in turn, and bounces otherwise. A message carrying
+  `TLS-Required: No` is delivered even when a receiver's TLS policy fails.
 
 ## Calendars and contacts (CalDAV, CardDAV)
 

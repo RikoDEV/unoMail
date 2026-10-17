@@ -258,7 +258,7 @@ async fn send_reply(app: &App, account_id: i64, recipient: &str, sender: &str, r
                     delivery::enqueue(app, "", &remote, &hash, message.len(), Some(account_id)).await?;
                 }
                 // Lists do not get out-of-office replies.
-                Target::List { .. } => {}
+                Target::List { .. } | Target::Trap => {}
             }
         }
         Ok(())

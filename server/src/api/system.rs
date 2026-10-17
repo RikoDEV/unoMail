@@ -264,5 +264,20 @@ pub async fn metrics(State(state): State<AppState>, ClientIp(ip): ClientIp, head
     metric("spam_blocked_total", "counter", "Messages classified as spam.", c(&m.spam_blocked));
     metric("auth_failures_total", "counter", "Failed authentication attempts.", c(&m.auth_failures));
     metric("http_requests_total", "counter", "HTTP requests served.", c(&m.http_requests));
+    metric("deliveries_deferred_total", "counter", "Delivery attempts that will be retried.", c(&m.deliveries_deferred));
+    metric("jmap_method_calls_total", "counter", "JMAP method calls.", c(&m.jmap_calls));
+    metric("imap_commands_total", "counter", "IMAP commands.", c(&m.imap_commands));
+    let (accounts, domains, stored): (i64, i64, i64) = sqlx::query_as("SELECT (SELECT COUNT(*) FROM accounts), (SELECT COUNT(*) FROM domains), (SELECT COALESCE(SUM(used_bytes), 0) FROM accounts)")
+        .fetch_one(&state.db)
+        .await
+        .unwrap_or((-1, -1, -1));
+    let (retrying, oldest): (i64, Option<i64>) = sqlx::query_as("SELECT COALESCE(SUM(attempts > 0), 0), MIN(created_at) FROM queue").fetch_one(&state.db).await.unwrap_or((-1, None));
+    metric("accounts", "gauge", "Mailboxes.", accounts);
+    metric("domains", "gauge", "Hosted domains.", domains);
+    metric("storage_used_bytes", "gauge", "Space taken by mail in all mailboxes.", stored);
+    metric("queue_retrying", "gauge", "Queued messages whose delivery failed at least once.", retrying);
+    metric("queue_oldest_seconds", "gauge", "Age of the oldest message in the outbound queue.", oldest.map_or(0, |at| now() - at));
+    out.push_str(&m.http_duration.render("unomail_http_request_duration_seconds", "Time to answer an HTTP request."));
+    out.push_str(&m.delivery_duration.render("unomail_delivery_duration_seconds", "Time of one outbound delivery attempt."));
     ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], out).into_response()
 }

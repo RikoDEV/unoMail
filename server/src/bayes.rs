@@ -331,6 +331,10 @@ pub fn train(app: &crate::app::AppState, account_id: i64, raw: Vec<u8>, spam: bo
         {
             tracing::warn!(error = %err, "personal spam filter training failed");
         }
+        // The source of the message earns its reputation from the decision too.
+        if app.rt().sender_reputation {
+            crate::security::filter::learn_from_message(&app, &raw, spam).await;
+        }
         crate::security::rspamd::learn(&app, raw, spam).await;
     });
 }

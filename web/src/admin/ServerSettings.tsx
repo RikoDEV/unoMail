@@ -73,6 +73,19 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    title: t('Built-in spam filter'),
+    description: t('The server’s own tests on incoming mail: deceptive links, the reputation of the sender’s network, provider and domain, and penalised origins. Their score is recorded in the X-Unomail-Filter header.'),
+    fields: [
+      { key: 'native_filter', label: t('Use the built-in filter'), help: t('Score incoming mail with the tests described above'), kind: 'bool' },
+      { key: 'native_filter_score', label: t('Junk score'), help: t('Mail scoring at least this much goes to Junk'), kind: 'decimal', min: 0.5, max: 100, dependsOn: ['native_filter'] },
+      { key: 'sender_reputation', label: t('Learn sender reputation'), help: t('Remember how much spam comes from each network, provider and verified domain, including users’ spam reports'), kind: 'bool' },
+      { key: 'spam_traps', label: t('Spam traps'), help: t('Comma separated addresses of your domains that nobody uses. Mail to them teaches the filter and is not delivered.'), kind: 'list' },
+      { key: 'penalized_countries', label: t('Penalised countries'), help: t('Comma separated two-letter codes, e.g. KP,RU; mail sent from there scores the points below'), kind: 'list', dependsOn: ['native_filter'] },
+      { key: 'penalized_asns', label: t('Penalised autonomous systems'), help: t('Comma separated network numbers (ASN), e.g. 64500'), kind: 'list', dependsOn: ['native_filter'] },
+      { key: 'origin_score', label: t('Points for a penalised origin'), help: t('Added once for the country and once for the network'), kind: 'decimal', min: 0, max: 100, dependsOn: ['native_filter'] },
+    ],
+  },
+  {
     title: t('Antivirus'),
     fields: [
       { key: 'antivirus_inbound', label: t('Scan incoming mail for viruses'), help: t('With ClamAV (UNOMAIL_CLAMAV_ADDR) when configured'), kind: 'bool' },

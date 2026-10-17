@@ -86,7 +86,9 @@ impl Tokenizer {
                     i += 1;
                     self.push(Arg::Str(out));
                 }
-                b'{' => {
+                // `~{n}` is a literal8 (RFC 3516): binary content, read like any literal.
+                b'{' | b'~' if line[i] == b'{' || line.get(i + 1) == Some(&b'{') => {
+                    let i = if line[i] == b'~' { i + 1 } else { i };
                     // A literal marker is only valid as the very last thing on the line.
                     let rest = std::str::from_utf8(&line[i + 1..]).map_err(|_| SyntaxError)?;
                     let body = rest.strip_suffix('}').ok_or(SyntaxError)?;

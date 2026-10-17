@@ -32,11 +32,13 @@ pub struct AccountRow {
     outbound_blocked: bool,
     outbound_blocked_reason: Option<String>,
     send_only: bool,
+    /// Kept by the server (postmaster@): cannot be deleted.
+    system: bool,
     created_at: i64,
 }
 
 const SELECT: &str = "SELECT id, domain_id, email, display_name, role, quota_bytes, used_bytes, enabled, imap_enabled, \
-     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, created_at FROM accounts";
+     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, system, created_at FROM accounts";
 
 async fn load(state: &AppState, id: i64) -> ApiResult<AccountRow> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?")))
@@ -270,6 +272,9 @@ pub async fn remove(State(state): State<AppState>, session: Session, Path(id): P
     let account = load_managed(&state, &session, id).await?;
     if account.id == session.account.id {
         return Err(ApiError::bad("you cannot delete your own account"));
+    }
+    if account.system {
+        return Err(ApiError::bad("postmaster mailboxes are kept by the server and cannot be deleted"));
     }
     if account.role == Role::SuperAdmin {
         let others: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM accounts WHERE role = 'super_admin' AND enabled = 1 AND id != ?")

@@ -17,8 +17,8 @@ use crate::{
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(60);
 const SESSION_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 const MAX_LINE: usize = 8 * 1024;
-const MAX_SCRIPT: usize = 64 * 1024;
-const MAX_SCRIPTS: usize = 20;
+pub const MAX_SCRIPT: usize = 64 * 1024;
+pub const MAX_SCRIPTS: usize = 20;
 const MAX_ERRORS: u32 = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

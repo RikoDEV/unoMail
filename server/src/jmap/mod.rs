@@ -2,7 +2,8 @@
 //!
 //! Implemented: Core/echo, Mailbox/get|set, Email/query|get|set|import, Thread/get, Identity/get and
 //! EmailSubmission/set, the `/changes` family and Email/queryChanges, plus blob upload/download
-//! and an event source for push.
+//! and an event source for push. Beyond mail: Quota (RFC 9425), SieveScript (RFC 9661),
+//! AddressBook and ContactCard (RFC 9610), and Calendar and CalendarEvent (JMAP Calendars).
 
 use std::collections::HashMap;
 
@@ -29,9 +30,14 @@ use crate::{
     error::ApiError,
 };
 
+mod calendar;
+mod contacts;
 mod email;
 mod mailbox;
 mod mdn;
+pub mod objects;
+mod quota;
+mod sieve;
 pub mod push;
 pub mod submission;
 mod ws;
@@ -186,6 +192,14 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
         "emailQuerySortOptions": ["receivedAt"],
         "mayCreateTopLevelMailbox": true,
     });
+    let calendar_caps = json!({
+        "maxCalendarsPerEvent": 1,
+        "minDateTime": "1900-01-01T00:00:00Z",
+        "maxDateTime": "2200-01-01T00:00:00Z",
+        "maxExpandedQueryDuration": "P366D",
+        "maxParticipantsPerEvent": crate::calendar::ical::MAX_ATTENDEES + 1,
+        "mayCreateCalendar": true,
+    });
     let submission_caps = json!({ "maxDelayedSend": submission::MAX_DELAY, "submissionExtensions": { "FUTURERELEASE": [submission::MAX_DELAY.to_string()] } });
     Ok(Json(json!({
         "capabilities": {
@@ -203,6 +217,10 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
             "urn:ietf:params:jmap:submission": submission_caps.clone(),
             "urn:ietf:params:jmap:websocket": { "url": ws::url(&state), "supportsPush": true },
             "urn:ietf:params:jmap:mdn": {},
+            "urn:ietf:params:jmap:quota": {},
+            "urn:ietf:params:jmap:sieve": {},
+            "urn:ietf:params:jmap:contacts": {},
+            "urn:ietf:params:jmap:calendars": {},
             "urn:ietf:params:jmap:webpush-vapid": { "applicationServerKey": push::application_server_key(&state) },
         },
         "accounts": {
@@ -213,10 +231,17 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
                 "accountCapabilities": {
                     "urn:ietf:params:jmap:mail": mail_caps,
                     "urn:ietf:params:jmap:submission": submission_caps,
+                    "urn:ietf:params:jmap:quota": {},
+                    "urn:ietf:params:jmap:sieve": sieve::capability(),
+                    "urn:ietf:params:jmap:contacts": { "maxAddressBooksPerCard": 1, "mayCreateAddressBook": false },
+                    "urn:ietf:params:jmap:calendars": calendar_caps,
                 },
             }
         },
-        "primaryAccounts": { "urn:ietf:params:jmap:mail": id, "urn:ietf:params:jmap:submission": id },
+        "primaryAccounts": {
+            "urn:ietf:params:jmap:mail": id, "urn:ietf:params:jmap:submission": id, "urn:ietf:params:jmap:quota": id,
+            "urn:ietf:params:jmap:sieve": id, "urn:ietf:params:jmap:contacts": id, "urn:ietf:params:jmap:calendars": id,
+        },
         "username": user.account.email,
         "apiUrl": "/jmap/api",
         "downloadUrl": "/jmap/download/{accountId}/{blobId}/{name}?type={type}",
@@ -348,6 +373,29 @@ async fn dispatch(ctx: &mut Context<'_>, name: &str, args: &Map<String, Value>) 
         "Mailbox/changes" => email::changes(ctx, args, "mailbox").await,
         "Thread/changes" => email::changes(ctx, args, "thread").await,
         "Email/queryChanges" => email::query_changes(ctx, args).await,
+        "Quota/get" => quota::get(ctx, args).await,
+        "Quota/changes" => quota::changes(ctx, args).await,
+        "Quota/query" => quota::query(ctx, args).await,
+        "Quota/queryChanges" => quota::query_changes(ctx, args).await,
+        "SieveScript/get" => sieve::get(ctx, args).await,
+        "SieveScript/changes" => sieve::changes(ctx, args).await,
+        "SieveScript/set" => sieve::set(ctx, args).await,
+        "SieveScript/query" => sieve::query(ctx, args).await,
+        "SieveScript/validate" => sieve::validate(ctx, args).await,
+        "AddressBook/get" => contacts::book_get(ctx, args).await,
+        "AddressBook/changes" => contacts::book_changes(ctx, args).await,
+        "AddressBook/set" => contacts::book_set(ctx, args).await,
+        "ContactCard/get" => contacts::get(ctx, args).await,
+        "ContactCard/changes" => contacts::changes(ctx, args).await,
+        "ContactCard/query" => contacts::query(ctx, args).await,
+        "ContactCard/set" => contacts::set(ctx, args).await,
+        "Calendar/get" => calendar::calendar_get(ctx, args).await,
+        "Calendar/changes" => calendar::calendar_changes(ctx, args).await,
+        "Calendar/set" => calendar::calendar_set(ctx, args).await,
+        "CalendarEvent/get" => calendar::event_get(ctx, args).await,
+        "CalendarEvent/changes" => calendar::event_changes(ctx, args).await,
+        "CalendarEvent/query" => calendar::event_query(ctx, args).await,
+        "CalendarEvent/set" => calendar::event_set(ctx, args).await,
         _ => Err(MethodError("unknownMethod", format!("unknown method {name}"))),
     }
 }
@@ -380,7 +428,15 @@ pub(crate) async fn process(state: &AppState, account: &Account, ip: std::net::I
         };
         let mut args = args.clone();
         let result = match resolve_references(&mut args, &responses, &mut budget) {
-            Ok(()) => dispatch(&mut ctx, name, &args).await,
+            Ok(()) => {
+                Metrics::inc(&state.metrics.jmap_calls);
+                let span = tracing::info_span!("jmap.method", jmap.method = name, jmap.error = tracing::field::Empty);
+                let result = tracing::Instrument::instrument(dispatch(&mut ctx, name, &args), span.clone()).await;
+                if let Err(MethodError(kind, _)) = &result {
+                    span.record("jmap.error", *kind);
+                }
+                result
+            }
             Err(err) => Err(err),
         };
         if let Ok(value) = &result {
@@ -503,7 +559,12 @@ async fn download(
     Path((account, blob_id, name)): Path<(String, String, String)>,
 ) -> Result<Response, ApiError> {
     own_account(&user, &account)?;
-    let (data, content_type) = email::load_blob(&state, &user.account, &blob_id).await?.ok_or(ApiError::NotFound)?;
+    let found = if blob_id.starts_with('s') {
+        sieve::load_blob(&state, user.account.id, &blob_id).await.map_err(anyhow::Error::from)?.map(|data| (data, "application/sieve".to_owned()))
+    } else {
+        email::load_blob(&state, &user.account, &blob_id).await?
+    };
+    let (data, content_type) = found.ok_or(ApiError::NotFound)?;
     let inline = INLINE_TYPES.contains(&content_type.as_str());
     let safe_name: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | ' ')).take(150).collect();
     let safe_name = if safe_name.trim_matches(['.', ' ']).is_empty() { "download".to_owned() } else { safe_name };

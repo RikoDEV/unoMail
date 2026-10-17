@@ -344,6 +344,29 @@ pub async fn delete_object(db: &SqlitePool, calendar: &Calendar, name: &str) -> 
     Ok(removed > 0)
 }
 
+/// Moves an object to another calendar of the same account, keeping its id (and name, so
+/// CalDAV clients find it there). The old calendar remembers the name as removed.
+pub async fn move_object(db: &SqlitePool, from: &Calendar, to: &Calendar, name: &str) -> Result<(), CalendarError> {
+    let mut tx = db.begin().await?;
+    let uid: Option<String> = sqlx::query_scalar("SELECT uid FROM calendar_objects WHERE calendar_id = ? AND name = ?").bind(from.id).bind(name).fetch_optional(&mut *tx).await?;
+    let Some(uid) = uid else { return Err(CalendarError::Invalid("no such object".into())) };
+    let clash: Option<i64> = sqlx::query_scalar("SELECT id FROM calendar_objects WHERE calendar_id = ? AND (uid = ? OR name = ?)").bind(to.id).bind(&uid).bind(name).fetch_optional(&mut *tx).await?;
+    if clash.is_some() {
+        return Err(CalendarError::UidConflict);
+    }
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM calendar_objects WHERE calendar_id = ?").bind(to.id).fetch_one(&mut *tx).await?;
+    if count >= MAX_OBJECTS {
+        return Err(CalendarError::Limit);
+    }
+    let old_token: i64 = sqlx::query_scalar("UPDATE calendars SET sync_token = sync_token + 1 WHERE id = ? RETURNING sync_token").bind(from.id).fetch_one(&mut *tx).await?;
+    let new_token: i64 = sqlx::query_scalar("UPDATE calendars SET sync_token = sync_token + 1 WHERE id = ? RETURNING sync_token").bind(to.id).fetch_one(&mut *tx).await?;
+    sqlx::query("UPDATE calendar_objects SET calendar_id = ?, modified = ? WHERE calendar_id = ? AND name = ?").bind(to.id).bind(new_token).bind(from.id).bind(name).execute(&mut *tx).await?;
+    sqlx::query("INSERT OR REPLACE INTO calendar_tombstones (calendar_id, name, modified) VALUES (?, ?, ?)").bind(from.id).bind(name).bind(old_token).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM calendar_tombstones WHERE calendar_id = ? AND name = ?").bind(to.id).bind(name).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 /// What changed in a calendar after `token`: (objects added or modified, names removed).
 pub async fn changes_since(db: &SqlitePool, calendar_id: i64, token: i64) -> sqlx::Result<(Vec<Object>, Vec<String>)> {
     let changed = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {OBJECT_COLUMNS} FROM calendar_objects WHERE calendar_id = ? AND modified > ? ORDER BY id"))).bind(calendar_id).bind(token).fetch_all(db).await?;

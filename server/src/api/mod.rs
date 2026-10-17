@@ -290,7 +290,13 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
     .iter()
     .any(|prefix| path.starts_with(prefix));
     let asset = path.starts_with("/assets/");
-    let mut response = next.run(request).await;
+    // Traced by route, not by path: ids in paths would make every request its own kind.
+    let route = request.extensions().get::<axum::extract::MatchedPath>().map_or("other", |p| p.as_str()).to_owned();
+    let span = tracing::info_span!("http.request", http.request.method = %request.method(), http.route = %route, http.response.status_code = tracing::field::Empty);
+    let started = std::time::Instant::now();
+    let mut response = tracing::Instrument::instrument(next.run(request), span.clone()).await;
+    state.metrics.http_duration.observe(started.elapsed());
+    span.record("http.response.status_code", response.status().as_u16());
     let headers = response.headers_mut();
     let cached = headers.contains_key("cache-control");
     let mut set = |name: &'static str, value: &'static str| {

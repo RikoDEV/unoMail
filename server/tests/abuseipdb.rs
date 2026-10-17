@@ -59,3 +59,32 @@ async fn password_guessers_are_reported_once() {
     assert!(sent[0].0.contains("ip=62.60.134.132") && sent[0].0.contains("categories=18") && sent[0].0.contains("imap"), "{}", sent[0].0);
     assert!(!sent[0].0.contains("guess0"), "the accounts tried are not disclosed");
 }
+
+#[tokio::test]
+async fn smtp_abuse_is_reported_with_every_reason_in_one_report() {
+    let (url, reports) = fake_abuseipdb().await;
+    let env = TestEnv::start_with(|cfg| {
+        cfg.abuseipdb_key = Some("test-key".into());
+        cfg.abuseipdb_url = url;
+        cfg.abuseipdb_report = true;
+    })
+    .await;
+    let spammer = "62.60.134.133".parse().unwrap();
+    reputation::report_abuse(&env.app, spammer, reputation::Abuse::SpamTrap);
+    reputation::report_abuse(&env.app, spammer, reputation::Abuse::RelayProbe);
+    reputation::report_abuse(&env.app, spammer, reputation::Abuse::SpamTrap);
+    fail_logins(&env, "62.60.134.133", 6).await;
+    reputation::report_abuse(&env.app, "192.168.1.9".parse().unwrap(), reputation::Abuse::Spam);
+    let mut reported = HashMap::new();
+    reputation::report_pending(&env.app, &mut reported).await;
+    let sent = reports.lock().clone();
+    assert_eq!(sent.len(), 1, "one report per address, none for private ones: {sent:?}");
+    let query = &sent[0].0;
+    assert!(query.contains("ip=62.60.134.133") && query.contains("categories=18%2C11%2C15"), "{query}");
+    assert!(query.contains("spam+trap") && query.contains("relay"), "{query}");
+
+    // Within the reporting interval the address is not reported again.
+    reputation::report_abuse(&env.app, spammer, reputation::Abuse::Spam);
+    reputation::report_pending(&env.app, &mut reported).await;
+    assert_eq!(reports.lock().len(), 1);
+}

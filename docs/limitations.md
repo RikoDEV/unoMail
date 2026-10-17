@@ -81,5 +81,22 @@
   actions.
 - **ARC:** a failed DMARC check is overridden only for sealers on the trusted list; other
   seals are recorded in `Authentication-Results` but change nothing.
+- **JMAP calendars and contacts** cover the account's own calendars and its address book;
+  calendars shared by colleagues are reached over CalDAV and the web client. Events are read
+  and written through the web client's model: title, description, one location, start and
+  duration, one recurrence rule, guests and one alert before the start. Other JSCalendar
+  properties a client sends (keywords, privacy, …) are accepted but not kept; overridden
+  occurrences of a series stay in the event but are not shown as `recurrenceOverrides`, and
+  to-dos are left to CalDAV. A card keeps one name, e-mail address, phone number,
+  organization and note. Push over the event source and WebSocket announces mail changes
+  only; clients learn of the others through `/changes`.
+- **REQUIRETLS:** bounces of such messages are sent without the flag, and the web client
+  offers no way to ask for it (mail programs do, on the submission ports).
+- **Built-in spam filter:** the registrable domain of a link is taken as its last two labels
+  (no public suffix list), and look-alike domains are recognised by Latin letters mixed with
+  Greek or Cyrillic ones in one label. The origin lookup asks Team Cymru's DNS service about
+  the sending address.
+- **OpenTelemetry** export covers traces (OTLP/HTTP with JSON); metrics stay on `/metrics` and
+  logs on standard output.
 - **Snooze and scheduled send** are checked every 30 and 2 seconds; mail returns or leaves
   that much later at most.

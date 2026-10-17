@@ -225,11 +225,73 @@ pub async fn stored_status(app: &App) -> Option<Status> {
 
 /// AbuseIPDB accepts one report of an address per 15 minutes from each reporter.
 const REPORT_INTERVAL_SECS: i64 = 15 * 60;
-/// AbuseIPDB category "Brute-Force".
-const CATEGORY_BRUTE_FORCE: &str = "18";
+/// AbuseIPDB categories (https://www.abuseipdb.com/categories).
+const CATEGORY_EMAIL_SPAM: u8 = 11;
+const CATEGORY_HACKING: u8 = 15;
+const CATEGORY_BRUTE_FORCE: u8 = 18;
+/// Reports waiting for the next round; more are dropped until then.
+const MAX_PENDING_ABUSE: usize = 1000;
 
-/// Reports addresses caught guessing passwords to AbuseIPDB, when `UNOMAIL_ABUSEIPDB_REPORT`
-/// is on. Never private or trusted addresses; the report names the protocol, not the accounts.
+/// Abuse seen over SMTP that is worth telling AbuseIPDB about. Only clear cases: a wrong
+/// report harms a legitimate server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Abuse {
+    /// Mail to one of the administrator's spam traps.
+    SpamTrap,
+    /// Mail the content filter refused as spam.
+    Spam,
+    /// Mail carrying a virus.
+    Virus,
+    /// Many unknown recipients tried in one connection.
+    DirectoryHarvest,
+    /// Repeated attempts to relay to other domains through this server.
+    RelayProbe,
+}
+
+impl Abuse {
+    fn category(self) -> u8 {
+        match self {
+            Abuse::RelayProbe => CATEGORY_HACKING,
+            _ => CATEGORY_EMAIL_SPAM,
+        }
+    }
+
+    fn describe(self) -> &'static str {
+        match self {
+            Abuse::SpamTrap => "Spam sent to a spam trap address",
+            Abuse::Spam => "Spam refused by the content filter",
+            Abuse::Virus => "Mail carrying a virus",
+            Abuse::DirectoryHarvest => "Directory harvest attack (many unknown recipients)",
+            Abuse::RelayProbe => "Open relay probing (relaying to foreign domains refused)",
+        }
+    }
+}
+
+/// SMTP abuse waiting to be reported, with the address it came from.
+#[derive(Default)]
+pub struct AbuseQueue(parking_lot::Mutex<Vec<(IpAddr, Abuse)>>);
+
+impl AbuseQueue {
+    fn take(&self) -> Vec<(IpAddr, Abuse)> {
+        std::mem::take(&mut *self.0.lock())
+    }
+}
+
+/// Notes abuse from `ip` for the next report to AbuseIPDB. Nothing happens unless reporting
+/// is on, and private or trusted addresses are never reported.
+pub fn report_abuse(app: &App, ip: IpAddr, abuse: Abuse) {
+    if app.cfg.abuseipdb_key.is_none() || !app.cfg.abuseipdb_report || is_private(ip) || is_trusted_source(&app.cfg, ip) {
+        return;
+    }
+    let mut pending = app.abuse.0.lock();
+    if pending.len() < MAX_PENDING_ABUSE && !pending.contains(&(ip, abuse)) {
+        pending.push((ip, abuse));
+    }
+}
+
+/// Reports abusive addresses to AbuseIPDB, when `UNOMAIL_ABUSEIPDB_REPORT` is on: password
+/// guessers and the SMTP abuse noted with [`report_abuse`]. Never private or trusted
+/// addresses; a report names the protocol or behaviour, not the accounts or recipients.
 pub async fn report_offenders(app: crate::app::AppState) {
     if app.cfg.abuseipdb_key.is_none() || !app.cfg.abuseipdb_report {
         return;
@@ -242,29 +304,53 @@ pub async fn report_offenders(app: crate::app::AppState) {
     }
 }
 
-/// One round of [`report_offenders`]: reports what the login limiter caught since the last
-/// round. `reported` remembers when each address was last reported.
+/// One round of [`report_offenders`]: reports what the login limiter and the SMTP server
+/// caught since the last round, one report per address with all its reasons. `reported`
+/// remembers when each address was last reported.
 pub async fn report_pending(app: &App, reported: &mut std::collections::HashMap<IpAddr, i64>) {
     let Some(key) = app.cfg.abuseipdb_key.as_deref() else { return };
     let now = now();
     reported.retain(|_, at| now - *at < REPORT_INTERVAL_SECS);
+    // Address → (categories, reasons), in order of first appearance.
+    let mut order: Vec<IpAddr> = Vec::new();
+    let mut found: std::collections::HashMap<IpAddr, (Vec<u8>, Vec<String>)> = std::collections::HashMap::new();
+    let mut note = |ip: IpAddr, category: u8, reason: String| {
+        let (categories, reasons) = found.entry(ip).or_insert_with(|| {
+            order.push(ip);
+            Default::default()
+        });
+        if !categories.contains(&category) {
+            categories.push(category);
+        }
+        if !reasons.contains(&reason) {
+            reasons.push(reason);
+        }
+    };
     for (ip, protocol) in app.limiter.take_offenders() {
+        note(ip, CATEGORY_BRUTE_FORCE, format!("Password guessing ({protocol} sign-in)"));
+    }
+    for (ip, abuse) in app.abuse.take() {
+        note(ip, abuse.category(), abuse.describe().to_owned());
+    }
+    for ip in order {
         if is_private(ip) || is_trusted_source(&app.cfg, ip) || reported.contains_key(&ip) {
             continue;
         }
         reported.insert(ip, now);
-        let comment = format!("Password guessing ({protocol} sign-in) on {}", app.cfg.hostname);
+        let (categories, reasons) = &found[&ip];
+        let categories = categories.iter().map(u8::to_string).collect::<Vec<_>>().join(",");
+        let comment = format!("{} on {}", reasons.join("; "), app.cfg.hostname);
         let sent = app
             .http
             .post(format!("{}/api/v2/report", app.cfg.abuseipdb_url.trim_end_matches('/')))
             .header("Key", key)
             .header("Accept", "application/json")
-            .query(&[("ip", ip.to_string().as_str()), ("categories", CATEGORY_BRUTE_FORCE), ("comment", comment.as_str())])
+            .query(&[("ip", ip.to_string().as_str()), ("categories", categories.as_str()), ("comment", comment.as_str())])
             .send()
             .await
             .and_then(reqwest::Response::error_for_status);
         match sent {
-            Ok(_) => crate::db::audit(&app.db, "system", "abuseipdb.reported", &ip.to_string(), &ip.to_string(), protocol).await,
+            Ok(_) => crate::db::audit(&app.db, "system", "abuseipdb.reported", &ip.to_string(), &ip.to_string(), &format!("categories {categories}: {}", reasons.join("; "))).await,
             Err(err) => tracing::warn!(%ip, error = %err, "AbuseIPDB report failed"),
         }
     }

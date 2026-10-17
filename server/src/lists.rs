@@ -133,7 +133,7 @@ async fn send(app: &App, envelope_sender: &str, recipient: &str, raw: &[u8]) -> 
                 delivery::enqueue(app, envelope_sender, &remote, &hash, raw.len(), None).await?;
             }
             // A list never posts to itself (or another list) directly: that is how loops start.
-            Target::List { .. } => {}
+            Target::List { .. } | Target::Trap => {}
         }
     }
     Ok(())

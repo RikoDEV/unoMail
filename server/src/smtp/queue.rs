@@ -37,11 +37,12 @@ struct Entry {
     dsn_envid: Option<String>,
     dsn_orcpt: Option<String>,
     delay_notified: i64,
+    require_tls: i64,
 }
 
 impl Entry {
     fn dsn(&self) -> Dsn {
-        Dsn { notify: self.dsn_notify.clone(), ret: self.dsn_ret.clone(), envid: self.dsn_envid.clone(), orcpt: self.dsn_orcpt.clone() }
+        Dsn { notify: self.dsn_notify.clone(), ret: self.dsn_ret.clone(), envid: self.dsn_envid.clone(), orcpt: self.dsn_orcpt.clone(), require_tls: self.require_tls != 0 }
     }
 }
 
@@ -80,6 +81,7 @@ pub async fn notify(app: &App, original_sender: &str, recipient: &str, action: A
         let mut blob = None;
         for target in targets {
             match target {
+                Target::Trap => {}
                 // A report about a list's copy: the list counts it against the member.
                 Target::List { list_id, role } => {
                     if let Err(err) = crate::lists::receive(app, list_id, role, "", &report, false).await {
@@ -155,10 +157,13 @@ async fn attempt(app: &App, entry: Entry) {
             return;
         }
     };
+    let domain = entry.recipient.rsplit_once('@').map_or("", |(_, domain)| domain).to_owned();
+    let span = tracing::info_span!("smtp.deliver", smtp.recipient_domain = %domain, smtp.attempt = entry.attempts + 1, smtp.outcome = tracing::field::Empty);
+    let started = std::time::Instant::now();
     let request = entry.dsn();
     // Notifications are never asked of, or about, notifications themselves.
-    let request = if entry.sender.is_empty() { Dsn::default() } else { request };
-    let outcome = match (Address::parse(&entry.recipient), entry.relay_identity_id) {
+    let request = if entry.sender.is_empty() { Dsn { require_tls: request.require_tls, ..Dsn::default() } } else { request };
+    let outcome = tracing::Instrument::instrument(async { match (Address::parse(&entry.recipient), entry.relay_identity_id) {
         (None, _) => Err(SendError::Permanent("invalid recipient address".into())),
         (Some(recipient), None) => client::deliver_with(app, &entry.sender, &recipient, &raw, Some(&request)).await,
         (Some(recipient), Some(identity)) => match client::Relay::load(app, identity).await {
@@ -167,7 +172,14 @@ async fn attempt(app: &App, entry: Entry) {
             Ok(None) => Err(SendError::Permanent("the SMTP server of the sending identity is no longer configured".into())),
             Err(err) => Err(SendError::Temporary(format!("identity lookup failed: {err}"))),
         },
-    };
+    } }, span.clone())
+    .await;
+    app.metrics.delivery_duration.observe(started.elapsed());
+    span.record("smtp.outcome", match &outcome {
+        Ok(_) => "delivered",
+        Err(SendError::Temporary(_)) => "deferred",
+        Err(SendError::Permanent(_)) => "failed",
+    });
 
     match outcome {
         Ok((reply, passed_on)) => {
@@ -182,6 +194,7 @@ async fn attempt(app: &App, entry: Entry) {
         }
         Err(SendError::Temporary(reason)) if now() < entry.expires_at => {
             let attempts = entry.attempts + 1;
+            Metrics::inc(&app.metrics.deliveries_deferred);
             event("deferred", &reason).await;
             if request.wants_delay() && entry.delay_notified == 0 && now() - entry.created_at >= DELAY_NOTICE_SECS {
                 notify(app, &entry.sender, &entry.recipient, Action::Delayed, &reason, &raw, &request).await;
@@ -229,7 +242,7 @@ async fn claim_entries(app: &App, limit: usize) -> sqlx::Result<Vec<Entry>> {
                       FROM queue q LEFT JOIN busy b ON b.recipient_domain = q.recipient_domain
                       WHERE q.status = 'queued' AND q.next_attempt_at <= ?1)
          UPDATE queue SET status = 'sending' WHERE id IN (SELECT id FROM due WHERE slot <= ?2 ORDER BY next_attempt_at, id LIMIT ?3)
-         RETURNING id, sender, recipient, blob_hash, size, attempts, expires_at, created_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt, delay_notified",
+         RETURNING id, sender, recipient, blob_hash, size, attempts, expires_at, created_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt, delay_notified, require_tls",
     )
     .bind(now())
     .bind(MAX_PARALLEL_PER_DOMAIN)
