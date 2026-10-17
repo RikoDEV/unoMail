@@ -1,0 +1,26 @@
+# Build output and dependencies
+**/node_modules
+**/target
+**/dist
+**/__pycache__
+
+# Local state and test artefacts
+**/.data
+**/data
+**/test-results
+**/playwright-report
+**/.env
+**/.env.*
+
+# Not needed in the image
+.git
+.github
+docs
+dev
+e2e
+server/tests
+**/*.md
+audit.sh
+docker-compose.yml
+Dockerfile
+.dockerignore

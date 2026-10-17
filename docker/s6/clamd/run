@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+# Antivirus daemon. Set CLAMAV_ENABLED=false on small hosts: the signature database needs
+# well over 1 GB of memory.
+if [ "${CLAMAV_ENABLED:-true}" != "true" ]; then
+    exec sleep infinity
+fi
+# clamd refuses to start without signatures; wait for the first download.
+until ls /data/clamav/*.c[lv]d >/dev/null 2>&1; do sleep 5; done
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/command clamd --config-file=/etc/clamav/clamd.conf

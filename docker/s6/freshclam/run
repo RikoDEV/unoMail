@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+if [ "${CLAMAV_ENABLED:-true}" != "true" ]; then
+    exec sleep infinity
+fi
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/command freshclam --daemon --foreground --config-file=/etc/clamav/freshclam.conf

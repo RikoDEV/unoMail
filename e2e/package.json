@@ -1,0 +1,16 @@
+{
+  "name": "unomail-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.5",
+    "selfsigned": "^5.5.0",
+    "typescript": "^7.0.2"
+  }
+}

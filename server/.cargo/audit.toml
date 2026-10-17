@@ -1,0 +1,14 @@
+# cargo-audit configuration.
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 (rsa: "Marvin" timing side channel in private-key operations).
+    # The rsa crate generates DKIM key pairs (security/dkim.rs; DKIM signatures themselves are
+    # produced by ring) and performs the S/MIME private-key operations (smime.rs): signing a
+    # message its owner sends, and decrypting a message its owner reads. The attack needs an
+    # oracle: many chosen ciphertexts decrypted on demand, with precise timing of each. Here a
+    # decryption happens only when the key's owner opens a message in their own session, with
+    # their own key, and its timing is visible to that session only; a sender of crafted
+    # messages can neither trigger it nor observe it. OpenPGP encryption at rest uses public
+    # keys only. Re-evaluate if that changes or when a fixed release is published.
+    "RUSTSEC-2023-0071",
+]

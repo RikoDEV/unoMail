@@ -1,0 +1,106 @@
+<div align="center">
+
+# unoMail
+
+**A complete, self-hosted mail server in a single container.**
+
+SMTP, IMAP, POP3, JMAP, CalDAV and CardDAV, a modern web client, an admin panel,
+and built-in spam and virus filtering. Written in Rust and React.
+
+[![CI](https://github.com/RikoDEV/unoMail/actions/workflows/ci.yml/badge.svg)](https://github.com/RikoDEV/unoMail/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RikoDEV/unoMail?include_prereleases&sort=semver)](https://github.com/RikoDEV/unoMail/releases)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+
+[Quick start](#quick-start) · [Features](#features) · [Documentation](#documentation) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+</div>
+
+---
+
+## Features
+
+**Mail server**
+- SMTP with DKIM signing, SPF/DKIM/DMARC/ARC verification, SRS, DSN, MTA-STS and DANE
+- IMAP (IDLE, CONDSTORE/QRESYNC, ACL, SORT/THREAD, COMPRESS…), POP3, ManageSieve, LMTP
+- JMAP (RFC 8620/8621) including WebSocket push, delayed send and undo
+- CalDAV and CardDAV for Thunderbird, Apple Calendar/Contacts, DAVx⁵ and others
+- Automatic Let's Encrypt certificates (HTTP-01 and Cloudflare DNS-01)
+
+**Web client**
+- Conversations, inbox categories, labels, snooze, scheduled send and undo send
+- Gmail-style search operators, filters (Sieve), templates, signatures and identities
+- Calendar with invitations and sharing, address book, shared folders
+- OpenPGP and S/MIME, offline mode, Web Push notifications, several accounts at once
+- Passkeys, TOTP two-step sign-in, app passwords and OpenID Connect single sign-on
+- English and Polish interface, skins and a plug-in API
+
+**Protection and operations**
+- Rspamd, ClamAV, greylisting, DNS blocklists, karma-based auto-blocking, and a personal Bayes filter for each user
+- Admin dashboard with traffic charts, delivery logs, TLS and DMARC reports
+- Mailing lists with moderation, webhooks, LDAP lookups, milters
+- Incremental daily backups to a directory or S3, optional encryption of stored mail
+
+## Quick start
+
+1. Set `UNOMAIL_HOSTNAME` (the server's public name, your MX target) and `UNOMAIL_ADMIN_EMAIL`
+   in [`docker-compose.yml`](docker-compose.yml), then start it:
+
+   ```sh
+   docker compose up -d --build
+   docker compose logs unomail | grep -A3 "initial administrator"
+   ```
+
+   Without `UNOMAIL_ADMIN_PASSWORD`, a random administrator password is printed once on first start.
+
+2. Open `https://<hostname>/`, sign in, and go to **Administration**:
+   1. **Domains**: add your domain and publish the DNS records shown (MX, SPF, DKIM, DMARC, PTR).
+   2. **Certificates**: request a Let's Encrypt certificate or upload your own
+      (a self-signed one is used until then).
+   3. **Mailboxes**: create accounts. **Mailboxes → Import** can copy existing mail over IMAP
+      or from a Maildir in `/data/unomail/import/<name>`.
+
+| Port | Service |
+| --- | --- |
+| 25 | SMTP |
+| 465, 587 | Submission (TLS, STARTTLS) |
+| 993, 143 | IMAP (TLS, mandatory STARTTLS) |
+| 995 | POP3 over TLS |
+| 4190 | ManageSieve |
+| 80, 443 | Web, ACME |
+
+All state lives in the `/data` volume. ClamAV needs more than 1 GB of RAM; set
+`CLAMAV_ENABLED=false` on small hosts. LMTP is off unless `UNOMAIL_LMTP_PORT` is set.
+
+Prebuilt binaries (Linux x86_64 and ARM64) are attached to each [GitHub release](https://github.com/RikoDEV/unoMail/releases).
+
+## Documentation
+
+| Guide | Contents |
+| --- | --- |
+| [Configuration](docs/configuration.md) | Environment variables and runtime server settings |
+| [Web client](docs/web-client.md) | Everything the webmail, calendar and address book can do |
+| [Administration](docs/administration.md) | Integrations, mailing lists, dashboard, blacklist, backups and restore |
+| [Mail programs](docs/mail-programs.md) | Passkeys and app passwords, IMAP/SMTP/JMAP details, CalDAV and CardDAV setup |
+| [Security model](docs/security-model.md) | How authentication, sessions, storage and transport are protected |
+| [Known limitations](docs/limitations.md) | What is not supported (yet) |
+| [Development](docs/development.md) | Running tests and the hot-reload dev setup |
+
+## Architecture
+
+| Part | Technology | Location |
+| --- | --- | --- |
+| Mail server and API | Rust (Tokio, Axum, rustls, SQLite) | [`server/`](server) |
+| Web client and admin panel | React, Vite, MUI | [`web/`](web) |
+| Spam and virus filtering | Rspamd, ClamAV, Redis (inside the container) | [`docker/`](docker) |
+| End-to-end tests | Playwright | [`e2e/`](e2e) |
+
+unoMail runs as a single node on SQLite; message contents can live in S3.
+
+## Contributing
+
+Bug reports and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Please report security issues privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+unoMail is licensed under the [GNU Affero General Public License v3.0](LICENSE).

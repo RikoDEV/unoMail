@@ -1,0 +1,2 @@
+#!/bin/sh
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/command s6-setuidgid rspamd rspamd -f

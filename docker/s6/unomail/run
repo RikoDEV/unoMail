@@ -1,0 +1,19 @@
+#!/command/with-contenv sh
+# Wait for the content filter so that no message is handled before it can be scanned. Loading
+# its rules and maps can take a minute on a cold start.
+i=0
+until s6-setuidgid unomail curl --silent --fail --unix-socket /run/rspamd/worker.sock http://localhost/ping >/dev/null 2>&1; do
+    i=$((i + 1))
+    if [ "$i" -ge 180 ]; then
+        echo "unomail: Rspamd did not become ready; starting anyway (mail is deferred until it is)" >&2
+        break
+    fi
+    sleep 1
+done
+# Whole-message virus scanning talks to clamd directly; without ClamAV there is nothing to ask.
+if [ "${CLAMAV_ENABLED:-true}" = "true" ]; then
+    export UNOMAIL_CLAMAV_ADDR="${UNOMAIL_CLAMAV_ADDR:-unix:/run/clamav/clamd.sock}"
+else
+    unset UNOMAIL_CLAMAV_ADDR
+fi
+exec s6-setuidgid unomail /usr/local/bin/unomail

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Backing store for Rspamd (Bayes statistics, reputation). Loopback only.
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/command s6-setuidgid redis redis-server --port 0 --unixsocket /run/redis/redis.sock --unixsocketperm 660 --protected-mode yes \
+    --dir /data/redis --save 900 1 --maxmemory 256mb --maxmemory-policy volatile-lru --daemonize no
