@@ -9,7 +9,7 @@ import Settings from '@mui/icons-material/Settings';
 import SettingsBrightness from '@mui/icons-material/SettingsBrightness';
 import { alpha, Avatar, Link, type SxProps, type Theme, Badge, Box, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
 import { useState, type ReactNode } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAppearance, useAuth } from './app';
 import { pendingCount } from './mail/outbox';
 
@@ -25,13 +25,10 @@ function AccountAvatar({ email, size }: { email: string; size: number }) {
 export function AccountMenu() {
   const { account, accounts, refreshAccounts, switchAccount, logout } = useAuth();
   const { mode, setMode } = useAppearance();
-  const navigate = useNavigate();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   if (!account) return null;
-  const go = (path: string) => {
-    setAnchor(null);
-    navigate(path);
-  };
+  // The pages are links, so a middle click or Ctrl+click opens them in a new tab.
+  const close = () => setAnchor(null);
   const others = accounts.filter((entry) => !entry.active);
   const otherUnread = others.reduce((sum, entry) => sum + entry.unread, 0);
   // Leaving an account loses its unsent offline changes; say so first.
@@ -82,27 +79,27 @@ export function AccountMenu() {
           </MenuItem>
         ))}
         {accounts.length < 5 && (
-          <MenuItem onClick={() => go('/login?add=1')}>
+          <MenuItem component={RouterLink} to="/login?add=1" onClick={close}>
             <ListItemIcon><PersonAdd fontSize="small" /></ListItemIcon>
             {t('Add another account')}
           </MenuItem>
         )}
         <Divider />
-        <MenuItem onClick={() => go('/mail')}>
+        <MenuItem component={RouterLink} to="/mail" onClick={close}>
           <ListItemIcon><Mail fontSize="small" /></ListItemIcon>
           {t('Mail')}
         </MenuItem>
-        <MenuItem onClick={() => go('/calendar')}>
+        <MenuItem component={RouterLink} to="/calendar" onClick={close}>
           <ListItemIcon><CalendarMonth fontSize="small" /></ListItemIcon>
           {t('Calendar')}
         </MenuItem>
         {account.role !== 'user' && (
-          <MenuItem onClick={() => go('/admin')}>
+          <MenuItem component={RouterLink} to="/admin" onClick={close}>
             <ListItemIcon><AdminPanelSettings fontSize="small" /></ListItemIcon>
             {t('Administration')}
           </MenuItem>
         )}
-        <MenuItem onClick={() => go('/settings')}>
+        <MenuItem component={RouterLink} to="/settings" onClick={close}>
           <ListItemIcon><Settings fontSize="small" /></ListItemIcon>
           {t('Settings')}
         </MenuItem>
