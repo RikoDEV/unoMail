@@ -29,6 +29,8 @@ interface Field {
   pattern?: RegExp;
   patternHint?: string;
   maxLength?: number;
+  /** For lists: what each item is (default: a DNS zone). */
+  items?: 'zone' | 'country' | 'asn' | 'address';
   /** Shown only while these switches are on. */
   dependsOn?: string[];
 }
@@ -79,9 +81,9 @@ const GROUPS: Group[] = [
       { key: 'native_filter', label: t('Use the built-in filter'), help: t('Score incoming mail with the tests described above'), kind: 'bool' },
       { key: 'native_filter_score', label: t('Junk score'), help: t('Mail scoring at least this much goes to Junk'), kind: 'decimal', min: 0.5, max: 100, dependsOn: ['native_filter'] },
       { key: 'sender_reputation', label: t('Learn sender reputation'), help: t('Remember how much spam comes from each network, provider and verified domain, including users’ spam reports'), kind: 'bool' },
-      { key: 'spam_traps', label: t('Spam traps'), help: t('Comma separated addresses of your domains that nobody uses. Mail to them teaches the filter and is not delivered.'), kind: 'list' },
-      { key: 'penalized_countries', label: t('Penalised countries'), help: t('Comma separated two-letter codes, e.g. KP,RU; mail sent from there scores the points below'), kind: 'list', dependsOn: ['native_filter'] },
-      { key: 'penalized_asns', label: t('Penalised autonomous systems'), help: t('Comma separated network numbers (ASN), e.g. 64500'), kind: 'list', dependsOn: ['native_filter'] },
+      { key: 'spam_traps', label: t('Spam traps'), help: t('Comma separated addresses of your domains that nobody uses. Mail to them teaches the filter and is not delivered.'), kind: 'list', items: 'address' },
+      { key: 'penalized_countries', label: t('Penalised countries'), help: t('Comma separated two-letter codes, e.g. KP,RU; mail sent from there scores the points below'), kind: 'list', items: 'country', dependsOn: ['native_filter'] },
+      { key: 'penalized_asns', label: t('Penalised autonomous systems'), help: t('Comma separated network numbers (ASN), e.g. 64500'), kind: 'list', items: 'asn', dependsOn: ['native_filter'] },
       { key: 'origin_score', label: t('Points for a penalised origin'), help: t('Added once for the country and once for the network'), kind: 'decimal', min: 0, max: 100, dependsOn: ['native_filter'] },
     ],
   },
@@ -180,15 +182,23 @@ function parse(field: Field, text: string): { value?: number | string | string[]
     return { value };
   }
   if (field.kind === 'list') {
-    const zones = text.split(',').map((z) => z.trim().toLowerCase()).filter(Boolean);
-    const bad = zones.find((z) => !/^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/.test(z));
-    return bad ? { error: t('“{{zone}}” is not a valid zone name', { zone: bad }) } : { value: zones };
+    const kind = field.items ?? 'zone';
+    const items = text.split(',').map((item) => (kind === 'country' ? item.trim().toUpperCase() : item.trim().toLowerCase())).filter(Boolean);
+    const bad = items.find((item) => !LIST_ITEM[kind].pattern.test(item));
+    return bad ? { error: LIST_ITEM[kind].error(bad) } : { value: items };
   }
   if (!/^\d+$/.test(text.trim())) return { error: t('Enter a whole number') };
   const n = Number(text);
   if ((field.min !== undefined && n < field.min) || (field.max !== undefined && n > field.max)) return { error: t('Must be between {{min}} and {{max}}', { min: field.min, max: field.max }) };
   return { value: field.kind === 'megabytes' ? n * MB : n };
 }
+
+const LIST_ITEM: Record<NonNullable<Field['items']>, { pattern: RegExp; error: (item: string) => string }> = {
+  zone: { pattern: /^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/, error: (zone) => t('“{{zone}}” is not a valid zone name', { zone }) },
+  country: { pattern: /^[A-Z]{2}$/, error: (item) => t('“{{item}}” is not a two-letter country code', { item }) },
+  asn: { pattern: /^(0|[1-9]\d{0,9})$/, error: (item) => t('“{{item}}” is not a network number', { item }) },
+  address: { pattern: /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/, error: (item) => t('“{{item}}” is not an email address', { item }) },
+};
 
 interface GlobalScript {
   name: string;
