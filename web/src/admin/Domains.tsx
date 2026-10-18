@@ -205,8 +205,9 @@ export function DomainDetail() {
         </Button>
       </PageHeader>
       {feedback}
-      <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap alignItems="center" sx={{ mb: 3 }}>
-        <FormControlLabel control={<Switch checked={d.enabled} disabled={!isSuper} onChange={(e) => void update({ enabled: e.target.checked }, t('Domain updated'))} />} label={t('Enabled')} />
+      {/* Top-aligned: the MTA-STS description makes that field taller than the others. */}
+      <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap alignItems="flex-start" sx={{ mb: 3 }}>
+        <FormControlLabel sx={{ height: 56 }} control={<Switch checked={d.enabled} disabled={!isSuper} onChange={(e) => void update({ enabled: e.target.checked }, t('Domain updated'))} />} label={t('Enabled')} />
         <TextField
           label={t('Catch-all address')}
           value={catchAll ?? d.catch_all ?? ''}
@@ -229,7 +230,7 @@ export function DomainDetail() {
           value={d.mta_sts_mode}
           onChange={(e) => void update({ mta_sts_mode: e.target.value }, t('MTA-STS policy updated')).then(() => dns.reload())}
           helperText={t('Tells other servers to deliver here only over verified TLS')}
-          sx={{ width: 300 }}
+          sx={{ width: 380, maxWidth: '100%' }}
         >
           <MenuItem value="none">{t('Not published')}</MenuItem>
           <MenuItem value="testing">{t('Testing (report only)')}</MenuItem>
