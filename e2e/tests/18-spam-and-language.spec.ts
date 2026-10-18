@@ -58,11 +58,11 @@ test.describe('spam reports and interface language', () => {
     await expect(filter.getByRole('button', { name: 'Forget what it learned' })).toHaveCount(0);
   });
 
-  test('the interface language is chosen in the settings and follows the account', async ({ page, browser }) => {
+  test('the interface language is chosen in the header and follows the account', async ({ page, browser }) => {
     await login(page, FIONA, USER_PASSWORD);
     await openSettings(page, 'General');
-    await page.getByLabel('Interface language').click();
-    await page.getByRole('option', { name: 'Polski' }).click();
+    await page.getByRole('button', { name: 'Interface language' }).click();
+    await page.getByRole('menuitem', { name: 'Polski' }).click();
 
     // The page reloads in Polish.
     await expect(page.getByRole('heading', { name: 'Ustawienia', level: 1 })).toBeVisible();
@@ -84,11 +84,11 @@ test.describe('spam reports and interface language', () => {
     await expect(second.getByRole('navigation', { name: 'Foldery' })).toBeVisible();
     await other.close();
 
-    // Back to English, by the same setting.
+    // Back to English, by the same button.
     await page.getByRole('button', { name: 'Menu konta' }).click();
     await page.getByRole('menuitem', { name: 'Ustawienia' }).click();
-    await page.getByLabel('Język interfejsu').click();
-    await page.getByRole('option', { name: 'English' }).click();
+    await page.getByRole('button', { name: 'Język interfejsu' }).click();
+    await page.getByRole('menuitem', { name: 'English' }).click();
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   });
 

@@ -74,7 +74,7 @@ export function TlsReports() {
                     <TableCell align="right">{report.successes + report.failures}</TableCell>
                     <TableCell>
                       {report.failures === 0 ? (
-                        <Chip size="small" color="success" label="none" />
+                        <Chip size="small" color="success" label={t('none')} />
                       ) : (
                         <Stack direction="row" gap={0.5} flexWrap="wrap">
                           {(report.details ?? []).map((detail, index) => (

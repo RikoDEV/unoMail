@@ -85,7 +85,7 @@ export function Lists() {
               <TableRow key={list.id} hover sx={{ cursor: 'pointer' }} onClick={() => setOpen(list.id)}>
                 <TableCell>
                   {list.address}
-                  {!list.enabled && <Chip size="small" label="off" sx={{ ml: 1 }} />}
+                  {!list.enabled && <Chip size="small" label={t('off')} sx={{ ml: 1 }} />}
                 </TableCell>
                 <TableCell>{list.name}</TableCell>
                 <TableCell>{POSTING[list.posting]}</TableCell>

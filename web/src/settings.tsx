@@ -14,7 +14,7 @@ import { SignaturesCard } from './settingsSignatures';
 import { ApiError, del, formatBytes, formatTime, get, post, put, errorText } from './api';
 import { useLoad } from './admin/common';
 import { useAuth } from './app';
-import { AppearanceCard, LanguageCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListCard, NotificationsCard, SendingCard, SmimeCard, TemplatesCard } from './settingsWebmail';
+import { AppearanceCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListCard, NotificationsCard, SendingCard, SmimeCard, TemplatesCard } from './settingsWebmail';
 import { TopBar } from './shell';
 import { AppPasswordsCard, TwoStepCard } from './settingsSecurity';
 
@@ -206,7 +206,7 @@ export default function SettingsPage() {
 
   // The settings, grouped. Each group has its own address (?tab=...), so it can be linked to.
   const sections: { id: string; label: string; icon: ReactElement; content: ReactNode }[] = [
-    { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><LanguageCard /><AppearanceCard /></> },
+    { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><AppearanceCard /></> },
     { id: 'inbox', label: t('Inbox'), icon: <Inbox />, content: <InboxCard /> },
     { id: 'identities', label: t('Identities'), icon: <Badge />, content: <IdentitiesCard /> },
     { id: 'signatures', label: t('Signatures'), icon: <Draw />, content: <SignaturesCard /> },

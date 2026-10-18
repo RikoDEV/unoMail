@@ -3,6 +3,8 @@ import PersonAdd from '@mui/icons-material/PersonAdd';
 import CalendarMonth from '@mui/icons-material/CalendarMonth';
 import DarkMode from '@mui/icons-material/DarkMode';
 import LightMode from '@mui/icons-material/LightMode';
+import LanguageIcon from '@mui/icons-material/Language';
+import Check from '@mui/icons-material/Check';
 import Logout from '@mui/icons-material/Logout';
 import Mail from '@mui/icons-material/Mail';
 import Settings from '@mui/icons-material/Settings';
@@ -13,7 +15,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useAppearance, useAuth } from './app';
 import { pendingCount } from './mail/outbox';
 
-import { t } from './i18n';
+import { chosenLanguage, LANGUAGES, setLanguage, t } from './i18n';
+import { updatePrefs } from './prefs';
 /** Account menu shown in the top-right corner of every page. */
 /** A round picture for an account: its first letter, in a colour of its own. */
 function AccountAvatar({ email, size }: { email: string; size: number }) {
@@ -170,6 +173,35 @@ export function Copyright({ placement, sx, className }: { placement: 'login' | '
   );
 }
 
+/** The interface language, stored with the account so it follows the user between devices. */
+function LanguageMenu() {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const chosen = chosenLanguage() ?? '';
+  async function choose(code: string) {
+    setAnchor(null);
+    await updatePrefs({ language: code }).catch(() => {});
+    setLanguage(code || null);
+  }
+  const options = [{ code: '', name: t('Automatic (browser language)') }, ...LANGUAGES];
+  return (
+    <>
+      <Tooltip title={t('Interface language')}>
+        <IconButton aria-label={t('Interface language')} aria-haspopup="menu" aria-expanded={Boolean(anchor)} onClick={(e) => setAnchor(e.currentTarget)}>
+          <LanguageIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
+        {options.map((option) => (
+          <MenuItem key={option.code} selected={option.code === chosen} lang={option.code || undefined} onClick={() => void choose(option.code)}>
+            <ListItemIcon>{option.code === chosen && <Check fontSize="small" />}</ListItemIcon>
+            <ListItemText>{option.name}</ListItemText>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+}
+
 export function TopBar({ title, children, leading, onHome }: { title: string; children?: ReactNode; leading?: ReactNode; onHome?: () => void }) {
   return (
     <Stack component="header" direction="row" alignItems="center" spacing={{ xs: 1, sm: 2 }} sx={{ px: { xs: 1, sm: 2 }, height: 64, flexShrink: 0 }}>
@@ -189,6 +221,7 @@ export function TopBar({ title, children, leading, onHome }: { title: string; ch
         {title}
       </Typography>
       <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
+      <LanguageMenu />
       <AccountMenu />
     </Stack>
   );

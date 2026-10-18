@@ -280,7 +280,7 @@ export function Mailboxes() {
                 )}
                 {box.send_only && <Chip size="small" color="secondary" label={t('send only')} sx={{ ml: 1 }} />}
                 {box.outbound_blocked && <Chip size="small" color="error" label={t('sending blocked')} sx={{ ml: 1 }} />}
-                {!box.enabled && <Chip size="small" color="warning" variant="outlined" label="disabled" sx={{ ml: 1 }} />}
+                {!box.enabled && <Chip size="small" color="warning" variant="outlined" label={t('disabled')} sx={{ ml: 1 }} />}
               </TableCell>
               <TableCell>{box.display_name}</TableCell>
               <TableCell>{box.role.replace('_', ' ')}</TableCell>

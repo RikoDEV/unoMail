@@ -1826,5 +1826,11 @@
   "Points for a penalised origin": "Punkty za karane pochodzenie",
   "Added once for the country and once for the network": "Dodawane raz za kraj i raz za sieć",
   "system": "systemowa",
-  "Kept by the server for every domain: it receives DMARC and TLS reports and mail to postmaster. Set a password to read it.": "Utrzymywana przez serwer dla każdej domeny: odbiera raporty DMARC i TLS oraz pocztę do postmastera. Ustaw hasło, aby ją czytać."
+  "Kept by the server for every domain: it receives DMARC and TLS reports and mail to postmaster. Set a password to read it.": "Utrzymywana przez serwer dla każdej domeny: odbiera raporty DMARC i TLS oraz pocztę do postmastera. Ustaw hasło, aby ją czytać.",
+  "encrypted": "szyfrowana",
+  "off": "wyłączona",
+  "disabled": "wyłączona",
+  "changed": "zmienione",
+  "default": "domyślne",
+  "none": "brak"
 }

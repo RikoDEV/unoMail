@@ -22,7 +22,7 @@ import { fetchKeys, fingerprint, generateKeys, importKeys, isUnlocked, localPriv
 import { escapeHtml } from './mail/sanitize';
 import { BUILT_IN_SKINS, skinIsDark } from './skins';
 
-import { chosenLanguage, LANGUAGES, setLanguage, t, uiLocale } from './i18n';
+import { t, uiLocale } from './i18n';
 import { useList } from './useLoad';
 /** Plain text typed into a settings field, as the HTML that is stored. */
 const textToStoredHtml = (text: string) => (text.trim() ? escapeHtml(text.trim()).replace(/\n/g, '<br>') : '');
@@ -503,33 +503,6 @@ export function MessageListCard() {
         </Stack>
         <FormControlLabel control={<Switch checked={offline} onChange={(_, enabled) => { setPersistentCache(enabled); setOffline(enabled); }} />} label="Keep mail offline on this trusted device" />
         <Typography variant="body2" color="text.secondary">Off by default. Cached messages are stored unencrypted in this browser and removed on sign-out.</Typography>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** The interface language, stored with the account so it follows the user between devices. */
-export function LanguageCard() {
-  const [value, setValue] = useState(chosenLanguage() ?? '');
-  async function choose(code: string) {
-    setValue(code);
-    await updatePrefs({ language: code }).catch(() => {});
-    setLanguage(code || null);
-  }
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t('Language')}
-        </Typography>
-        <TextField select label={t('Interface language')} value={value} onChange={(e) => void choose(e.target.value)} sx={{ minWidth: 260 }}>
-          <MenuItem value="">{t('Automatic (browser language)')}</MenuItem>
-          {LANGUAGES.map((language) => (
-            <MenuItem key={language.code} value={language.code} lang={language.code}>
-              {language.name}
-            </MenuItem>
-          ))}
-        </TextField>
       </CardContent>
     </Card>
   );

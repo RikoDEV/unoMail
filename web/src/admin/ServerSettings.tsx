@@ -325,13 +325,13 @@ export function ServerSettings() {
                     <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                       {overridden ? (
                         <>
-                          <Chip size="small" label="changed" color="primary" sx={{ mr: 1 }} />
+                          <Chip size="small" label={t('changed')} color="primary" sx={{ mr: 1 }} />
                           <Button size="small" onClick={() => void save(field.key, null)} aria-label={t('Reset {{label}}', { label: field.label })}>
                             {t('Reset')}
                           </Button>
                         </>
                       ) : (
-                        <Chip size="small" label="default" variant="outlined" />
+                        <Chip size="small" label={t('default')} variant="outlined" />
                       )}
                     </TableCell>
                   </TableRow>

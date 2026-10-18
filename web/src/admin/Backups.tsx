@@ -102,7 +102,7 @@ export function Backups() {
                 {data.snapshots.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(s.created_at)}</TableCell>
-                    <TableCell><code>{s.id}</code>{s.encrypted_mail && <Chip size="small" label="encrypted" sx={{ ml: 1 }} />}</TableCell>
+                    <TableCell><code>{s.id}</code>{s.encrypted_mail && <Chip size="small" label={t('encrypted')} sx={{ ml: 1 }} />}</TableCell>
                     <TableCell align="right">{s.blobs}</TableCell>
                     <TableCell align="right">{formatBytes(s.database_bytes)}</TableCell>
                     <TableCell>{s.version}</TableCell>
