@@ -193,22 +193,23 @@ test.describe('message list, reader and search', () => {
     await login(page, IVY, USER_PASSWORD);
     await page.getByRole('button', { name: 'Account menu' }).click();
     await page.getByRole('menuitem', { name: 'Settings' }).click();
-    const sections = page.getByRole('tablist', { name: 'Settings sections' });
-    await expect(sections.getByRole('tab')).toHaveText(['General', 'Inbox', 'Identities', 'Signatures', 'Templates', 'Filters', 'Out of office', 'Security']);
+    const sections = page.getByRole('navigation', { name: 'Settings sections' });
+    await expect(sections.getByRole('button')).toHaveText(['General', 'Inbox', 'Identities', 'Signatures', 'Templates', 'Filters', 'Out of office', 'Security']);
     await expect(page.getByRole('heading', { name: 'General', level: 2 })).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Message list density' })).toBeVisible();
     await expect(page.getByLabel('Sieve script')).toHaveCount(0);
     const main = (await page.getByRole('main').boundingBox())!;
-    expect(main.width).toBeGreaterThan(page.viewportSize()!.width * 0.9);
+    // Everything beside the section list.
+    expect(main.width).toBeGreaterThan(page.viewportSize()!.width * 0.75);
 
-    await sections.getByRole('tab', { name: 'Security' }).click();
+    await sections.getByRole('button', { name: 'Security' }).click();
     await expect(page).toHaveURL(/\?tab=security$/);
     await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Sessions' })).toBeVisible();
     // A section can be linked to.
     await page.goto('/settings?tab=filters');
     await expect(page.getByRole('tab', { name: 'Rules' })).toBeVisible();
-    await expect(sections.getByRole('tab', { name: 'Filters' })).toHaveAttribute('aria-selected', 'true');
+    await expect(sections.getByRole('button', { name: 'Filters' })).toHaveAttribute('aria-current', 'page');
     await page.goto('/settings?tab=nonsense');
     await expect(page.getByRole('heading', { name: 'General', level: 2 })).toBeVisible();
   });

@@ -4,9 +4,10 @@ import BeachAccess from '@mui/icons-material/BeachAccess';
 import Draw from '@mui/icons-material/Draw';
 import FilterAlt from '@mui/icons-material/FilterAlt';
 import Inbox from '@mui/icons-material/Inbox';
+import MenuIcon from '@mui/icons-material/Menu';
 import Security from '@mui/icons-material/Security';
 import Tune from '@mui/icons-material/Tune';
-import { Alert, Box, Button, Card, CardContent, FormControlLabel, LinearProgress, Paper, Stack, Switch, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, LinearProgress, Paper, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useEffect, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiltersCard } from './settingsFilters';
@@ -96,7 +97,8 @@ function VacationCard() {
 export default function SettingsPage() {
   useTitle(t('Settings'));
   const [params, setParams] = useSearchParams();
-  const wide = useMediaQuery(useTheme().breakpoints.up('md'));
+  const compact = useMediaQuery(useTheme().breakpoints.down('md'));
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const { account } = useAuth();
   const sessions = useLoad(() => get<SessionRow[]>('/api/auth/sessions'), []);
   const [current, setCurrent] = useState('');
@@ -217,37 +219,50 @@ export default function SettingsPage() {
     { id: 'security', label: t('Security'), icon: <Security />, content: <>{passwordCard}<TwoStepCard /><AppPasswordsCard /><EncryptionCard /><SmimeCard />{sessionsCard}</> },
   ];
   const active = sections.find((section) => section.id === params.get('tab')) ?? sections[0];
+  const nav = (
+    <Box component="nav" aria-label={t('Settings sections')} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined }}>
+      <Typography variant="h6" component="h1" sx={{ px: 2, pt: compact ? 1 : 0, pb: 1 }}>
+        {t('Settings')}
+      </Typography>
+      <List dense disablePadding>
+        {sections.map((section) => (
+          <ListItemButton
+            key={section.id}
+            selected={section.id === active.id}
+            aria-current={section.id === active.id ? 'page' : undefined}
+            onClick={() => { setParams({ tab: section.id }, { replace: true }); setDrawerOpen(false); }}
+            sx={{ mb: 0.25, '&.Mui-selected': { bgcolor: 'action.selected', fontWeight: 600 } }}
+          >
+            <ListItemIcon sx={{ minWidth: 40 }}>{section.icon}</ListItemIcon>
+            <ListItemText primary={section.label} />
+          </ListItemButton>
+        ))}
+      </List>
+      <Copyright placement="settings" sx={{ mt: 'auto', px: 2, pt: 3, pb: 2, flexShrink: 0 }} />
+    </Box>
+  );
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-      <TopBar title={t('unoMail')} />
-      <Paper elevation={0} component="main" sx={{ flex: 1, minHeight: 0, mx: 1, mb: 1, borderRadius: 1.5, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, overflow: 'hidden' }}>
-        <Box sx={(theme) => ({ width: { md: 240 }, flexShrink: 0, borderRight: { md: `1px solid ${theme.palette.divider}` }, borderBottom: { xs: `1px solid ${theme.palette.divider}`, md: 'none' }, pt: { md: 2 }, display: { md: 'flex' }, flexDirection: 'column' })}>
-          <Typography variant="h5" component="h1" sx={{ px: 3, pt: { xs: 2, md: 0 }, pb: 1 }}>
-            {t('Settings')}
-          </Typography>
-          <Tabs
-            orientation={wide ? 'vertical' : 'horizontal'}
-            variant={wide ? 'standard' : 'scrollable'}
-            value={active.id}
-            onChange={(_, id: string) => setParams({ tab: id }, { replace: true })}
-            aria-label={t('Settings sections')}
-            sx={{ '& .MuiTab-root': { justifyContent: 'flex-start', minHeight: 48, textTransform: 'none', px: 3, fontSize: 15 }, '& .MuiTabs-indicator': { left: wide ? 0 : undefined } }}
-          >
-            {sections.map((section) => (
-              <Tab key={section.id} value={section.id} label={section.label} icon={section.icon} iconPosition="start" id={`settings-tab-${section.id}`} aria-controls={`settings-panel-${section.id}`} />
-            ))}
-          </Tabs>
-          <Copyright placement="settings" sx={{ display: { xs: 'none', md: 'block' }, mt: 'auto', px: 3, pt: 3, pb: 2 }} />
-        </Box>
-        <Box role="tabpanel" id={`settings-panel-${active.id}`} aria-labelledby={`settings-tab-${active.id}`} sx={{ flex: 1, minWidth: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}>
-          <Typography variant="h6" component="h2" sx={{ mb: 2, fontWeight: 400, fontSize: 22 }}>
+      <TopBar
+        title={t('unoMail')}
+        leading={compact && <Tooltip title={t('Menu')}><IconButton aria-label={t('Settings sections')} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton></Tooltip>}
+      />
+      <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {compact ? (
+          <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
+            {nav}
+          </Drawer>
+        ) : (
+          nav
+        )}
+        <Paper elevation={0} component="main" sx={{ flex: 1, minWidth: 0, overflow: 'auto', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, p: { xs: 2, sm: 3 } }}>
+          <Typography variant="h5" component="h2" sx={{ mb: 2 }}>
             {active.label}
           </Typography>
           {message && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>{message}</Alert>}
           <Stack spacing={3}>{active.content}</Stack>
-          <Copyright placement="settings" sx={{ display: { md: 'none' }, mt: 4 }} />
-        </Box>
-      </Paper>
+        </Paper>
+      </Box>
     </Box>
   );
 }

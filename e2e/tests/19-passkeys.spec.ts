@@ -40,7 +40,7 @@ async function signOut(page: Page) {
 async function openSecurity(page: Page) {
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
-  await page.getByRole('tab', { name: 'Security' }).click();
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Security' }).click();
 }
 
 async function signedInAs(page: Page, email: string) {

@@ -39,7 +39,7 @@ async function openSettings(page: Page, tab?: string) {
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  if (tab) await page.getByRole('tab', { name: tab }).click();
+  if (tab) await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: tab }).click();
 }
 
 const conversation = (page: Page) => page.getByRole('region', { name: 'Conversation' });
@@ -104,7 +104,7 @@ test.describe('web mail extras', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
 
     // A signature, used by the team address for new messages.
-    await page.getByRole('tab', { name: 'Signatures' }).click();
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Signatures' }).click();
     await page.getByRole('button', { name: 'Add signature' }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('Signature name').fill('Team');
@@ -115,7 +115,7 @@ test.describe('web mail extras', () => {
     await page.getByRole('option', { name: 'Team' }).click();
     await expect(page.getByRole('combobox', { name: `For new messages from team@${DOMAIN}` })).toHaveText('Team');
 
-    await page.getByRole('tab', { name: 'Templates' }).click();
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Templates' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('Template name').fill('Thanks');

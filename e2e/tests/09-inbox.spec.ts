@@ -15,7 +15,7 @@ async function openSettings(page: Page, tab?: string) {
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  if (tab) await page.getByRole('tab', { name: tab }).click();
+  if (tab) await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: tab }).click();
 }
 
 test.describe('inbox tools', () => {
