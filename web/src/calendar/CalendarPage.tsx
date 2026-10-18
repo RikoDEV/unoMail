@@ -14,7 +14,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { del, get, postRaw, errorText } from '../api';
-import { TopBar } from '../shell';
+import { TopBar, useTitle } from '../shell';
 import {
   COLORS, addDays, dayKey, daysOf, draft, formatSpan, formatTime, formatTitle, isBanner, layoutDay, onDay, sameDay, shift, startOfDay, type Calendar, type EventForm, type Occurrence,
   type View,
@@ -267,6 +267,7 @@ function AgendaView({ date, events, colorOf, onOpen }: ViewProps) {
 // --- Page ------------------------------------------------------------------------------------
 
 export default function CalendarPage() {
+  useTitle(t('Calendar'));
   const navigate = useNavigate();
   // On small screens the calendars slide in over the page, and the toolbar shrinks.
   const theme = useTheme();

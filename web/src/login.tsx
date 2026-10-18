@@ -9,7 +9,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { autofillAvailable, forgetUnknownPasskey, type PasskeyAnswer, passkeysAvailable, type RequestOptions, signWithPasskey, wasDismissed } from './webauthn';
 
 import { currentLanguage, LANGUAGES, setLanguage, t } from './i18n';
-import { Copyright } from './shell';
+import { Copyright, useTitle } from './shell';
 /** The second step of a sign-in: a code from the authenticator app, a passkey, or a recovery code. */
 function SecondStep({ challenge, onDone, onCancel }: { challenge: SecondFactorChallenge; onDone: (data: { account: Account; csrf_token: string }) => void; onCancel: () => void }) {
   const [mode, setMode] = useState<'totp' | 'recovery'>(challenge.methods.totp ? 'totp' : 'recovery');
@@ -101,6 +101,7 @@ function SecondStep({ challenge, onDone, onCancel }: { challenge: SecondFactorCh
 
 /** The sign-in page. With `adding`, the user is signed in already and adds another account. */
 export function Login({ adding = false }: { adding?: boolean }) {
+  useTitle(adding ? t('Add another account') : t('Sign in'));
   const { login, completeLogin } = useAuth();
   const [challenge, setChallenge] = useState<SecondFactorChallenge | null>(null);
   const navigate = useNavigate();

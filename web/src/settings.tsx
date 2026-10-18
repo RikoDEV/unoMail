@@ -15,7 +15,7 @@ import { ApiError, del, formatBytes, formatTime, get, post, put, errorText } fro
 import { useLoad } from './admin/common';
 import { useAuth } from './app';
 import { AppearanceCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListCard, NotificationsCard, SendingCard, SmimeCard, TemplatesCard } from './settingsWebmail';
-import { TopBar } from './shell';
+import { TopBar, useTitle } from './shell';
 import { AppPasswordsCard, TwoStepCard } from './settingsSecurity';
 
 import { t } from './i18n';
@@ -94,6 +94,7 @@ function VacationCard() {
 }
 
 export default function SettingsPage() {
+  useTitle(t('Settings'));
   const [params, setParams] = useSearchParams();
   const wide = useMediaQuery(useTheme().breakpoints.up('md'));
   const { account } = useAuth();

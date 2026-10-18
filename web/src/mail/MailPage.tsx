@@ -35,7 +35,7 @@ import { del, post, errorText, formatBytes } from '../api';
 import { useAuth } from '../app';
 import { setPluginNotifier, usePlugins } from '../plugins';
 import { usePrefs } from '../prefs';
-import { Copyright, TopBar } from '../shell';
+import { Copyright, TopBar, useTitle } from '../shell';
 import { cachedList, cachedMailboxes, cachedThread, cacheList, cacheMailboxes, cacheThread, openCache } from './cache';
 import { Composer, type SentInfo } from './Composer';
 import { CATEGORIES, type CategoryName, categoryCounts, exportUrl, importMessages, LABEL_COLORS, type LabelDetail, listLabelDetails, saveLabel } from './extra';
@@ -159,6 +159,12 @@ export default function MailPage() {
   const mailbox = useMemo(() => mailboxes.find((m) => m.id === mailboxSlug) ?? mailboxes.find((m) => m.role === (mailboxSlug || 'inbox')), [mailboxes, mailboxSlug]);
   // "label:<name>" in the URL shows every conversation carrying that label.
   const label = mailboxSlug?.startsWith('label:') ? decodeURIComponent(mailboxSlug.slice(6)) : null;
+  const unreadInbox = mailboxes.find((m) => m.role === 'inbox')?.unreadEmails ?? 0;
+  useTitle(
+    thread ? thread[0]?.subject || t('(no subject)') : null,
+    serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : mailbox && folderName(mailbox),
+    unreadInbox > 0 && t('{{count}} unread', { count: unreadInbox }),
+  );
   const slug = label ? `label:${encodeURIComponent(label)}` : (mailbox?.id ?? 'inbox');
   const byRole = useCallback((role: string) => mailboxes.find((m) => m.role === role), [mailboxes]);
 

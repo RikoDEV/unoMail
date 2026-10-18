@@ -2,6 +2,7 @@ import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogConten
 import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode, useCallback, useState } from 'react';
 
 import { t } from '../i18n';
+import { useTitle } from '../shell';
 import { errorText } from '../api';
 export { useLoad } from '../useLoad';
 
@@ -74,6 +75,7 @@ export const routeBy =
     patterns.find(([pattern]) => pattern.test(message))?.[1] ?? fallback;
 
 export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
+  useTitle(title, t('Administration'));
   return (
     <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
       <Typography variant="h5" component="h1" sx={{ flex: 1 }}>

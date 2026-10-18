@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { del, get, post, postRaw, put, errorText } from './api';
 import type { Contact, ContactGroup } from './mail/extra';
-import { TopBar } from './shell';
+import { TopBar, useTitle } from './shell';
 
 import { t } from './i18n';
 const EMPTY: Omit<Contact, 'id'> = { name: '', email: '', phone: '', organization: '', notes: '', pgp_key: '' };
@@ -113,6 +113,7 @@ function ContactDialog({ contact, groups, onClose }: { contact: Contact | null; 
 
 /** The personal address book: contacts, groups, and vCard import/export. */
 export default function ContactsPage() {
+  useTitle(t('Contacts'));
   const navigate = useNavigate();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [groups, setGroups] = useState<ContactGroup[]>([]);

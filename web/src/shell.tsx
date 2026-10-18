@@ -10,7 +10,7 @@ import Mail from '@mui/icons-material/Mail';
 import Settings from '@mui/icons-material/Settings';
 import SettingsBrightness from '@mui/icons-material/SettingsBrightness';
 import { alpha, Avatar, Link, type SxProps, type Theme, Badge, Box, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAppearance, useAuth } from './app';
 import { pendingCount } from './mail/outbox';
@@ -157,6 +157,14 @@ export function AccountMenu() {
       </Menu>
     </>
   );
+}
+
+/** Sets the browser tab title: the given parts, most specific first, then "unoMail". */
+export function useTitle(...parts: (string | null | undefined | false)[]) {
+  const title = [...parts.filter(Boolean), 'unoMail'].join(' · ');
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
 }
 
 /** The copyright line under the sign-in form and at the foot of the mail sidebar. */
