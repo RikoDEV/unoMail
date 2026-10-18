@@ -1,5 +1,5 @@
-import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableContainer, type TableProps, Typography } from '@mui/material';
-import { type ReactNode, useCallback, useState } from 'react';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, type TableProps, TableRow, TableSortLabel, Typography } from '@mui/material';
+import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode, useCallback, useState } from 'react';
 
 import { t } from '../i18n';
 import { errorText } from '../api';
@@ -119,10 +119,61 @@ export const validators = {
 };
 
 /** A table that scrolls sideways inside its own box when the screen is too narrow for it. */
-export function ScrollTable(props: TableProps) {
+type Props = { children?: ReactNode; label?: ReactNode; 'data-sort'?: string | number };
+
+/** Plain text of a rendered cell, used as its sort key unless the cell sets `data-sort`. */
+function sortText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(sortText).join(' ');
+  if (isValidElement<Props>(node)) return [sortText(node.props.children), sortText(node.props.label)].join(' ').trim();
+  return '';
+}
+
+function sortKey(row: ReactNode, column: number): string | number {
+  if (!isValidElement<Props>(row)) return '';
+  const cell = Children.toArray(row.props.children)[column];
+  if (!isValidElement<Props>(cell)) return '';
+  return cell.props['data-sort'] ?? sortText(cell.props.children);
+}
+
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+/** Admin table that scrolls sideways on narrow screens; clicking a column title sorts the rows by it. */
+export function ScrollTable({ children, ...props }: TableProps) {
+  const [sort, setSort] = useState<{ column: number; desc: boolean } | null>(null);
+  const parts = Children.map(children, (part) => {
+    if (!isValidElement<Props>(part)) return part;
+    if (part.type === TableHead) {
+      return cloneElement(part, {}, Children.map(part.props.children, (row) => {
+        if (!isValidElement<Props>(row) || row.type !== TableRow) return row;
+        return cloneElement(row, {}, Children.toArray(row.props.children).map((cell, column) => {
+          const element = cell as ReactElement<Props>;
+          if (!isValidElement(cell) || cell.type !== TableCell || !sortText(element.props.children)) return cell;
+          const active = sort?.column === column;
+          return cloneElement(element, { sortDirection: active ? (sort.desc ? 'desc' : 'asc') : false } as Props, (
+            <TableSortLabel active={active} direction={active && sort.desc ? 'desc' : 'asc'} onClick={() => setSort(active && sort.desc ? null : { column, desc: active })}>
+              {element.props.children}
+            </TableSortLabel>
+          ));
+        }));
+      }));
+    }
+    if (part.type === TableBody && sort) {
+      const rows = Children.toArray(part.props.children);
+      rows.sort((a, b) => {
+        const [x, y] = [sortKey(a, sort.column), sortKey(b, sort.column)];
+        if (x === '' || y === '') return x === y ? 0 : x === '' ? 1 : -1;
+        const order = typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y));
+        return sort.desc ? -order : order;
+      });
+      return cloneElement(part, {}, rows);
+    }
+    return part;
+  });
   return (
     <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
-      <Table {...props} />
+      <Table {...props}>{parts}</Table>
     </TableContainer>
   );
 }

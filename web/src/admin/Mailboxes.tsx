@@ -284,7 +284,7 @@ export function Mailboxes() {
               </TableCell>
               <TableCell>{box.display_name}</TableCell>
               <TableCell>{box.role.replace('_', ' ')}</TableCell>
-              <TableCell>
+              <TableCell data-sort={box.used_bytes}>
                 <Typography variant="caption">
                   {t('{{used}} of {{quota}}', { used: formatBytes(box.used_bytes), quota: box.quota_bytes ? formatBytes(box.quota_bytes) : t('unlimited') })}
                 </Typography>
