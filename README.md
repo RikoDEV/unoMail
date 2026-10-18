@@ -25,29 +25,43 @@ and built-in spam and virus filtering. Written in Rust and React.
 
 **Mail server**
 - SMTP with DKIM signing, SPF/DKIM/DMARC/ARC verification, SRS, DSN, MTA-STS and DANE
-- IMAP4rev1 and IMAP4rev2 (IDLE, CONDSTORE/QRESYNC, ACL, SORT/THREAD, BINARY, COMPRESS…), POP3, ManageSieve, LMTP
+- IMAP4rev1 and IMAP4rev2 (IDLE, CONDSTORE/QRESYNC, ACL, QUOTA, SORT/THREAD, BINARY, COMPRESS…), POP3, ManageSieve, LMTP
 - JMAP (RFC 8620/8621) including WebSocket push, delayed send and undo, plus JMAP for
   quotas, Sieve scripts, contacts and calendars
 - REQUIRETLS (RFC 8689) for mail that must never travel unencrypted
+- Internationalized addresses (SMTPUTF8) for mailboxes, aliases and recipients
 - CalDAV and CardDAV for Thunderbird, Apple Calendar/Contacts, DAVx⁵ and others
 - Automatic Let's Encrypt certificates (HTTP-01 and Cloudflare DNS-01)
 
 **Web client**
 - Conversations, inbox categories, labels, snooze, scheduled send and undo send
+- Condensed or expanded message list with quick actions, drag and drop and bulk selection
 - Gmail-style search operators, filters (Sieve), templates, signatures and identities
-- Calendar with invitations and sharing, address book, shared folders
+- Out-of-office replies, read receipts and one-click unsubscribe
+- Calendar with invitations, sharing, reminders and tasks; address book with groups and vCard import/export
+- Shared and global folders with per-right access control
+- Sender details and BIMI logos, warnings for deceptive links, blocked remote images,
+  and previews for images, text and PDF attachments
 - OpenPGP and S/MIME, offline mode, Web Push notifications, several accounts at once
 - Passkeys, TOTP two-step sign-in, app passwords and OpenID Connect single sign-on
-- English and Polish interface, skins and a plug-in API
+- English and Polish interface, skins and a plug-in API; usable on small screens
+
+**Administration**
+- Domains with DNS record checks and DKIM key management, mailboxes, aliases and
+  `postmaster@` mailboxes; domain administrators confined to their own domains
+- Mailbox import over IMAP or from a Maildir
+- Dashboard with daily and live traffic charts, queue, delivery, system and audit logs
+- TLS (RFC 8460) and DMARC aggregate reports, received and sent
+- Mailing lists with moderation, webhooks, LDAP lookups, milters, skins and plug-ins
 
 **Protection and operations**
 - Rspamd, ClamAV, greylisting, DNS blocklists, karma-based auto-blocking, and a personal Bayes filter for each user
 - A built-in filter for deceptive links, sender reputation (network, provider, domain),
   penalised countries and networks, and spam traps
-- Admin dashboard with traffic charts, delivery logs, TLS and DMARC reports; Prometheus
-  metrics and OpenTelemetry traces
-- Mailing lists with moderation, webhooks, LDAP lookups, milters
-- Incremental daily backups to a directory or S3, optional encryption of stored mail
+- SMTP blacklist with user-defined, automatic and karma rules
+- Automatic clean-up of Trash and Junk after a configurable number of days
+- Prometheus metrics and OpenTelemetry traces
+- Incremental daily backups to a directory or S3, optional encryption of stored mail, message contents in S3
 
 ## Quick start
 
