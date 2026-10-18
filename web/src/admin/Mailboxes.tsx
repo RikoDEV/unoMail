@@ -275,12 +275,12 @@ export function Mailboxes() {
                 {box.email}
                 {box.system && (
                   <Tooltip title={t('Kept by the server for every domain: it receives DMARC and TLS reports and mail to postmaster. Set a password to read it.')}>
-                    <Chip size="small" label={t('system')} sx={{ ml: 1 }} />
+                    <Chip size="small" color="info" label={t('system')} sx={{ ml: 1 }} />
                   </Tooltip>
                 )}
-                {box.send_only && <Chip size="small" label={t('send only')} sx={{ ml: 1 }} />}
+                {box.send_only && <Chip size="small" color="secondary" label={t('send only')} sx={{ ml: 1 }} />}
                 {box.outbound_blocked && <Chip size="small" color="error" label={t('sending blocked')} sx={{ ml: 1 }} />}
-                {!box.enabled && <Chip size="small" label="disabled" sx={{ ml: 1 }} />}
+                {!box.enabled && <Chip size="small" color="warning" variant="outlined" label="disabled" sx={{ ml: 1 }} />}
               </TableCell>
               <TableCell>{box.display_name}</TableCell>
               <TableCell>{box.role.replace('_', ' ')}</TableCell>
