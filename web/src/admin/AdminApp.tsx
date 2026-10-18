@@ -20,7 +20,7 @@ import { Box, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemTe
 import { type ReactElement, useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../app';
-import { TopBar } from '../shell';
+import { Copyright, TopBar } from '../shell';
 import { Aliases } from './Aliases';
 import { Certificates } from './Certificates';
 import { DashboardPage } from './Dashboard';
@@ -74,7 +74,7 @@ export default function AdminApp() {
   const location = useLocation();
   useEffect(() => setDrawerOpen(false), [location.pathname, compact]);
   const nav = (
-        <Box component="nav" aria-label={t('Administration')} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto' }}>
+        <Box component="nav" aria-label={t('Administration')} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined }}>
           <List dense>
             {items.map((item) => (
               <ListItemButton key={item.path} component={NavLink} to={`/admin/${item.path}`} sx={{ mb: 0.25, '&.active': { bgcolor: 'action.selected', fontWeight: 600 } }}>
@@ -83,6 +83,7 @@ export default function AdminApp() {
               </ListItemButton>
             ))}
           </List>
+          <Copyright placement="admin" sx={{ mt: 'auto', px: 2, pt: 3, pb: 2, flexShrink: 0 }} />
         </Box>
   );
   return (

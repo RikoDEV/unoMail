@@ -15,7 +15,7 @@ import { ApiError, del, formatBytes, formatTime, get, post, put, errorText } fro
 import { useLoad } from './admin/common';
 import { useAuth } from './app';
 import { AppearanceCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListCard, NotificationsCard, SendingCard, SmimeCard, TemplatesCard } from './settingsWebmail';
-import { TopBar, useTitle } from './shell';
+import { Copyright, TopBar, useTitle } from './shell';
 import { AppPasswordsCard, TwoStepCard } from './settingsSecurity';
 
 import { t } from './i18n';
@@ -221,7 +221,7 @@ export default function SettingsPage() {
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopBar title={t('unoMail')} />
       <Paper elevation={0} component="main" sx={{ flex: 1, minHeight: 0, mx: 1, mb: 1, borderRadius: 1.5, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, overflow: 'hidden' }}>
-        <Box sx={(theme) => ({ width: { md: 240 }, flexShrink: 0, borderRight: { md: `1px solid ${theme.palette.divider}` }, borderBottom: { xs: `1px solid ${theme.palette.divider}`, md: 'none' }, pt: { md: 2 } })}>
+        <Box sx={(theme) => ({ width: { md: 240 }, flexShrink: 0, borderRight: { md: `1px solid ${theme.palette.divider}` }, borderBottom: { xs: `1px solid ${theme.palette.divider}`, md: 'none' }, pt: { md: 2 }, display: { md: 'flex' }, flexDirection: 'column' })}>
           <Typography variant="h5" component="h1" sx={{ px: 3, pt: { xs: 2, md: 0 }, pb: 1 }}>
             {t('Settings')}
           </Typography>
@@ -237,6 +237,7 @@ export default function SettingsPage() {
               <Tab key={section.id} value={section.id} label={section.label} icon={section.icon} iconPosition="start" id={`settings-tab-${section.id}`} aria-controls={`settings-panel-${section.id}`} />
             ))}
           </Tabs>
+          <Copyright placement="settings" sx={{ display: { xs: 'none', md: 'block' }, mt: 'auto', px: 3, pt: 3, pb: 2 }} />
         </Box>
         <Box role="tabpanel" id={`settings-panel-${active.id}`} aria-labelledby={`settings-tab-${active.id}`} sx={{ flex: 1, minWidth: 0, overflow: 'auto', p: { xs: 2, md: 3 } }}>
           <Typography variant="h6" component="h2" sx={{ mb: 2, fontWeight: 400, fontSize: 22 }}>
@@ -244,6 +245,7 @@ export default function SettingsPage() {
           </Typography>
           {message && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setMessage('')}>{message}</Alert>}
           <Stack spacing={3}>{active.content}</Stack>
+          <Copyright placement="settings" sx={{ display: { md: 'none' }, mt: 4 }} />
         </Box>
       </Paper>
     </Box>

@@ -167,8 +167,8 @@ export function useTitle(...parts: (string | null | undefined | false)[]) {
   }, [title]);
 }
 
-/** The copyright line under the sign-in form and at the foot of the mail sidebar. */
-export function Copyright({ placement, sx, className }: { placement: 'login' | 'sidebar'; sx?: SxProps<Theme>; className?: string }) {
+/** The copyright line under the sign-in form and at the foot of the side navigation. */
+export function Copyright({ placement, sx, className }: { placement: 'login' | 'sidebar' | 'settings' | 'admin'; sx?: SxProps<Theme>; className?: string }) {
   // The link sends no referrer, so the campaign tags say where the visit came from.
   const href = `https://riko.dev/?utm_source=unomail&utm_medium=referral&utm_campaign=copyright&utm_content=${placement}`;
   return (
