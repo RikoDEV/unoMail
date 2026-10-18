@@ -447,6 +447,8 @@ pub fn router(state: AppState) -> Router {
         .route("/smtp-access/rules/{id}", put(access::rule_update).delete(access::rule_delete))
         .route("/smtp-access/karma", get(access::karma_list))
         .route("/smtp-access/karma/{ip}", delete(access::karma_delete))
+        .route("/smtp-access/login-blocks", get(access::login_blocks))
+        .route("/smtp-access/login-blocks/unblock", post(access::login_unblock))
         .route("/spam-filter", get(spamfilter::overview))
         .route("/spam-filter/thresholds", put(spamfilter::actions_put))
         .route("/spam-filter/rules", put(spamfilter::symbol_put))

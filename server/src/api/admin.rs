@@ -71,6 +71,7 @@ pub async fn settings_patch(State(state): State<AppState>, session: Session, Jso
     }
     let runtime = Runtime::from_config(&state.cfg).with_overrides(&overrides).map_err(ApiError::bad)?;
     settings::save_overrides(&state.db, &overrides).await?;
+    state.limiter.set_limits(runtime.login_limits());
     state.settings.store(std::sync::Arc::new(runtime));
     let summary: Vec<String> = changes.iter().map(|(k, v)| if settings::SECRET_KEYS.contains(&k.as_str()) { format!("{k}=(changed)") } else { format!("{k}={v}") }).collect();
     session.audit(&state, "settings.updated", "server", &summary.join(" ")).await;

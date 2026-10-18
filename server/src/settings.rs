@@ -148,6 +148,54 @@ pub struct Runtime {
     /// Days the dashboard's daily statistics are kept.
     #[serde(default = "four_hundred")]
     pub stats_retention_days: i64,
+
+    // Login limits.
+    /// Minutes over which failed logins are counted.
+    #[serde(default = "login_window_mins")]
+    pub login_window_mins: i64,
+    #[serde(default = "login_max_failures_per_account_and_ip")]
+    pub login_max_failures_per_account_and_ip: u32,
+    #[serde(default = "login_max_failures_per_ip")]
+    pub login_max_failures_per_ip: u32,
+    #[serde(default = "login_max_failures_per_account")]
+    pub login_max_failures_per_account: u32,
+    /// Hours a repeat offender can be locked out at most.
+    #[serde(default = "login_max_lock_hours")]
+    pub login_max_lock_hours: i64,
+    /// Failures from a network after which each further one is answered slowly.
+    #[serde(default = "login_tarpit_after")]
+    pub login_tarpit_after: u32,
+    /// Failures from a network after which it is reported for guessing passwords.
+    #[serde(default = "login_report_after")]
+    pub login_report_after: u32,
+}
+
+fn login_window_mins() -> i64 {
+    crate::auth::WINDOW_SECS / 60
+}
+
+fn login_max_failures_per_account_and_ip() -> u32 {
+    crate::auth::MAX_FAILURES_PER_ACCOUNT_AND_IP
+}
+
+fn login_max_failures_per_ip() -> u32 {
+    crate::auth::MAX_FAILURES_PER_IP
+}
+
+fn login_max_failures_per_account() -> u32 {
+    crate::auth::MAX_FAILURES_PER_ACCOUNT
+}
+
+fn login_max_lock_hours() -> i64 {
+    crate::auth::MAX_LOCK_SECS / 3600
+}
+
+fn login_tarpit_after() -> u32 {
+    crate::auth::TARPIT_AFTER
+}
+
+fn login_report_after() -> u32 {
+    crate::auth::REPORT_AFTER
 }
 
 fn ninety() -> i64 {
@@ -236,6 +284,13 @@ impl Runtime {
             privacy_hide_client_ip: true,
             log_retention_days: ninety(),
             stats_retention_days: four_hundred(),
+            login_window_mins: login_window_mins(),
+            login_max_failures_per_account_and_ip: login_max_failures_per_account_and_ip(),
+            login_max_failures_per_ip: login_max_failures_per_ip(),
+            login_max_failures_per_account: login_max_failures_per_account(),
+            login_max_lock_hours: login_max_lock_hours(),
+            login_tarpit_after: login_tarpit_after(),
+            login_report_after: login_report_after(),
         }
     }
 
@@ -247,6 +302,18 @@ impl Runtime {
     /// Whether to sign in to the default route: switched on and with a user name.
     pub fn route_signs_in(&self) -> bool {
         self.default_route_auth && !self.default_route_username.is_empty()
+    }
+
+    pub fn login_limits(&self) -> crate::auth::LoginLimits {
+        crate::auth::LoginLimits {
+            window_secs: self.login_window_mins * 60,
+            max_failures_per_account_and_ip: self.login_max_failures_per_account_and_ip,
+            max_failures_per_ip: self.login_max_failures_per_ip,
+            max_failures_per_account: self.login_max_failures_per_account,
+            max_lock_secs: self.login_max_lock_hours * 3600,
+            tarpit_after: self.login_tarpit_after,
+            report_after: self.login_report_after,
+        }
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -310,6 +377,18 @@ impl Runtime {
         }
         if !(1..=3650).contains(&self.log_retention_days) || !(1..=3650).contains(&self.stats_retention_days) {
             return Err("log and statistics retention must be between 1 and 3650 days".into());
+        }
+        if !(1..=1440).contains(&self.login_window_mins) {
+            return Err("the login counting window must be between 1 and 1440 minutes".into());
+        }
+        if [self.login_max_failures_per_account_and_ip, self.login_max_failures_per_ip, self.login_max_failures_per_account].iter().any(|n| !(1..=10_000).contains(n)) {
+            return Err("failed login limits must be between 1 and 10000".into());
+        }
+        if !(1..=720).contains(&self.login_max_lock_hours) || self.login_max_lock_hours * 60 < self.login_window_mins {
+            return Err("the longest login lockout must be between 1 and 720 hours, and not shorter than the counting window".into());
+        }
+        if !(1..=10_000).contains(&self.login_tarpit_after) || !(1..=10_000).contains(&self.login_report_after) {
+            return Err("the slow-down and report thresholds must be between 1 and 10000".into());
         }
         Ok(())
     }
@@ -404,6 +483,10 @@ mod tests {
             json!({ "spam_traps": ["not an address"] }),
             json!({ "penalized_countries": ["pl"] }),
             json!({ "native_filter_score": 0 }),
+            json!({ "login_window_mins": 0 }),
+            json!({ "login_max_failures_per_ip": 0 }),
+            json!({ "login_max_lock_hours": 0 }),
+            json!({ "login_window_mins": 120, "login_max_lock_hours": 1 }),
         ] {
             assert!(base.with_overrides(bad.as_object().unwrap()).is_err(), "{bad}");
         }

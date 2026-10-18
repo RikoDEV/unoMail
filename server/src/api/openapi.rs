@@ -182,6 +182,8 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("delete", "/api/smtp-access/rules/{id}", "smtp access", "Delete a rule", "super_admin"),
     ("get", "/api/smtp-access/karma", "smtp access", "Behaviour scores of remote addresses", "super_admin"),
     ("delete", "/api/smtp-access/karma/{ip}", "smtp access", "Forget the score of an address", "super_admin"),
+    ("get", "/api/smtp-access/login-blocks", "smtp access", "Networks and accounts refused by the login rate limit", "super_admin"),
+    ("post", "/api/smtp-access/login-blocks/unblock", "smtp access", "Lift a login rate limit block", "super_admin"),
     ("get", "/api/spam-filter", "spam filter", "Rspamd status, thresholds, rule scores and recent verdicts", "super_admin"),
     ("put", "/api/spam-filter/thresholds", "spam filter", "Set the scores at which mail is marked as spam or rejected", "super_admin"),
     ("put", "/api/spam-filter/rules", "spam filter", "Change the score of one Rspamd rule", "super_admin"),

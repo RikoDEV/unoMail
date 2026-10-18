@@ -198,13 +198,14 @@ impl App {
         let filter_http = filter_client(&cfg.rspamd_socket)?;
         let filter_controller_http = filter_client(&cfg.rspamd_controller_socket)?;
         let settings = ArcSwap::from_pointee(crate::settings::load(&db, &cfg).await?);
+        let limiter = LoginLimiter::with_limits(settings.load().login_limits());
         Ok(Arc::new(App {
             cfg,
             settings,
             db,
             store,
             tls,
-            limiter: LoginLimiter::default(),
+            limiter,
             abuse: Default::default(),
             challenges: Default::default(),
             oauth: Default::default(),

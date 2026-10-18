@@ -286,22 +286,63 @@ pub enum AuthError {
     Internal,
 }
 
-const WINDOW_SECS: i64 = 15 * 60;
+// Defaults of the login limits; administrators can change them in the server settings.
+pub const WINDOW_SECS: i64 = 15 * 60;
 /// Wrong passwords for one account from one network before that network is locked out of it.
-const MAX_FAILURES_PER_ACCOUNT_AND_IP: u32 = 5;
+pub const MAX_FAILURES_PER_ACCOUNT_AND_IP: u32 = 5;
 /// Failed logins from one network, whatever accounts they target (password spraying).
-const MAX_FAILURES_PER_IP: u32 = 10;
+pub const MAX_FAILURES_PER_IP: u32 = 10;
 /// Failed logins for one account from anywhere (distributed guessing). Deliberately higher,
 /// and never escalated, so that strangers cannot keep the owner out for long.
-const MAX_FAILURES_PER_ACCOUNT: u32 = 20;
+pub const MAX_FAILURES_PER_ACCOUNT: u32 = 20;
 /// Repeat offenders are locked out for longer each time, up to this.
-const MAX_LOCK_SECS: i64 = 24 * 3600;
+pub const MAX_LOCK_SECS: i64 = 24 * 3600;
 const MAX_LIMITER_ENTRIES: usize = 50_000;
 /// From this many recent failures on, every further failure is answered slowly.
-const TARPIT_AFTER: u32 = 3;
+pub const TARPIT_AFTER: u32 = 3;
 /// A network with this many recent failures is guessing passwords: it is offered for reporting.
-const REPORT_AFTER: u32 = 5;
+pub const REPORT_AFTER: u32 = 5;
 const MAX_PENDING_REPORTS: usize = 1000;
+
+/// The limits a [`LoginLimiter`] enforces.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LoginLimits {
+    pub window_secs: i64,
+    pub max_failures_per_account_and_ip: u32,
+    pub max_failures_per_ip: u32,
+    pub max_failures_per_account: u32,
+    pub max_lock_secs: i64,
+    pub tarpit_after: u32,
+    pub report_after: u32,
+}
+
+impl Default for LoginLimits {
+    fn default() -> Self {
+        LoginLimits {
+            window_secs: WINDOW_SECS,
+            max_failures_per_account_and_ip: MAX_FAILURES_PER_ACCOUNT_AND_IP,
+            max_failures_per_ip: MAX_FAILURES_PER_IP,
+            max_failures_per_account: MAX_FAILURES_PER_ACCOUNT,
+            max_lock_secs: MAX_LOCK_SECS,
+            tarpit_after: TARPIT_AFTER,
+            report_after: REPORT_AFTER,
+        }
+    }
+}
+
+/// A network, account or account-and-network pair the limiter currently refuses.
+#[derive(Debug, Clone, Serialize)]
+pub struct LoginBlock {
+    /// The limiter's key, used to lift the block.
+    pub key: String,
+    /// `ip`, `pair` or `acct`.
+    pub kind: &'static str,
+    pub network: Option<String>,
+    pub email: Option<String>,
+    pub failures: u32,
+    /// When the lockout ends; for a used-up allowance, when its window ends.
+    pub until: i64,
+}
 
 #[derive(Default)]
 struct Attempts {
@@ -321,8 +362,9 @@ struct Attempts {
 #[derive(Default)]
 pub struct LoginLimiter {
     entries: Mutex<HashMap<String, Attempts>>,
-    /// Addresses that went past [`REPORT_AFTER`], with the protocol they guessed on.
+    /// Addresses that went past the report threshold, with the protocol they guessed on.
     offenders: Mutex<Vec<(IpAddr, &'static str)>>,
+    limits: Mutex<LoginLimits>,
 }
 
 /// The network an address belongs to for rate limiting: the address itself for IPv4, the /64
@@ -341,30 +383,85 @@ pub fn network(ip: IpAddr) -> String {
 }
 
 impl LoginLimiter {
+    pub fn with_limits(limits: LoginLimits) -> Self {
+        let limiter = Self::default();
+        limiter.set_limits(limits);
+        limiter
+    }
+
+    pub fn limits(&self) -> LoginLimits {
+        *self.limits.lock()
+    }
+
+    pub fn set_limits(&self, limits: LoginLimits) {
+        *self.limits.lock() = limits;
+    }
+
     /// (key, allowed failures per window, whether repeated lockouts grow longer)
-    fn keys(email: &str, ip: IpAddr) -> [(String, u32, bool); 3] {
+    fn keys(&self, email: &str, ip: IpAddr) -> [(String, u32, bool); 3] {
+        let limits = self.limits();
         let net = network(ip);
         [
-            (format!("ip:{net}"), MAX_FAILURES_PER_IP, true),
-            (format!("pair:{email}|{net}"), MAX_FAILURES_PER_ACCOUNT_AND_IP, true),
-            (format!("acct:{email}"), MAX_FAILURES_PER_ACCOUNT, false),
+            (format!("ip:{net}"), limits.max_failures_per_ip, true),
+            (format!("pair:{email}|{net}"), limits.max_failures_per_account_and_ip, true),
+            (format!("acct:{email}"), limits.max_failures_per_account, false),
         ]
     }
 
     pub fn is_blocked(&self, email: &str, ip: IpAddr) -> bool {
         let now = now();
+        let window = self.limits().window_secs;
+        let keys = self.keys(email, ip);
         let entries = self.entries.lock();
-        Self::keys(email, ip).iter().any(|(key, max, _)| {
-            entries.get(key).is_some_and(|a| a.locked_until > now || (now - a.window_start < WINDOW_SECS && a.failures >= *max))
+        keys.iter().any(|(key, max, _)| {
+            entries.get(key).is_some_and(|a| a.locked_until > now || (now - a.window_start < window && a.failures >= *max))
         })
+    }
+
+    /// Everything currently refused: locked out, or with its allowance used up.
+    pub fn blocks(&self) -> Vec<LoginBlock> {
+        let now = now();
+        let limits = self.limits();
+        let entries = self.entries.lock();
+        let mut out: Vec<LoginBlock> = entries
+            .iter()
+            .filter_map(|(key, a)| {
+                let (kind, rest) = key.split_once(':')?;
+                let (kind, network, email, max) = match kind {
+                    "ip" => ("ip", Some(rest.to_string()), None, limits.max_failures_per_ip),
+                    "pair" => {
+                        let (email, net) = rest.rsplit_once('|')?;
+                        ("pair", Some(net.to_string()), Some(email.to_string()), limits.max_failures_per_account_and_ip)
+                    }
+                    "acct" => ("acct", None, Some(rest.to_string()), limits.max_failures_per_account),
+                    _ => return None,
+                };
+                let until = if a.locked_until > now {
+                    a.locked_until
+                } else if now - a.window_start < limits.window_secs && a.failures >= max {
+                    a.window_start + limits.window_secs
+                } else {
+                    return None;
+                };
+                Some(LoginBlock { key: key.clone(), kind, network, email, failures: a.failures, until })
+            })
+            .collect();
+        out.sort_by(|a, b| b.until.cmp(&a.until).then_with(|| a.key.cmp(&b.key)));
+        out
+    }
+
+    /// Lifts a block, forgetting its failures and earlier lockouts. Returns whether it existed.
+    pub fn unblock(&self, key: &str) -> bool {
+        self.entries.lock().remove(key).is_some()
     }
 
     /// Registers a login attempt. Returns false when the attempt must be refused without even
     /// looking at the password.
     pub fn attempt(&self, email: &str, ip: IpAddr) -> bool {
         let now = now();
+        let limits = self.limits();
+        let keys = self.keys(email, ip);
         let mut entries = self.entries.lock();
-        let keys = Self::keys(email, ip);
         // Blocked networks cannot allocate a new account/pair for every request.
         if entries.get(&keys[0].0).is_some_and(|a| a.locked_until > now) { return false; }
         if entries.len() + keys.iter().filter(|(key, _, _)| !entries.contains_key(key)).count() > MAX_LIMITER_ENTRIES { return false; }
@@ -375,14 +472,14 @@ impl LoginLimiter {
                 allowed = false;
                 continue;
             }
-            if now - entry.window_start >= WINDOW_SECS {
+            if now - entry.window_start >= limits.window_secs {
                 entry.failures = 0;
                 entry.window_start = now;
             }
             if entry.failures >= *max {
                 // The allowance is used up: lock, for longer each time it happens again.
                 entry.strikes = if *escalate { entry.strikes + 1 } else { 1 };
-                entry.locked_until = now + (WINDOW_SECS << (2 * (entry.strikes - 1)).min(20)).min(MAX_LOCK_SECS);
+                entry.locked_until = now + (limits.window_secs << (2 * (entry.strikes - 1)).min(20)).min(limits.max_lock_secs);
                 entry.failures = 0;
                 entry.window_start = now;
                 allowed = false;
@@ -399,8 +496,8 @@ impl LoginLimiter {
 
     /// Takes back the count of an attempt that turned out to be a successful login.
     pub fn forgive(&self, email: &str, ip: IpAddr) {
+        let [(by_ip, _, _), (pair, _, _), (account, _, _)] = self.keys(email, ip);
         let mut entries = self.entries.lock();
-        let [(by_ip, _, _), (pair, _, _), (account, _, _)] = Self::keys(email, ip);
         entries.remove(&pair);
         entries.remove(&account);
         if let Some(entry) = entries.get_mut(&by_ip) {
@@ -408,10 +505,10 @@ impl LoginLimiter {
         }
     }
 
-    /// Notes a failed login; a network that just went past [`REPORT_AFTER`] is kept for
+    /// Notes a failed login; a network that just reached the report threshold is kept for
     /// [`take_offenders`](Self::take_offenders).
     fn note_failure(&self, ip: IpAddr, protocol: Protocol) {
-        if self.failures_from(ip) == REPORT_AFTER {
+        if self.failures_from(ip) == self.limits().report_after {
             let mut offenders = self.offenders.lock();
             if offenders.len() < MAX_PENDING_REPORTS {
                 offenders.push((ip, protocol.as_str()));
@@ -433,13 +530,15 @@ impl LoginLimiter {
     /// before it gets blocked.
     pub fn tarpit(&self, ip: IpAddr) -> std::time::Duration {
         let failures = self.failures_from(ip);
-        std::time::Duration::from_millis(u64::from(failures.saturating_sub(TARPIT_AFTER - 1)).min(5) * 400)
+        let after = self.limits().tarpit_after.max(1);
+        std::time::Duration::from_millis(u64::from(failures.saturating_sub(after - 1)).min(5) * 400)
     }
 
     pub fn prune(&self) {
         let now = now();
-        // Entries are kept for a day so that a returning offender is recognised.
-        self.entries.lock().retain(|_, a| a.locked_until > now || now - a.window_start < MAX_LOCK_SECS);
+        let keep = self.limits().max_lock_secs.max(MAX_LOCK_SECS);
+        // Entries are kept for at least a day so that a returning offender is recognised.
+        self.entries.lock().retain(|_, a| a.locked_until > now || now - a.window_start < keep);
     }
 }
 
@@ -551,6 +650,21 @@ mod tests {
         let count = limiter.entries.lock().len();
         for i in 0..1000 { assert!(!limiter.attempt(&format!("fresh{i}@example.org"), ip)); }
         assert_eq!(limiter.entries.lock().len(), count);
+    }
+
+    #[test]
+    fn limiter_lists_and_lifts_blocks_and_follows_changed_limits() {
+        let limiter = LoginLimiter::with_limits(LoginLimits { max_failures_per_account_and_ip: 2, ..LoginLimits::default() });
+        let ip: IpAddr = "203.0.113.50".parse().unwrap();
+        assert!(limiter.attempt("a@example.com", ip) && limiter.attempt("a@example.com", ip));
+        assert!(!limiter.attempt("a@example.com", ip), "the configured limit applies");
+        let blocks = limiter.blocks();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!((blocks[0].kind, blocks[0].email.as_deref(), blocks[0].network.as_deref()), ("pair", Some("a@example.com"), Some("203.0.113.50")));
+        assert!(blocks[0].until > now());
+        assert!(limiter.unblock(&blocks[0].key));
+        assert!(limiter.blocks().is_empty() && limiter.attempt("a@example.com", ip), "unblocked");
+        assert!(!limiter.unblock("pair:nobody@example.com|192.0.2.1"));
     }
 
     #[test]

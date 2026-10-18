@@ -5,6 +5,7 @@ import Add from '@mui/icons-material/Add';
 import Block from '@mui/icons-material/Block';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
+import LockOpen from '@mui/icons-material/LockOpen';
 import VerifiedUser from '@mui/icons-material/VerifiedUser';
 import {
   Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
@@ -38,6 +39,17 @@ interface Karma {
   hits: number;
   last_seen: number;
   last_event: string;
+  rdns: string | null;
+  country: string | null;
+}
+
+interface LoginBlock {
+  key: string;
+  kind: 'ip' | 'pair' | 'acct';
+  network: string | null;
+  email: string | null;
+  failures: number;
+  until: number;
   rdns: string | null;
   country: string | null;
 }
@@ -278,8 +290,62 @@ function KarmaTable() {
   );
 }
 
+function LoginBlocksTable() {
+  const { data, error, reload } = useLoad(() => get<LoginBlock[]>('/api/smtp-access/login-blocks'), []);
+  const { run, feedback } = useAction();
+  const blocks = data ?? [];
+  const kindLabel = (kind: LoginBlock['kind']) => (kind === 'ip' ? t('Network') : kind === 'pair' ? t('Account from network') : t('Account'));
+  return (
+    <>
+      {feedback}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        {t('Networks and accounts refused for too many failed logins, on every protocol. The limits are set in the server settings. Unblocking also forgets the failures and earlier lockouts.')}
+      </Typography>
+      {blocks.length === 0 ? (
+        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+          {t('Nothing is rate limited.')}
+        </Typography>
+      ) : (
+        <ScrollTable size="small" aria-label={t('Login rate limited')}>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t('Blocked')}</TableCell>
+              <TableCell>{t('Address or network')}</TableCell>
+              <TableCell>{t('Account')}</TableCell>
+              <TableCell align="right">{t('Failures')}</TableCell>
+              <TableCell>{t('Until')}</TableCell>
+              <TableCell />
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {blocks.map((block) => (
+              <TableRow key={block.key} hover>
+                <TableCell>
+                  <Chip size="small" color="error" label={kindLabel(block.kind)} />
+                </TableCell>
+                <TableCell>{block.network ? <RemoteAddress address={block.network} rdns={block.rdns} country={block.country} /> : '—'}</TableCell>
+                <TableCell sx={{ overflowWrap: 'anywhere' }}>{block.email ?? '—'}</TableCell>
+                <TableCell align="right">{block.failures}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(block.until)}</TableCell>
+                <TableCell align="right">
+                  <Tooltip title={t('Unblock')}>
+                    <IconButton size="small" aria-label={t('Unblock {{target}}', { target: [block.email, block.network].filter(Boolean).join(' / ') })} onClick={() => void run(async () => { await post('/api/smtp-access/login-blocks/unblock', { key: block.key }); await reload(); }, t('Unblocked'))}>
+                      <LockOpen fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </ScrollTable>
+      )}
+    </>
+  );
+}
+
 export function SmtpAccess() {
-  const [tab, setTab] = useState<'user' | 'auto' | 'karma'>('user');
+  const [tab, setTab] = useState<'user' | 'auto' | 'karma' | 'login'>('user');
   return (
     <>
       <PageHeader title={t('SMTP blacklist and whitelist')} />
@@ -287,8 +353,9 @@ export function SmtpAccess() {
         <Tab value="user" label={t('User defined')} />
         <Tab value="auto" label={t('Automatically generated')} />
         <Tab value="karma" label={t('Karma records')} />
+        <Tab value="login" label={t('Login rate limited')} />
       </Tabs>
-      {tab === 'karma' ? <KarmaTable /> : <RulesTable key={tab} source={tab} />}
+      {tab === 'karma' ? <KarmaTable /> : tab === 'login' ? <LoginBlocksTable /> : <RulesTable key={tab} source={tab} />}
     </>
   );
 }

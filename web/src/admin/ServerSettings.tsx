@@ -97,6 +97,18 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    title: t('Login rate limit'),
+    fields: [
+      { key: 'login_window_mins', label: t('Counting window (minutes)'), help: t('Failed logins are counted over this period; a first lockout lasts as long'), kind: 'number', min: 1, max: 1440 },
+      { key: 'login_max_failures_per_account_and_ip', label: t('Failures per account from one network'), help: t('Then that network is locked out of the account'), kind: 'number', min: 1, max: 10000 },
+      { key: 'login_max_failures_per_ip', label: t('Failures from one network'), help: t('For any accounts (password spraying); then the network is locked out'), kind: 'number', min: 1, max: 10000 },
+      { key: 'login_max_failures_per_account', label: t('Failures per account from anywhere'), help: t('Distributed guessing; then the account is locked for one window'), kind: 'number', min: 1, max: 10000 },
+      { key: 'login_max_lock_hours', label: t('Longest lockout (hours)'), help: t('Each repeated lockout lasts four times the previous one, up to this'), kind: 'number', min: 1, max: 720 },
+      { key: 'login_tarpit_after', label: t('Slow down after failures'), help: t('From this many failures from a network, each further answer is delayed'), kind: 'number', min: 1, max: 10000 },
+      { key: 'login_report_after', label: t('Report after failures'), help: t('A network with this many failures is reported for guessing passwords'), kind: 'number', min: 1, max: 10000 },
+    ],
+  },
+  {
     title: t('Storage'),
     fields: [
       { key: 'trash_retention_days', label: t('Empty Trash after (days)'), help: t('Messages in Trash longer than this are deleted for good; 0 keeps them'), kind: 'number', min: 0, max: 3650 },

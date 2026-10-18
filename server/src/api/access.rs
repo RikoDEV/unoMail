@@ -188,6 +188,43 @@ pub async fn karma_delete(State(state): State<AppState>, session: Session, Path(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Networks and accounts the login limiter refuses right now.
+pub async fn login_blocks(State(state): State<AppState>, session: Session) -> JsonResult<Vec<Value>> {
+    session.require_super()?;
+    let blocks = state.limiter.blocks();
+    let out = join_all(blocks.into_iter().take(1000).map(|block| {
+        let state = state.clone();
+        async move {
+            // A single address is described; an IPv6 /64 only by its country.
+            let described = match block.network.as_deref().and_then(|n| n.parse::<IpAddr>().ok().map(IpNet::from).or_else(|| n.parse::<IpNet>().ok())) {
+                Some(net) => describe_network(&state, &net).await,
+                None => Described::default(),
+            };
+            json!({
+                "key": block.key, "kind": block.kind, "network": block.network, "email": block.email,
+                "failures": block.failures, "until": block.until, "rdns": described.rdns, "country": described.country,
+            })
+        }
+    }))
+    .await;
+    Ok(Json(out))
+}
+
+#[derive(Deserialize)]
+pub struct UnblockInput {
+    key: String,
+}
+
+/// Lifts a login block, forgetting the failures behind it.
+pub async fn login_unblock(State(state): State<AppState>, session: Session, Json(input): Json<UnblockInput>) -> JsonResult<Value> {
+    session.require_super()?;
+    if input.key.len() > 400 || !state.limiter.unblock(&input.key) {
+        return Err(ApiError::NotFound);
+    }
+    session.audit(&state, "login.unblocked", &sanitize_line(&input.key), "").await;
+    Ok(Json(json!({ "ok": true })))
+}
+
 #[derive(Deserialize)]
 pub struct HistoryQuery {
     /// Look-back window in hours (default 24, at most a week).
