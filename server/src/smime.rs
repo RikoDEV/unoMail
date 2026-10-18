@@ -198,7 +198,7 @@ fn pkcs1_scheme(algorithm: &ObjectIdentifier) -> Option<Pkcs1v15Sign> {
 /// Checks CMS signed-data. `content` is the signed MIME entity of a detached signature; for
 /// an opaque one it is inside the structure. Returns the outcome and the signed content.
 pub fn verify_signed_data(app: Option<&App>, der: &[u8], content: Option<&[u8]>, sender: &str) -> (Signature, Option<Vec<u8>>) {
-    let Ok(info) = ContentInfo::from_der(der) else { return (Signature::invalid("the signature cannot be read"), None) };
+    let Some(info) = content_info(der) else { return (Signature::invalid("the signature cannot be read"), None) };
     if info.content_type != ID_SIGNED_DATA {
         return (Signature::invalid("not a signature"), None);
     }
@@ -263,6 +263,125 @@ pub fn verify_signed_data(app: Option<&App>, der: &[u8], content: Option<&[u8]>,
     };
     let reason = (!ok).then(|| "the signature does not match the message".to_owned());
     (Signature { status, signer: info, matches_sender, reason, certificate: Some(signer_der) }, Some(content))
+}
+
+/// Reads a CMS structure; Thunderbird (NSS) and streaming OpenSSL write BER with indefinite
+/// lengths, which is converted to DER first.
+fn content_info(der: &[u8]) -> Option<ContentInfo> {
+    ContentInfo::from_der(der).ok().or_else(|| ContentInfo::from_der(&ber_to_der(der)?).ok())
+}
+
+/// Re-encodes BER as DER: indefinite lengths become definite ones and constructed OCTET
+/// STRINGs are joined. Definite-length primitive contents are kept byte for byte, so the
+/// certificates and signed attributes inside still verify.
+fn ber_to_der(input: &[u8]) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(input.len());
+    let (_, used) = ber_element(input, 0, &mut out)?;
+    (used == input.len() || input[used..].iter().all(|b| *b == 0)).then_some(out)
+}
+
+/// Converts one element into `out`; returns (whether it was an end-of-contents marker, bytes read).
+fn ber_element(input: &[u8], depth: usize, out: &mut Vec<u8>) -> Option<(bool, usize)> {
+    if depth > 64 {
+        return None;
+    }
+    let mut pos = 0;
+    let first = *input.get(pos)?;
+    pos += 1;
+    if first & 0x1f == 0x1f {
+        while *input.get(pos)? & 0x80 != 0 {
+            pos += 1;
+        }
+        pos += 1;
+    }
+    let tag = &input[..pos];
+    let length_byte = *input.get(pos)?;
+    pos += 1;
+    if first == 0 && length_byte == 0 {
+        return Some((true, pos));
+    }
+    let constructed = first & 0x20 != 0;
+    let mut content = Vec::new();
+    if length_byte == 0x80 {
+        if !constructed {
+            return None;
+        }
+        loop {
+            let (end, used) = ber_element(&input[pos..], depth + 1, &mut content)?;
+            pos += used;
+            if end {
+                break;
+            }
+        }
+    } else {
+        let length = if length_byte & 0x80 == 0 {
+            usize::from(length_byte)
+        } else {
+            let count = usize::from(length_byte & 0x7f);
+            if count > 4 {
+                return None;
+            }
+            let bytes = input.get(pos..pos + count)?;
+            pos += count;
+            bytes.iter().fold(0usize, |acc, b| (acc << 8) | usize::from(*b))
+        };
+        let body = input.get(pos..pos.checked_add(length)?)?;
+        pos += length;
+        if constructed {
+            let mut inner = 0;
+            while inner < body.len() {
+                let (end, used) = ber_element(&body[inner..], depth + 1, &mut content)?;
+                if end {
+                    return None;
+                }
+                inner += used;
+            }
+        } else {
+            content.extend_from_slice(body);
+        }
+    }
+    if first == 0x24 {
+        // A constructed OCTET STRING: DER has only the primitive form.
+        let mut joined = Vec::new();
+        let mut inner = 0;
+        while inner < content.len() {
+            if content[inner] != 0x04 {
+                return None;
+            }
+            let (header, length) = der_header(&content[inner..])?;
+            joined.extend_from_slice(content.get(inner + header..inner + header + length)?);
+            inner += header + length;
+        }
+        out.push(0x04);
+        der_length(joined.len(), out);
+        out.extend_from_slice(&joined);
+    } else {
+        out.extend_from_slice(tag);
+        der_length(content.len(), out);
+        out.extend_from_slice(&content);
+    }
+    Some((false, pos))
+}
+
+/// (header size, content length) of an element written by `ber_element`.
+fn der_header(input: &[u8]) -> Option<(usize, usize)> {
+    let length_byte = *input.get(1)?;
+    if length_byte & 0x80 == 0 {
+        return Some((2, usize::from(length_byte)));
+    }
+    let count = usize::from(length_byte & 0x7f);
+    let length = input.get(2..2 + count)?.iter().fold(0usize, |acc, b| (acc << 8) | usize::from(*b));
+    Some((2 + count, length))
+}
+
+fn der_length(length: usize, out: &mut Vec<u8>) {
+    if length < 0x80 {
+        out.push(length as u8);
+    } else {
+        let bytes: Vec<u8> = length.to_be_bytes().into_iter().skip_while(|b| *b == 0).collect();
+        out.push(0x80 | bytes.len() as u8);
+        out.extend_from_slice(&bytes);
+    }
 }
 
 // --- MIME --------------------------------------------------------------------------------------
@@ -514,7 +633,7 @@ pub fn encrypt(raw: &[u8], certificates: &[Vec<u8>]) -> Result<Vec<u8>, String> 
 
 /// Decrypts CMS enveloped-data addressed to `identity`.
 pub fn decrypt(der: &[u8], identity: &Identity) -> Result<Vec<u8>, String> {
-    let info = ContentInfo::from_der(der).map_err(|_| "the encrypted message cannot be read")?;
+    let info = content_info(der).ok_or("the encrypted message cannot be read")?;
     if info.content_type != ID_ENVELOPED_DATA {
         return Err("not an encrypted message".into());
     }
@@ -599,7 +718,7 @@ pub async fn view(app: &App, account_id: i64, raw: Vec<u8>) -> (Vec<u8>, Option<
         }
         let Some(der) = decoded_body(&current) else { break };
         let smime_type = param(&params, "smime-type").unwrap_or("").to_ascii_lowercase();
-        let is_signed = smime_type == "signed-data" || ContentInfo::from_der(&der).is_ok_and(|i| i.content_type == ID_SIGNED_DATA);
+        let is_signed = smime_type == "signed-data" || content_info(&der).is_some_and(|i| i.content_type == ID_SIGNED_DATA);
         if is_signed {
             let (result, content) = verify_signed_data(Some(app), &der, None, &sender);
             status.signature = Some(result);
@@ -698,6 +817,25 @@ pub mod tests {
     }
 
 
+    /// Rewrites the constructed elements of the first `levels` levels with indefinite lengths.
+    fn indefinite(der: &[u8], levels: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut pos = 0;
+        while pos < der.len() {
+            let (header, length) = der_header(&der[pos..]).unwrap();
+            let body = &der[pos + header..pos + header + length];
+            if levels > 0 && der[pos] & 0x20 != 0 {
+                out.extend_from_slice(&[der[pos], 0x80]);
+                out.extend(indefinite(body, levels - 1));
+                out.extend_from_slice(&[0, 0]);
+            } else {
+                out.extend_from_slice(&der[pos..pos + header + length]);
+            }
+            pos += header + length;
+        }
+        out
+    }
+
     /// A self-signed RSA certificate for `email`: (certificate DER, PKCS #8 key DER).
     pub fn certificate(email: &str) -> (Vec<u8>, Vec<u8>) {
         let key = RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap();
@@ -729,6 +867,12 @@ pub mod tests {
         let mut tampered = entity.clone();
         tampered[30] ^= 1;
         assert_eq!(verify_signed_data(None, &signature, Some(&tampered), "bob@example.org").0.status, "invalid");
+
+        // As NSS writes it: the outer structures with indefinite lengths.
+        let ber = indefinite(&signature, 3);
+        assert!(ContentInfo::from_der(&ber).is_err());
+        assert_eq!(ber_to_der(&ber).as_deref(), Some(&signature[..]));
+        assert_eq!(verify_signed_data(None, &ber, Some(&entity), "bob@example.org").0.status, "untrusted");
 
         let encrypted = encrypt(&signed, std::slice::from_ref(&cert)).unwrap();
         let text = String::from_utf8_lossy(&encrypted).into_owned();
