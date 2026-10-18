@@ -1791,5 +1791,21 @@
   "disabled": "désactivé",
   "changed": "modifié",
   "default": "par défaut",
-  "none": "aucun"
+  "none": "aucun",
+  "Minimize": "Réduire",
+  "Recipients": "Destinataires",
+  "Formatting options": "Options de mise en forme",
+  "Redo": "Rétablir",
+  "Numbered list": "Liste numérotée",
+  "Indent less": "Diminuer le retrait",
+  "Indent more": "Augmenter le retrait",
+  "Insert emoji": "Insérer un emoji",
+  "Recently used": "Utilisés récemment",
+  "Smileys": "Smileys",
+  "People": "Personnes",
+  "Nature": "Nature",
+  "Food": "Nourriture",
+  "Activities": "Activités",
+  "Objects": "Objets",
+  "Symbols": "Symboles"
 }

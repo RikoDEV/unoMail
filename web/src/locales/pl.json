@@ -1832,5 +1832,21 @@
   "disabled": "wyłączona",
   "changed": "zmienione",
   "default": "domyślne",
-  "none": "brak"
+  "none": "brak",
+  "Minimize": "Minimalizuj",
+  "Recipients": "Adresaci",
+  "Formatting options": "Opcje formatowania",
+  "Redo": "Ponów",
+  "Numbered list": "Lista numerowana",
+  "Indent less": "Zmniejsz wcięcie",
+  "Indent more": "Zwiększ wcięcie",
+  "Insert emoji": "Wstaw emoji",
+  "Recently used": "Ostatnio używane",
+  "Smileys": "Buźki",
+  "People": "Ludzie",
+  "Nature": "Przyroda",
+  "Food": "Jedzenie",
+  "Activities": "Aktywności",
+  "Objects": "Przedmioty",
+  "Symbols": "Symbole"
 }

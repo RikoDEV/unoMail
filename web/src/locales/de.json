@@ -1750,5 +1750,21 @@
   "disabled": "deaktiviert",
   "changed": "geändert",
   "default": "Standard",
-  "none": "keine"
+  "none": "keine",
+  "Minimize": "Minimieren",
+  "Recipients": "Empfänger",
+  "Formatting options": "Formatierungsoptionen",
+  "Redo": "Wiederholen",
+  "Numbered list": "Nummerierte Liste",
+  "Indent less": "Einzug verkleinern",
+  "Indent more": "Einzug vergrößern",
+  "Insert emoji": "Emoji einfügen",
+  "Recently used": "Zuletzt verwendet",
+  "Smileys": "Smileys",
+  "People": "Personen",
+  "Nature": "Natur",
+  "Food": "Essen",
+  "Activities": "Aktivitäten",
+  "Objects": "Objekte",
+  "Symbols": "Symbole"
 }

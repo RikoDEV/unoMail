@@ -1832,5 +1832,21 @@
   "disabled": "zakázáno",
   "changed": "změněno",
   "default": "výchozí",
-  "none": "žádné"
+  "none": "žádné",
+  "Minimize": "Minimalizovat",
+  "Recipients": "Příjemci",
+  "Formatting options": "Možnosti formátování",
+  "Redo": "Znovu",
+  "Numbered list": "Číslovaný seznam",
+  "Indent less": "Zmenšit odsazení",
+  "Indent more": "Zvětšit odsazení",
+  "Insert emoji": "Vložit emoji",
+  "Recently used": "Nedávno použité",
+  "Smileys": "Smajlíci",
+  "People": "Lidé",
+  "Nature": "Příroda",
+  "Food": "Jídlo",
+  "Activities": "Aktivity",
+  "Objects": "Předměty",
+  "Symbols": "Symboly"
 }
