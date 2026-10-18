@@ -7,12 +7,12 @@ import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import VerifiedUser from '@mui/icons-material/VerifiedUser';
 import {
-  Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
+  Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
   Tooltip, Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { del, formatTime, get, post, put } from '../api';
-import { PageHeader, routeBy, useAction, useFormAction, useLoad } from './common';
+import { PageHeader, routeBy, useAction, useFormAction, useLoad, ScrollTable } from './common';
 import { RemoteAddress } from './RemoteAddress';
 
 import { t } from '../i18n';
@@ -143,7 +143,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
           {source === 'user' ? t('No rules yet.') : t('Nothing has been blocked automatically.')}
         </Typography>
       ) : (
-        <Table size="small" aria-label={source === 'user' ? t('User defined rules') : t('Automatic rules')}>
+        <ScrollTable size="small" aria-label={source === 'user' ? t('User defined rules') : t('Automatic rules')}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Address or network')}</TableCell>
@@ -190,7 +190,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       )}
       {editing && (
         <RuleDialog
@@ -225,7 +225,7 @@ function KarmaTable() {
           {t('No remote server has been scored yet.')}
         </Typography>
       ) : (
-        <Table size="small" aria-label={t('Karma records')}>
+        <ScrollTable size="small" aria-label={t('Karma records')}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Address')}</TableCell>
@@ -272,7 +272,7 @@ function KarmaTable() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       )}
     </>
   );

@@ -2,12 +2,12 @@
 // the LDAP directory, webhooks, skins and web client plug-ins.
 
 import Delete from '@mui/icons-material/Delete';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, FormControlLabel, IconButton, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, FormControlLabel, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { del, formatTime, get, post, put, errorText } from '../api';
 import { useAppearance } from '../app';
 import { BUILT_IN_SKINS } from '../skins';
-import { PageHeader, useAction, useLoad } from './common';
+import { PageHeader, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 // --- Single sign-on ------------------------------------------------------------------------
@@ -221,7 +221,7 @@ function Webhooks() {
             ))}
           </Stack>
           {(data?.webhooks.length ?? 0) > 0 && (
-            <Table size="small" aria-label={t('Webhooks')}>
+            <ScrollTable size="small" aria-label={t('Webhooks')}>
               <TableHead>
                 <TableRow>
                   <TableCell>URL</TableCell>
@@ -249,7 +249,7 @@ function Webhooks() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ScrollTable>
           )}
         </Stack>
       </CardContent>
@@ -328,7 +328,7 @@ function Plugins() {
         {(data?.length ?? 0) === 0 ? (
           <Typography color="text.secondary">{t('No plug-ins are installed.')}</Typography>
         ) : (
-          <Table size="small" aria-label={t('Plug-ins')}>
+          <ScrollTable size="small" aria-label={t('Plug-ins')}>
             <TableBody>
               {data!.map((plugin) => (
                 <TableRow key={plugin.id}>
@@ -348,7 +348,7 @@ function Plugins() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         )}
       </CardContent>
     </Card>

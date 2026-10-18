@@ -2,11 +2,11 @@ import Add from '@mui/icons-material/Add';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import MoveToInbox from '@mui/icons-material/MoveToInbox';
-import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, MenuItem, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { del, formatBytes, get, patch, post } from '../api';
 import { useAuth } from '../app';
-import { ConfirmDialog, PageHeader, routeBy, StatusChip, useAction, useFormAction, useLoad, validators } from './common';
+import { ConfirmDialog, PageHeader, routeBy, StatusChip, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
 
 import { t, uiLocale } from '../i18n';
 interface Mailbox {
@@ -114,7 +114,7 @@ function ImportDialog({ box, isSuper, onClose }: { box: Mailbox; isSuper: boolea
             {t('Folders, read/replied/flagged state and dates are preserved. Messages that already exist are skipped, so an import can be repeated safely.')}
           </Typography>
           {jobs.length > 0 && (
-            <Table size="small" aria-label={t('Import jobs')}>
+            <ScrollTable size="small" aria-label={t('Import jobs')}>
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Started')}</TableCell>
@@ -138,7 +138,7 @@ function ImportDialog({ box, isSuper, onClose }: { box: Mailbox; isSuper: boolea
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ScrollTable>
           )}
         </Stack>
       </DialogContent>
@@ -257,7 +257,7 @@ export function Mailboxes() {
       </PageHeader>
       {error && <Alert severity="error">{error}</Alert>}
       {!form && feedback}
-      <Table size="small" aria-label={t('Mailboxes')}>
+      <ScrollTable size="small" aria-label={t('Mailboxes')}>
         <TableHead>
           <TableRow>
             <TableCell>{t('Address')}</TableCell>
@@ -318,7 +318,7 @@ export function Mailboxes() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+      </ScrollTable>
       {data && data.total > data.items.length && (
         <Typography variant="caption" color="text.secondary">
           {t('Showing {{length}} of {{total}}. Refine the search to see more.', { length: data.items.length, total: data.total })}

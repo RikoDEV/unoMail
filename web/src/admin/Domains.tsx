@@ -4,14 +4,14 @@ import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
 import Refresh from '@mui/icons-material/Refresh';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, Table, TableBody,
+  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody,
   TableCell, TableHead, TableRow, TextField, Tooltip, Typography, Link,
 } from '@mui/material';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { del, formatBytes, get, patch, post, put } from '../api';
 import { useAuth } from '../app';
-import { ConfirmDialog, PageHeader, routeBy, StatusChip, useAction, useFormAction, useLoad, validators } from './common';
+import { ConfirmDialog, PageHeader, routeBy, StatusChip, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface Domain {
@@ -78,7 +78,7 @@ export function Domains() {
       </PageHeader>
       {error && <Alert severity="error">{error}</Alert>}
       {feedback}
-      <Table size="small" aria-label={t('Domains')}>
+      <ScrollTable size="small" aria-label={t('Domains')}>
         <TableHead>
           <TableRow>
             <TableCell>{t('Domain')}</TableCell>
@@ -126,7 +126,7 @@ export function Domains() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+      </ScrollTable>
       <Dialog open={name !== null} onClose={() => setName(null)} fullWidth maxWidth="xs">
         <DialogTitle>{t('Add domain')}</DialogTitle>
         <DialogContent>
@@ -245,7 +245,7 @@ export function DomainDetail() {
           {t('Check again')}
         </Button>
       </Stack>
-      <Table size="small" sx={{ mb: 4 }} aria-label={t('DNS records')}>
+      <ScrollTable size="small" sx={{ mb: 4 }} aria-label={t('DNS records')}>
         <TableHead>
           <TableRow>
             <TableCell>{t('Check')}</TableCell>
@@ -287,13 +287,13 @@ export function DomainDetail() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+      </ScrollTable>
 
       <Typography variant="h6">{t('DKIM keys')}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         {t('To rotate a key: add a new selector, publish its DNS record, then deactivate and delete the old one. Mail is signed with every active key.')}
       </Typography>
-      <Table size="small" aria-label={t('DKIM keys')}>
+      <ScrollTable size="small" aria-label={t('DKIM keys')}>
         <TableHead>
           <TableRow>
             <TableCell>{t('Selector')}</TableCell>
@@ -336,7 +336,7 @@ export function DomainDetail() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+      </ScrollTable>
       <Stack direction="row" spacing={1} sx={{ mt: 2, mb: 4 }} alignItems="flex-start">
         <TextField label={t('New selector')} value={selector} onChange={(e) => setSelector(e.target.value.toLowerCase())} placeholder="mail2026" />
         <TextField select label={t('Algorithm')} value={algorithm} onChange={(e) => setAlgorithm(e.target.value)} sx={{ width: 190 }}>

@@ -1,8 +1,8 @@
-import { Alert, Box, Card, CardContent, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, Stack, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { formatBytes, get } from '../api';
 import { formatTime } from '../api';
-import { PageHeader, StatusChip, useLoad } from './common';
+import { PageHeader, StatusChip, useLoad, ScrollTable } from './common';
 import { RemoteAddress } from './RemoteAddress';
 import { DailyStatsChart } from './DailyStatsChart';
 import { TimeChart } from './TimeChart';
@@ -61,7 +61,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
         {flow.length === 0 ? (
           <Typography color="text.secondary">{t('No mail has been processed yet.')}</Typography>
         ) : (
-          <Table size="small" aria-label={t('Mail flow, last 24 hours')}>
+          <ScrollTable size="small" aria-label={t('Mail flow, last 24 hours')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Direction')}</TableCell>
@@ -80,7 +80,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         )}
       </Box>
       <Box sx={{ minWidth: 0 }}>
@@ -90,7 +90,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
         {!activity ? null : activity.remote_ips.length === 0 ? (
           <Typography color="text.secondary">{t('Nobody has connected since the server started.')}</Typography>
         ) : (
-          <Table size="small" aria-label={t('Remote IPs')}>
+          <ScrollTable size="small" aria-label={t('Remote IPs')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Address')}</TableCell>
@@ -109,7 +109,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         )}
       </Box>
       <Box sx={{ minWidth: 0 }}>
@@ -119,7 +119,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
         {!activity ? null : activity.replies.length === 0 ? (
           <Typography color="text.secondary">{t('No SMTP conversation has taken place yet.')}</Typography>
         ) : (
-          <Table size="small" aria-label={t('Last messages')}>
+          <ScrollTable size="small" aria-label={t('Last messages')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Time')}</TableCell>
@@ -142,7 +142,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         )}
       </Box>
     </Box>

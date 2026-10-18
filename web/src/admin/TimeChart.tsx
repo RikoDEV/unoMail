@@ -4,7 +4,8 @@
 // everything else (grid, axis labels) stays in the background. Hovering shows the exact value,
 // and a table of the same data is one click away.
 
-import { Box, Card, CardContent, Table, TableBody, TableCell, TableHead, TableRow, Typography, useTheme } from '@mui/material';
+import { Box, Card, CardContent, TableBody, TableCell, TableHead, TableRow, Typography, useTheme } from '@mui/material';
+import { ScrollTable } from './common';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { t, uiLocale } from '../i18n';
@@ -124,7 +125,7 @@ export function TimeChart({ title, headline, hint, points, max, format }: Props)
           {showTable ? t('Hide the data table') : t('Show as a table')}
         </Typography>
         {showTable && (
-          <Table size="small" aria-label={t('{{title}}, data', { title })} sx={{ mt: 1 }}>
+          <ScrollTable size="small" aria-label={t('{{title}}, data', { title })} sx={{ mt: 1 }}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Time')}</TableCell>
@@ -139,7 +140,7 @@ export function TimeChart({ title, headline, hint, points, max, format }: Props)
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         )}
       </CardContent>
     </Card>

@@ -1,10 +1,10 @@
 import Delete from '@mui/icons-material/Delete';
 import Replay from '@mui/icons-material/Replay';
-import { Alert, Button, FormControlLabel, IconButton, MenuItem, Stack, Switch, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Button, FormControlLabel, IconButton, MenuItem, Stack, Switch, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Tooltip, Typography } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import { del, formatBytes, formatTime, get, post, errorText } from '../api';
 import { useAuth } from '../app';
-import { PageHeader, StatusChip, useAction, useLoad } from './common';
+import { PageHeader, StatusChip, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface QueueEntry {
@@ -33,7 +33,7 @@ export function Queue() {
       {feedback}
       {data?.length === 0 && <Typography color="text.secondary">{t('The queue is empty.')}</Typography>}
       {data && data.length > 0 && (
-        <Table size="small" aria-label={t('Queue')}>
+        <ScrollTable size="small" aria-label={t('Queue')}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Queued')}</TableCell>
@@ -71,7 +71,7 @@ export function Queue() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       )}
     </>
   );
@@ -202,7 +202,7 @@ export function Logs() {
       </Tabs>
       {active.error && <Alert severity="error">{active.error}</Alert>}
       {tab === 'system' ? (
-        <Table size="small" aria-label={t('System log')} sx={{ '& td': { fontSize: 13 } }}>
+        <ScrollTable size="small" aria-label={t('System log')} sx={{ '& td': { fontSize: 13 } }}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Time')}</TableCell>
@@ -223,9 +223,9 @@ export function Logs() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       ) : tab === 'delivery' ? (
-        <Table size="small" aria-label={t('Delivery log')} sx={{ '& td': { fontSize: 13 } }}>
+        <ScrollTable size="small" aria-label={t('Delivery log')} sx={{ '& td': { fontSize: 13 } }}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Time')}</TableCell>
@@ -250,9 +250,9 @@ export function Logs() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       ) : (
-        <Table size="small" aria-label={t('Audit log')} sx={{ '& td': { fontSize: 13 } }}>
+        <ScrollTable size="small" aria-label={t('Audit log')} sx={{ '& td': { fontSize: 13 } }}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Time')}</TableCell>
@@ -275,7 +275,7 @@ export function Logs() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       )}
       {active.rows.length === 0 && !active.error && <Typography color="text.secondary" sx={{ mt: 2 }}>{t('No log entries match.')}</Typography>}
       {active.rows.length >= 200 && tab !== 'system' && (

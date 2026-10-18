@@ -1,10 +1,10 @@
 // Configuration of the Rspamd spam filter: thresholds, rule scores and recent verdicts.
 
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { formatTime, get, put } from '../api';
-import { PageHeader, routeBy, useAction, useFormAction, useLoad } from './common';
+import { PageHeader, routeBy, useAction, useFormAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface RuleInfo {
@@ -98,7 +98,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           {t('{{matching}} of {{count}} rules', { matching: matching.length, count: rules.length })}{matching.length > MAX_RULES_SHOWN ? t(', showing the {{MAX_RULES_SHOWN}} with the largest scores', { MAX_RULES_SHOWN }) : ''}{t('. Positive scores count towards spam, negative ones against it.')}
         </Typography>
-        <Table size="small" aria-label={t('Spam filter rules')}>
+        <ScrollTable size="small" aria-label={t('Spam filter rules')}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Rule')}</TableCell>
@@ -130,7 +130,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
         {editing && (
           <Dialog open onClose={() => setEditing(null)} fullWidth maxWidth="xs">
             <DialogTitle sx={{ wordBreak: 'break-all' }}>{editing.rule.symbol}</DialogTitle>
@@ -185,7 +185,7 @@ function History({ rows }: { rows: Verdict[] }) {
         {rows.length === 0 ? (
           <Typography color="text.secondary">{t('Nothing has been scanned yet.')}</Typography>
         ) : (
-          <Table size="small" aria-label={t('Recent verdicts')}>
+          <ScrollTable size="small" aria-label={t('Recent verdicts')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Time')}</TableCell>
@@ -216,7 +216,7 @@ function History({ rows }: { rows: Verdict[] }) {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         )}
       </CardContent>
     </Card>

@@ -1,9 +1,9 @@
 // Global server configuration: settings that can be changed while the server runs.
 
-import { Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, Stack, Switch, Table, TableBody, TableCell, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, Stack, Switch, TableBody, TableCell, TableRow, TextField, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { del, get, patch, put } from '../api';
-import { PageHeader, useAction, useLoad } from './common';
+import { PageHeader, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 type Values = Record<string, boolean | number | string | string[]>;
@@ -284,7 +284,7 @@ export function ServerSettings() {
             </Typography>
           )}
           {note && <Alert severity="warning" sx={{ mt: 1 }}>{note}</Alert>}
-          <Table size="small" aria-label={group.title} sx={{ mt: 1, '& tr:last-of-type td': { borderBottom: 0 } }}>
+          <ScrollTable size="small" aria-label={group.title} sx={{ mt: 1, '& tr:last-of-type td': { borderBottom: 0 } }}>
             <TableBody>
               {group.fields.filter((field) => (field.dependsOn ?? []).every((key) => Boolean(data.values[key]))).map((field) => {
                 const value = data.values[field.key];
@@ -338,7 +338,7 @@ export function ServerSettings() {
                 );
               })}
             </TableBody>
-          </Table>
+          </ScrollTable>
           </CardContent>
         </Card>
         );

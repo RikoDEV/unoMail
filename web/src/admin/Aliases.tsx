@@ -1,10 +1,10 @@
 import Add from '@mui/icons-material/Add';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip } from '@mui/material';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { del, get, patch, post } from '../api';
-import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, validators } from './common';
+import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface Alias {
@@ -62,7 +62,7 @@ export function Aliases() {
       </PageHeader>
       {error && <Alert severity="error">{error}</Alert>}
       {!form && feedback}
-      <Table size="small" aria-label={t('Aliases')}>
+      <ScrollTable size="small" aria-label={t('Aliases')}>
         <TableHead>
           <TableRow>
             <TableCell>{t('Alias')}</TableCell>
@@ -100,7 +100,7 @@ export function Aliases() {
             </TableRow>
           ))}
         </TableBody>
-      </Table>
+      </ScrollTable>
       <Dialog open={Boolean(form)} onClose={() => setForm(null)} fullWidth maxWidth="sm">
         <DialogTitle>{form?.id === undefined ? t('Add alias') : t('Edit {{source}}', { source: form.source })}</DialogTitle>
         {form && (

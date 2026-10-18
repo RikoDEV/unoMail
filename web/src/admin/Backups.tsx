@@ -1,10 +1,10 @@
 // Backups: where they go, the snapshots kept there and recent runs. Configured with
 // environment variables; this page shows the state and starts a backup on demand.
 
-import { Alert, Button, Card, CardContent, Chip, Table, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
+import { Alert, Button, Card, CardContent, Chip, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
 import { useEffect } from 'react';
 import { formatBytes, formatTime, get, post } from '../api';
-import { PageHeader, useAction, useLoad } from './common';
+import { PageHeader, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface Snapshot {
@@ -88,7 +88,7 @@ export function Backups() {
         <Card variant="outlined" sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" sx={{ mb: 1 }}>{t('Snapshots')}</Typography>
-            <Table size="small" aria-label={t('Snapshots')}>
+            <ScrollTable size="small" aria-label={t('Snapshots')}>
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Taken')}</TableCell>
@@ -109,7 +109,7 @@ export function Backups() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ScrollTable>
           </CardContent>
         </Card>
       )}
@@ -120,7 +120,7 @@ export function Backups() {
             {data.runs.length === 0 ? (
               <Typography color="text.secondary">{t('No backup has run yet.')}</Typography>
             ) : (
-              <Table size="small" aria-label={t('Backup runs')}>
+              <ScrollTable size="small" aria-label={t('Backup runs')}>
                 <TableHead>
                   <TableRow>
                     <TableCell>{t('Started')}</TableCell>
@@ -141,7 +141,7 @@ export function Backups() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </ScrollTable>
             )}
           </CardContent>
         </Card>

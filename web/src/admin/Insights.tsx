@@ -5,12 +5,12 @@ import Refresh from '@mui/icons-material/Refresh';
 import UploadFile from '@mui/icons-material/UploadFile';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle,
-  LinearProgress, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  LinearProgress, MenuItem, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { formatTime, get, postRaw } from '../api';
 import { useAuth } from '../app';
-import { PageHeader, StatusChip, useAction, useLoad } from './common';
+import { PageHeader, StatusChip, useAction, useLoad, ScrollTable } from './common';
 
 import { t, uiLocale } from '../i18n';
 interface DomainSummary {
@@ -127,7 +127,7 @@ export function Dmarc() {
       {data && data.sources.length > 0 && (
         <>
           <Typography variant="h6">{t('Sending sources')}</Typography>
-          <Table size="small" sx={{ mb: 3 }} aria-label={t('Sending sources')}>
+          <ScrollTable size="small" sx={{ mb: 3 }} aria-label={t('Sending sources')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Source address')}</TableCell>
@@ -150,9 +150,9 @@ export function Dmarc() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
           <Typography variant="h6">{t('Reports')}</Typography>
-          <Table size="small" aria-label={t('Reports')}>
+          <ScrollTable size="small" aria-label={t('Reports')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Period')}</TableCell>
@@ -175,7 +175,7 @@ export function Dmarc() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         </>
       )}
       <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} maxWidth="md" fullWidth>
@@ -183,7 +183,7 @@ export function Dmarc() {
           {detail?.report.org_name} · {detail?.report.domain}
         </DialogTitle>
         <DialogContent>
-          <Table size="small" aria-label={t('Report records')}>
+          <ScrollTable size="small" aria-label={t('Report records')}>
             <TableHead>
               <TableRow>
                 <TableCell>{t('Source')}</TableCell>
@@ -206,7 +206,7 @@ export function Dmarc() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
         </DialogContent>
       </Dialog>
     </>
@@ -252,7 +252,7 @@ export function Diagnostics() {
             </CardContent>
           </Card>
           <Typography variant="h6">{t('Port health')}</Typography>
-          <Table size="small" sx={{ mb: 3, maxWidth: 520 }} aria-label={t('Port health')}>
+          <ScrollTable size="small" sx={{ mb: 3, maxWidth: 520 }} aria-label={t('Port health')}>
             <TableHead><TableRow><TableCell>{t('Service')}</TableCell><TableCell align="right">{t('Port')}</TableCell><TableCell>{t('Status')}</TableCell></TableRow></TableHead>
             <TableBody>
               {data.ports.map((p) => (
@@ -263,7 +263,7 @@ export function Diagnostics() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ScrollTable>
           <Typography variant="h6">{t('Outbound delivery')}</Typography>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
             <StatusChip status={data.outbound_port_25} />

@@ -3,10 +3,10 @@
 import Add from '@mui/icons-material/Add';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import Delete from '@mui/icons-material/Delete';
-import { Alert, Badge, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Badge, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { del, formatTime, get, patch, post } from '../api';
-import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, validators } from './common';
+import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface MailingList {
@@ -70,7 +70,7 @@ export function Lists() {
           {t('No lists yet. A list is an address whose mail goes to all its members, with moderation, subscribing by mail and one-click unsubscribe.')}
         </Typography>
       ) : (
-        <Table size="small" aria-label={t('Mailing lists')}>
+        <ScrollTable size="small" aria-label={t('Mailing lists')}>
           <TableHead>
             <TableRow>
               <TableCell>{t('Address')}</TableCell>
@@ -94,7 +94,7 @@ export function Lists() {
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+        </ScrollTable>
       )}
       <Dialog open={creating !== null} onClose={() => setCreating(null)} fullWidth maxWidth="xs">
         <DialogTitle>{t('New mailing list')}</DialogTitle>
@@ -164,7 +164,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
               <Typography variant="h6" sx={{ mb: 1 }}>
                 <Badge color="warning" badgeContent={held.data?.length} sx={{ pr: 2 }}>{t('Waiting for approval')}</Badge>
               </Typography>
-              <Table size="small" aria-label={t('Held messages')}>
+              <ScrollTable size="small" aria-label={t('Held messages')}>
                 <TableBody>
                   {held.data?.map((item) => (
                     <TableRow key={item.token}>
@@ -178,7 +178,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </ScrollTable>
             </CardContent>
           </Card>
         )}
@@ -239,7 +239,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                 {t('Add')}
               </Button>
             </Stack>
-            <Table size="small" aria-label={t('Members')}>
+            <ScrollTable size="small" aria-label={t('Members')}>
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Address')}</TableCell>
@@ -268,7 +268,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ScrollTable>
           </CardContent>
         </Card>
       </Stack>

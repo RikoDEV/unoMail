@@ -1,4 +1,4 @@
-import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Typography } from '@mui/material';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableContainer, type TableProps, Typography } from '@mui/material';
 import { type ReactNode, useCallback, useState } from 'react';
 
 import { t } from '../i18n';
@@ -117,3 +117,12 @@ export const validators = {
   email: (v: string) => (/^[\p{L}\p{N}._+-]+@[\p{L}\p{N}-]+(\.[\p{L}\p{N}-]+)+$/u.test(v.trim()) ? '' : t('Enter a valid e-mail address')),
   password: (v: string) => (v.length >= 10 ? '' : t('Use at least 10 characters')),
 };
+
+/** A table that scrolls sideways inside its own box when the screen is too narrow for it. */
+export function ScrollTable(props: TableProps) {
+  return (
+    <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+      <Table {...props} />
+    </TableContainer>
+  );
+}

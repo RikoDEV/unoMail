@@ -1,11 +1,11 @@
 // SMTP TLS reports (RFC 8460): what other servers report about reaching ours securely, and
 // how this server's own outgoing sessions went.
 
-import { Alert, Card, CardContent, Chip, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Card, CardContent, Chip, MenuItem, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { formatTime, get } from '../api';
 import { useAuth } from '../app';
-import { PageHeader, useLoad } from './common';
+import { PageHeader, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface Received {
@@ -53,7 +53,7 @@ export function TlsReports() {
           {data && data.received.length === 0 ? (
             <Typography color="text.secondary">{t('No reports in this period.')}</Typography>
           ) : (
-            <Table size="small" aria-label={t('Received TLS reports')}>
+            <ScrollTable size="small" aria-label={t('Received TLS reports')}>
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Day')}</TableCell>
@@ -86,7 +86,7 @@ export function TlsReports() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ScrollTable>
           )}
         </CardContent>
       </Card>
@@ -100,7 +100,7 @@ export function TlsReports() {
             {data && data.outgoing.length === 0 ? (
               <Typography color="text.secondary">{t('Nothing recorded in this period.')}</Typography>
             ) : (
-              <Table size="small" aria-label={t('Outgoing TLS results')}>
+              <ScrollTable size="small" aria-label={t('Outgoing TLS results')}>
                 <TableHead>
                   <TableRow>
                     <TableCell>{t('Domain')}</TableCell>
@@ -121,7 +121,7 @@ export function TlsReports() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </ScrollTable>
             )}
           </CardContent>
         </Card>
