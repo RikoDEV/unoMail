@@ -25,6 +25,8 @@ describe('attachment risks', () => {
 describe('link warnings', () => {
   it('spots links whose text names another site', () => {
     expect(linkWarning('https://evil.example/login', 'https://paypal.com/login')).toBe('The link says paypal.com, but it goes to evil.example.');
+    // A broken percent-encoding in the hidden user name is reported, not thrown.
+    expect(linkWarning('http://%E0%A4%A@example.com', 'click')).toContain('example.com');
     expect(linkWarning('https://evil.example/', 'Log in at www.paypal.com')).toContain('paypal.com');
     expect(linkWarning('https://www.paypal.com/x', 'paypal.com')).toBeNull();
     expect(linkWarning('https://login.paypal.com/x', 'https://paypal.com')).toBeNull();

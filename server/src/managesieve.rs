@@ -175,7 +175,7 @@ impl Session {
             let args = &tokens[1..];
             if self.account.is_some()
                 && let Some(grant) = self.grant.as_mut()
-                && !grant.recheck(&self.app.db).await
+                && !grant.recheck(&self.app).await
             {
                 return self.send("BYE \"the sign-in is no longer valid\"\r\n").await;
             }

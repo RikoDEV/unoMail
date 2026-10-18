@@ -949,6 +949,7 @@ pub async fn set(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodResu
                     Some(_) => return Err(set_error("forbidden", "you may not add messages to this mailbox")),
                     None => return Err(set_error("invalidProperties", "unknown mailbox")),
                 };
+                let raw = crate::security::admit_stored(ctx.app, &raw, owner != ctx.account.id).map_err(|name| set_error("forbidden", crate::security::attachments::refusal(&name)))?;
                 let appended = ctx.app.store.append(owner, mailbox, &raw, flags, None).await.map_err(|err| match err {
                     StoreError::NotFound => set_error("invalidProperties", "unknown mailbox"),
                     StoreError::QuotaExceeded => set_error("overQuota", "mailbox quota exceeded"),
@@ -1056,6 +1057,7 @@ pub async fn import(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodR
                 Some(_) => return Err(set_error("forbidden", "you may not add messages to this mailbox")),
                 None => return Err(set_error("invalidProperties", "unknown mailbox")),
             };
+            let raw = crate::security::admit_stored(ctx.app, &raw, owner != ctx.account.id).map_err(|name| set_error("forbidden", crate::security::attachments::refusal(&name)))?;
             let appended = ctx.app.store.append(owner, mailbox, &raw, flags, None).await.map_err(|err| match err {
                 StoreError::QuotaExceeded => set_error("overQuota", "mailbox quota exceeded"),
                 other => {

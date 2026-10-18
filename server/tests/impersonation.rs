@@ -268,28 +268,88 @@ async fn protocol_sign_ins_end_with_the_credential_they_used() {
     env.domain("example.org").await;
     let bob = env.account("bob@example.org").await;
     let db = &env.app.db;
+    let app = &*env.app;
 
     let password = Grant::new(&bob, Protocol::Imap, Some(Credential::Password));
-    let token = Grant::new(&bob, Protocol::Imap, None);
-    assert!(password.valid(db).await && token.valid(db).await);
+    assert!(password.valid(app).await);
+    // A token sign-in holds only while the identity provider vouches for it (see the SSO
+    // tests); with no provider, or no token to show it, it does not.
+    assert!(!Grant::new(&bob, Protocol::Imap, None).valid(app).await);
+    assert!(!Grant::new(&bob, Protocol::Imap, None).with_token("token".into()).valid(app).await, "single sign-on is off");
 
     // A new password ends the sessions opened with the old one.
     sqlx::query("UPDATE accounts SET password_hash = 'changed' WHERE id = ?").bind(bob.id).execute(db).await.unwrap();
-    assert!(!password.valid(db).await);
-    assert!(token.valid(db).await, "the identity provider vouches for tokens");
+    assert!(!password.valid(app).await);
 
     // A revoked app password ends its sessions.
     sqlx::query("INSERT INTO app_passwords (id, account_id, name, hash, scopes, created_at) VALUES (7, ?, 'phone', 'h', 'imap', 0)").bind(bob.id).execute(db).await.unwrap();
     let app_password = Grant::new(&bob, Protocol::Imap, Some(Credential::AppPassword(7)));
-    assert!(app_password.valid(db).await);
+    assert!(app_password.valid(app).await);
     sqlx::query("DELETE FROM app_passwords WHERE id = 7").execute(db).await.unwrap();
-    assert!(!app_password.valid(db).await);
+    assert!(!app_password.valid(app).await);
 
     // So does disabling the mailbox, its domain or the protocol.
-    let fresh = |account: &unomail::auth::Account| Grant::new(account, Protocol::Imap, None);
+    let bob = unomail::auth::Account::by_id(db, bob.id).await.unwrap().unwrap();
+    let fresh = |protocol| Grant::new(&bob, protocol, Some(Credential::Password));
+    assert!(fresh(Protocol::Imap).valid(app).await);
     sqlx::query("UPDATE accounts SET imap_enabled = 0 WHERE id = ?").bind(bob.id).execute(db).await.unwrap();
-    assert!(!fresh(&bob).valid(db).await);
-    assert!(Grant::new(&bob, Protocol::Smtp, None).valid(db).await);
+    assert!(!fresh(Protocol::Imap).valid(app).await);
+    assert!(fresh(Protocol::Smtp).valid(app).await);
     sqlx::query("UPDATE domains SET enabled = 0").execute(db).await.unwrap();
-    assert!(!Grant::new(&bob, Protocol::Smtp, None).valid(db).await);
+    assert!(!fresh(Protocol::Smtp).valid(app).await);
+}
+
+/// Schedules a message an hour ahead through JMAP, signed in with `auth` headers (none: the
+/// client's session cookie).
+async fn schedule_with(api: &Api, auth: &[(&str, &str)], subject: &str) {
+    let jmap = |calls: serde_json::Value| async move {
+        let body = json!({ "using": ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail", "urn:ietf:params:jmap:submission"], "methodCalls": calls });
+        let reply = api.send(axum::http::Method::POST, "/jmap/api", Some(body), auth).await;
+        assert_eq!(reply.status, StatusCode::OK, "{}", reply.text);
+        reply.body["methodResponses"].clone()
+    };
+    let session = api.send(axum::http::Method::GET, "/jmap/session", None, auth).await.body;
+    let account = session["primaryAccounts"]["urn:ietf:params:jmap:mail"].as_str().unwrap().to_owned();
+    let boxes = jmap(json!([["Mailbox/get", { "accountId": account }, "0"]])).await[0][1]["list"].clone();
+    let drafts = boxes.as_array().unwrap().iter().find(|m| m["role"] == "drafts").unwrap()["id"].as_str().unwrap().to_owned();
+    let reply = jmap(json!([
+        ["Email/set", { "accountId": account, "create": { "d": { "mailboxIds": { &drafts: true }, "from": [{ "email": "bob@example.org" }], "to": [{ "email": "x@remote.example" }], "subject": subject, "bodyValues": { "t": { "value": "hi" } }, "textBody": [{ "partId": "t" }] } } }, "c"],
+        ["EmailSubmission/set", { "accountId": account, "create": { "s": { "emailId": "#d", "envelope": { "mailFrom": { "email": "bob@example.org", "parameters": { "HOLDFOR": "3600" } }, "rcptTo": [{ "email": "x@remote.example" }] } } } }, "s"],
+    ]))
+    .await;
+    assert!(reply[1][1]["created"]["s"].is_object(), "{reply}");
+}
+
+#[tokio::test]
+async fn revoking_a_credential_calls_off_what_it_scheduled() {
+    use base64::Engine;
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+    let mine = Api::logged_in(&env, "bob@example.org").await;
+    let other = Api::logged_in(&env, "bob@example.org").await;
+    let created = mine.post("/api/me/app-passwords", json!({ "name": "phone", "scopes": ["jmap"], "password": PASSWORD })).await;
+    assert_eq!(created.status, StatusCode::OK, "{}", created.text);
+    let basic = format!("Basic {}", base64::engine::general_purpose::STANDARD.encode(format!("bob@example.org:{}", created.body["password"].as_str().unwrap())));
+    let app = [("authorization", basic.as_str())];
+
+    schedule_with(&mine, &[], "mine").await;
+    schedule_with(&other, &[], "other session").await;
+    schedule_with(&Api::new(&env), &app, "app password").await;
+    let status = |subject: &'static str| {
+        let db = env.app.db.clone();
+        async move {
+            sqlx::query_scalar::<_, String>("SELECT s.undo_status FROM email_submissions s JOIN messages m ON m.id = s.message_id WHERE m.subject = ?").bind(subject).fetch_one(&db).await.unwrap()
+        }
+    };
+
+    assert_eq!(mine.send(axum::http::Method::DELETE, "/api/auth/sessions", None, &[]).await.status, StatusCode::OK);
+    assert_eq!(status("other session").await, "canceled");
+    assert_eq!(status("mine").await, "pending", "the session that signed the others out keeps its own");
+    assert_eq!(status("app password").await, "pending");
+
+    let id = created.body["id"].as_i64().unwrap();
+    assert_eq!(mine.send(axum::http::Method::DELETE, &format!("/api/me/app-passwords/{id}"), None, &[]).await.status, StatusCode::OK);
+    assert_eq!(status("app password").await, "canceled");
+    assert_eq!(status("mine").await, "pending");
 }

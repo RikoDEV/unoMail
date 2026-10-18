@@ -352,3 +352,30 @@ async fn searching_a_shared_folder_stays_within_it() {
     let reply = w.carol_api.jmap(json!([["Email/query", { "accountId": account, "filter": fine, "calculateTotal": true }, "q"]])).await;
     assert_eq!(reply[0][1]["total"], 2, "{reply}");
 }
+
+#[tokio::test]
+async fn a_disabled_owner_shares_nothing() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    let alice = env.account("alice@example.org").await;
+    let bob = env.account("bob@example.org").await;
+    let inbox = env.app.store.mailbox_by_role(alice.id, "inbox").await.unwrap().unwrap();
+    unomail::sharing::set(&env.app.db, &inbox, "bob@example.org", "lr").await.unwrap();
+    let alice_api = Api::logged_in(&env, "alice@example.org").await;
+    let calendar = alice_api.post("/api/me/calendars", json!({ "name": "Team" })).await.body["id"].as_i64().unwrap();
+    alice_api.put(&format!("/api/me/calendars/{calendar}/shares"), json!([{ "email": "bob@example.org", "write": true }])).await;
+    let visible = || async {
+        let bob = Account::by_id(&env.app.db, bob.id).await.unwrap().unwrap();
+        let mailbox = unomail::sharing::mailbox(&env.app.db, &bob, inbox.id).await.unwrap().is_some();
+        let calendar = unomail::calendar::store::access_by_id(&env.app.db, &bob, calendar).await.unwrap().is_some();
+        (mailbox, calendar)
+    };
+    assert_eq!(visible().await, (true, true));
+
+    sqlx::query("UPDATE accounts SET enabled = 0 WHERE id = ?").bind(alice.id).execute(&env.app.db).await.unwrap();
+    assert_eq!(visible().await, (false, false), "not even by id");
+    sqlx::query("UPDATE accounts SET enabled = 1 WHERE id = ?").bind(alice.id).execute(&env.app.db).await.unwrap();
+    sqlx::query("UPDATE domains SET enabled = 0").execute(&env.app.db).await.unwrap();
+    let bob = Account::by_id(&env.app.db, bob.id).await.unwrap().unwrap();
+    assert!(unomail::sharing::mailbox(&env.app.db, &bob, inbox.id).await.unwrap().is_none(), "nor when the domain is off");
+}

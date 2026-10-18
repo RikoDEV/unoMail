@@ -305,6 +305,8 @@ pub struct Context<'a> {
     pub app: &'a AppState,
     pub account: &'a Account,
     pub ip: std::net::IpAddr,
+    /// The credential the request was made with (see [`crate::api::LiveAuth::origin`]).
+    pub origin: String,
     /// Creation ids from earlier `/set` calls in this request mapped to the real ids.
     pub created: HashMap<String, String>,
 }
@@ -410,7 +412,7 @@ fn request_error(kind: &str, detail: &str) -> Response {
 }
 
 /// Runs one JMAP request object; on failure, the request-level error type and detail.
-pub(crate) async fn process(state: &AppState, account: &Account, ip: std::net::IpAddr, request: &Value) -> Result<Value, (&'static str, &'static str)> {
+pub(crate) async fn process(state: &AppState, account: &Account, ip: std::net::IpAddr, origin: String, request: &Value) -> Result<Value, (&'static str, &'static str)> {
     let Some(_slot) = RequestSlot::take(state, account.id) else { return Err(("limit", "too many concurrent requests")) };
     let mut budget = Budget::new();
     budget.charge(request, 0).map_err(|_| ("limit", "request structure is too large"))?;
@@ -420,7 +422,7 @@ pub(crate) async fn process(state: &AppState, account: &Account, ip: std::net::I
     if calls.len() > MAX_CALLS {
         return Err(("limit", "too many method calls"));
     }
-    let mut ctx = Context { app: state, account, ip, created: HashMap::new() };
+    let mut ctx = Context { app: state, account, ip, origin, created: HashMap::new() };
     let mut responses: Vec<Value> = Vec::with_capacity(calls.len());
     for call in calls {
         let (Some(name), Some(args), Some(call_id)) = (call[0].as_str(), call[1].as_object(), call[2].as_str()) else {
@@ -455,7 +457,7 @@ async fn api(State(state): State<AppState>, user: JmapUser, body: Bytes) -> Resp
     let Ok(request) = serde_json::from_slice::<Value>(&body) else {
         return request_error("notJSON", "the request body is not valid JSON");
     };
-    match process(&state, &user.account, user.ip, &request).await {
+    match process(&state, &user.account, user.ip, user.auth.origin(), &request).await {
         Ok(response) => Json(response).into_response(),
         Err((kind, detail)) => request_error(kind, detail),
     }
@@ -587,7 +589,7 @@ async fn avatar(
     axum::extract::Query(query): axum::extract::Query<crate::api::avatar::AvatarQuery>,
 ) -> Result<Response, ApiError> {
     own_account(&user, &account)?;
-    let ctx = Context { app: &state, account: &user.account, ip: user.ip, created: HashMap::new() };
+    let ctx = Context { app: &state, account: &user.account, ip: user.ip, origin: user.auth.origin(), created: HashMap::new() };
     let id = parse_id(&email_id, 'm').ok_or(ApiError::NotFound)?;
     let (message, _) = ctx.message(id).await.map_err(|_| ApiError::NotFound)?.ok_or(ApiError::NotFound)?;
     // Only the headers matter here; a message full of attachments is not read in full.
@@ -616,7 +618,7 @@ async fn avatars(
 ) -> Result<Response, ApiError> {
     own_account(&user, &account)?;
     let ids: Vec<String> = query.ids.split(',').filter(|id| !id.is_empty()).take(MAX_AVATAR_BATCH).map(str::to_owned).collect();
-    let ctx = Context { app: &state, account: &user.account, ip: user.ip, created: HashMap::new() };
+    let ctx = Context { app: &state, account: &user.account, ip: user.ip, origin: user.auth.origin(), created: HashMap::new() };
     let lookups = ids.into_iter().map(|email_id: String| {
         let (ctx, state) = (&ctx, &state);
         async move {

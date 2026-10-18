@@ -4,7 +4,7 @@
 //! Notifications carry envelope metadata only, never message content, and are signed with
 //! HMAC-SHA256 (`X-Unomail-Signature: sha256=<hex>`) so receivers can verify their origin.
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use serde_json::{Value, json};
 use sqlx::SqlitePool;
@@ -12,6 +12,7 @@ use sqlx::SqlitePool;
 use crate::{
     app::App,
     secretbox::SecretBox,
+    security::reputation::is_private,
     util::{hmac_sha256, now, sanitize_line},
 };
 
@@ -29,7 +30,56 @@ fn notification(event: &str, data: &Value) -> String {
     json!({ "event": event, "timestamp": now(), "data": data }).to_string()
 }
 
-async fn send(db: &SqlitePool, http: &reqwest::Client, hook: &Hook, event: &str, body: &str) -> String {
+/// Where a notification for `url` may be sent: the host and the one address checked for it.
+///
+/// Receivers named as localhost were chosen deliberately and are reached as they are. Any
+/// other host must resolve to public addresses only, checked at every send rather than when
+/// the webhook was saved, so that DNS cannot later point it at an internal service.
+async fn destination(url: &str, allow_private: bool) -> Result<Option<(String, SocketAddr)>, &'static str> {
+    let url = reqwest::Url::parse(url).map_err(|_| "invalid URL")?;
+    let host = url.host_str().ok_or("invalid URL")?.trim_matches(['[', ']']).to_owned();
+    if allow_private || matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {
+        return Ok(None);
+    }
+    let port = url.port_or_known_default().ok_or("invalid URL")?;
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), port)).await.map_err(|_| "connection failed")?.collect();
+    match addrs.first() {
+        Some(addr) if !addrs.iter().any(|a| is_private(a.ip())) => Ok(Some((host, *addr))),
+        Some(_) => Err("refused: private address"),
+        None => Err("connection failed"),
+    }
+}
+
+async fn send(db: &SqlitePool, http: &reqwest::Client, allow_private: bool, hook: &Hook, event: &str, body: &str) -> String {
+    let status = match destination(&hook.url, allow_private).await {
+        Ok(target) => post(http, target, hook, event, body).await,
+        Err(refused) => refused.to_owned(),
+    };
+    let _ = sqlx::query("UPDATE webhooks SET last_status = ?, last_at = ? WHERE id = ?").bind(&status).bind(now()).bind(hook.id).execute(db).await;
+    status
+}
+
+async fn post(http: &reqwest::Client, target: Option<(String, SocketAddr)>, hook: &Hook, event: &str, body: &str) -> String {
+    // The connection goes to exactly the address that was checked.
+    let pinned;
+    let http = match target {
+        None => http,
+        Some((host, addr)) => {
+            let client = reqwest::Client::builder()
+                .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
+                .resolve(&host, addr)
+                .redirect(reqwest::redirect::Policy::none())
+                .timeout(std::time::Duration::from_secs(15))
+                .build();
+            match client {
+                Ok(client) => {
+                    pinned = client;
+                    &pinned
+                }
+                Err(_) => return "connection failed".to_owned(),
+            }
+        }
+    };
     let body = body.to_owned();
     let signature = hex::encode(hmac_sha256(hook.secret.as_bytes(), body.as_bytes()));
     let result = http
@@ -41,13 +91,11 @@ async fn send(db: &SqlitePool, http: &reqwest::Client, hook: &Hook, event: &str,
         .body(body)
         .send()
         .await;
-    let status = match result {
+    match result {
         Ok(response) => format!("HTTP {}", response.status().as_u16()),
         Err(err) if err.is_timeout() => "timed out".to_owned(),
         Err(_) => "connection failed".to_owned(),
-    };
-    let _ = sqlx::query("UPDATE webhooks SET last_status = ?, last_at = ? WHERE id = ?").bind(&status).bind(now()).bind(hook.id).execute(db).await;
-    status
+    }
 }
 
 async fn hooks_for(db: &SqlitePool, secrets: &SecretBox, event: Option<&str>, only: Option<i64>) -> sqlx::Result<Vec<Hook>> {
@@ -75,7 +123,8 @@ const RETRY_DELAYS: [u64; 2] = [5, 30];
 fn retryable(status: &str) -> bool {
     match status.strip_prefix("HTTP ").and_then(|code| code.parse::<u16>().ok()) {
         Some(code) => code == 408 || code == 429 || code >= 500,
-        None => true,
+        // A refused destination stays refused.
+        None => !status.starts_with("refused"),
     }
 }
 
@@ -92,6 +141,7 @@ pub fn emit(app: &App, event: &'static str, data: Value) {
 fn start(app: &App) -> tokio::sync::mpsc::Sender<(&'static str, Value)> {
     let (sender, mut events) = tokio::sync::mpsc::channel::<(&'static str, Value)>(BACKLOG);
     let (db, http, secrets): (SqlitePool, reqwest::Client, Arc<SecretBox>) = (app.db.clone(), app.http.clone(), app.secrets.clone());
+    let allow_private = app.cfg.allow_private_destinations;
     tokio::spawn(async move {
         let slots = Arc::new(tokio::sync::Semaphore::new(PARALLEL));
         while let Some((event, data)) = events.recv().await {
@@ -109,7 +159,7 @@ fn start(app: &App) -> tokio::sync::mpsc::Sender<(&'static str, Value)> {
                 tokio::spawn(async move {
                     for delay in std::iter::once(0).chain(RETRY_DELAYS) {
                         tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-                        let status = send(&db, &http, &hook, event, &body).await;
+                        let status = send(&db, &http, allow_private, &hook, event, &body).await;
                         tracing::debug!(url = %sanitize_line(&hook.url), event, status, "webhook notified");
                         if !retryable(&status) {
                             break;
@@ -127,7 +177,24 @@ fn start(app: &App) -> tokio::sync::mpsc::Sender<(&'static str, Value)> {
 pub async fn deliver_to(app: &App, id: i64, event: &str, data: Value) -> sqlx::Result<Option<String>> {
     let hooks = hooks_for(&app.db, &app.secrets, None, Some(id)).await?;
     match hooks.first() {
-        Some(hook) => Ok(Some(send(&app.db, &app.http, hook, event, &notification(event, &data)).await)),
+        Some(hook) => Ok(Some(send(&app.db, &app.http, app.cfg.allow_private_destinations, hook, event, &notification(event, &data)).await)),
         None => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn webhooks_do_not_reach_private_addresses() {
+        assert_eq!(destination("https://10.0.0.5/hook", false).await, Err("refused: private address"));
+        assert_eq!(destination("https://[fd00::1]:8443/hook", false).await, Err("refused: private address"));
+        assert_eq!(destination("https://169.254.169.254/latest", false).await, Err("refused: private address"));
+        assert_eq!(destination("http://localhost:9000/hook", false).await, Ok(None), "localhost is chosen deliberately");
+        assert_eq!(destination("https://10.0.0.5/hook", true).await, Ok(None));
+        let public = destination("https://203.0.113.7:8443/hook", false).await.unwrap().unwrap();
+        assert_eq!(public.1, "203.0.113.7:8443".parse().unwrap());
+        assert!(!retryable("refused: private address"));
     }
 }

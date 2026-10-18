@@ -44,6 +44,7 @@ async fn maintenance(app: AppState) {
         unomail::security::access::prune(&app).await;
         outbound::prune(&app).await;
         unomail::api::avatar::prune(&app).await;
+        unomail::dmarc_reports::prune(&app).await;
         // Delivery and audit logs are kept as long as the administrator set.
         let cutoff = now() - app.rt().log_retention_days * 86400;
         for sql in [

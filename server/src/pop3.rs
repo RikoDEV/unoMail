@@ -141,7 +141,7 @@ impl Session {
                 Err(_) => return Ok(()),
             };
             if let Some(grant) = self.grant.as_mut()
-                && !grant.recheck(&self.app.db).await
+                && !grant.recheck(&self.app).await
             {
                 // Nothing marked for deletion is removed: the session did not end properly.
                 return self.conn.write_all(b"-ERR [AUTH] the sign-in is no longer valid\r\n").await;

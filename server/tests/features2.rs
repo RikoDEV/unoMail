@@ -366,6 +366,15 @@ async fn acme_http_challenge_handler_serves_only_pending_tokens() {
     let redirecting = Api { router: unomail::api::redirect_router(env.app.clone()), ..api.clone() };
     assert_eq!(redirecting.get("/.well-known/acme-challenge/tok_123").await.text, "tok_123.thumbprint");
     assert_eq!(redirecting.get("/mail").await.status, StatusCode::PERMANENT_REDIRECT);
+    // Redirects keep only Host names this server answers for.
+    env.domain("example.org").await;
+    let location = |host: &'static str| {
+        let redirecting = &redirecting;
+        async move { redirecting.send(axum::http::Method::GET, "/mail", None, &[("host", host)]).await.headers["location"].to_str().unwrap().to_owned() }
+    };
+    let own = env.app.cfg.hostname.clone();
+    assert!(location("evil.example").await.starts_with(&format!("https://{own}")), "not sent to someone else's site");
+    assert!(location("webmail.example.org").await.starts_with("https://webmail.example.org"));
     for probe in ["/.well-known/acme-challenge/../../api/auth/me", "/.well-known/acme-challenge/tok_123/extra", "/.well-known/acme-challenge/"] {
         assert_ne!(api.get(probe).await.text, "tok_123.thumbprint", "{probe}");
     }

@@ -188,9 +188,11 @@ impl Session {
             access::Verdict::Allowed => self.whitelisted = true,
             access::Verdict::Neutral => {}
         }
-        if self.mode == Mode::Lmtp && !self.whitelisted && !reputation::is_private(ip) {
+        // LMTP mail is taken as vouched for (no SPF, DKIM or DMARC checks), so only hosts named
+        // as trusted may use it: being on the same private network is not enough.
+        if self.mode == Mode::Lmtp && !self.whitelisted && !reputation::is_trusted_source(&self.app.cfg, ip) {
             self.app.daily.add(Metric::ConnectionBlocked);
-            return self.reply("554 5.7.1 LMTP is only offered to mail servers on the local network").await;
+            return self.reply("554 5.7.1 LMTP is only offered to trusted mail servers (UNOMAIL_TRUSTED_NETWORKS)").await;
         }
         if self.mode == Mode::Mx && reputation::is_private(ip) && !reputation::is_trusted_source(&self.app.cfg, ip) {
             reputation::note_untrusted_private_peer(ip);
@@ -236,7 +238,7 @@ impl Session {
             let verb = verb.to_ascii_uppercase();
             if self.account.is_some()
                 && let Some(grant) = self.grant.as_mut()
-                && !grant.recheck(&self.app.db).await
+                && !grant.recheck(&self.app).await
             {
                 return self.reply("421 4.7.0 The sign-in is no longer valid, closing connection").await;
             }
@@ -381,7 +383,9 @@ impl Session {
                 return Ok(Flow::Continue);
             };
             let result = crate::oauth::authenticate_token(&self.app, &user, &token, self.peer.ip(), Protocol::Smtp).await;
-            return self.finish_auth(result.map(|account| (account, None))).await;
+            let outcome = self.finish_auth(result.map(|account| (account, None))).await;
+            self.grant = self.grant.take().map(|grant| grant.with_token(token));
+            return outcome;
         }
         let credentials: Option<(String, String)> = match mechanism.as_str() {
             "PLAIN" => {

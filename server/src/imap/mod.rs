@@ -704,7 +704,9 @@ impl Session {
                 return Ok((bad("malformed authentication data"), Flow::Continue));
             };
             let result = crate::oauth::authenticate_token(&self.app, &user, &token, self.peer.ip(), Protocol::Imap).await;
-            return self.finish_login(result.map(|account| (account, None))).await;
+            let outcome = self.finish_login(result.map(|account| (account, None))).await;
+            self.grant = self.grant.take().map(|grant| grant.with_token(token));
+            return outcome;
         }
         let credentials = STANDARD.decode(response.trim()).ok().and_then(|bytes| {
             let mut parts = bytes.split(|b| *b == 0);
@@ -725,7 +727,7 @@ impl Session {
     /// False once the account was disabled or the credential it signed in with revoked.
     async fn still_signed_in(&mut self) -> bool {
         match (&self.account, &mut self.grant) {
-            (Some(_), Some(grant)) => grant.recheck(&self.app.db).await,
+            (Some(_), Some(grant)) => grant.recheck(&self.app).await,
             _ => true,
         }
     }
@@ -1156,7 +1158,9 @@ impl Session {
         if raw.is_empty() {
             return bad("empty message");
         }
-        let appended = self.app.store.append(mailbox.account_id, mailbox.id, raw, flags, date).await.map_err(|err| match err {
+        let foreign = self.account.as_ref().is_some_and(|account| account.id != mailbox.account_id);
+        let raw = crate::security::admit_stored(&self.app, raw, foreign).map_err(|name| format!("NO [CANNOT] the message contains an executable attachment ({name}), which this server does not accept"))?;
+        let appended = self.app.store.append(mailbox.account_id, mailbox.id, &raw, flags, date).await.map_err(|err| match err {
             StoreError::QuotaExceeded => "NO [OVERQUOTA] mailbox quota exceeded".to_owned(),
             other => internal(other),
         })?;

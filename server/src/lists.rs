@@ -33,7 +33,20 @@ pub enum Role {
     Post,
     Request,
     Owner,
+    /// The plain bounce address, which no copy is sent from: reports to it are ignored.
     Bounces,
+    /// The bounce address one member's copies are sent from (VERP), authenticated by its tag.
+    MemberBounces(i64),
+}
+
+/// Who a message to the list is from, and how far that is established.
+#[derive(Debug, Clone, Copy)]
+pub struct Sender<'a> {
+    pub envelope: &'a str,
+    /// The envelope sender is authenticated (SMTP AUTH, or an SPF pass).
+    pub envelope_verified: bool,
+    /// The From address is authenticated (DMARC alignment, or checked at submission).
+    pub author_verified: bool,
 }
 
 #[derive(Debug, Clone, Serialize, sqlx::FromRow)]
@@ -91,15 +104,32 @@ pub async fn target(app: &App, address: &Address) -> sqlx::Result<Option<Target>
     if let Some(id) = sqlx::query_scalar::<_, i64>("SELECT id FROM mailing_lists WHERE address = ? AND enabled = 1").bind(&full).fetch_optional(&app.db).await? {
         return Ok(Some(Target::List { list_id: id, role: Role::Post }));
     }
+    let (local, tag) = address.local.split_once('+').map_or((address.local.as_str(), None), |(local, tag)| (local, Some(tag)));
     for (suffix, role) in [("-request", Role::Request), ("-owner", Role::Owner), ("-bounces", Role::Bounces)] {
-        if let Some(local) = address.local.strip_suffix(suffix) {
+        if let Some(local) = local.strip_suffix(suffix) {
             let base = format!("{local}@{}", address.domain);
             if let Some(id) = sqlx::query_scalar::<_, i64>("SELECT id FROM mailing_lists WHERE address = ? AND enabled = 1").bind(&base).fetch_optional(&app.db).await? {
+                let role = match (role, tag) {
+                    (Role::Bounces, Some(tag)) => bounce_member(app, id, tag).await?.map_or(Role::Bounces, Role::MemberBounces),
+                    _ => role,
+                };
                 return Ok(Some(Target::List { list_id: id, role }));
             }
         }
     }
     Ok(None)
+}
+
+fn bounce_tag(secret: &[u8], list_id: i64, member_id: i64) -> String {
+    let mac = hmac_sha256(secret, format!("bounces:{list_id}:{member_id}").as_bytes());
+    format!("{member_id}.{}", &hex::encode(mac)[..20])
+}
+
+/// The member a VERP bounce tag stands for, if the tag is genuine.
+async fn bounce_member(app: &App, list_id: i64, tag: &str) -> sqlx::Result<Option<i64>> {
+    let Some(member_id) = tag.split_once('.').and_then(|(id, _)| id.parse::<i64>().ok()) else { return Ok(None) };
+    let secret = crate::db::get_or_create_secret(&app.db, "lists.secret").await?;
+    Ok(crate::util::ct_eq(bounce_tag(secret.as_bytes(), list_id, member_id).as_bytes(), tag.to_ascii_lowercase().as_bytes()).then_some(member_id))
 }
 
 /// Whether an address is taken by a list (or one of its special addresses).
@@ -272,10 +302,12 @@ async fn distribute(app: &App, list: &List, raw: &[u8]) -> anyhow::Result<usize>
     ));
     let secret = crate::db::get_or_create_secret(&app.db, "lists.secret").await?;
     let base = app.cfg.public_url();
-    let bounces = list.special("bounces");
     let mut sent = 0;
     for member in members(app, list.id).await? {
         let token = unsubscribe_token(secret.as_bytes(), &member);
+        // Each copy carries its own return address, so a report about it can only be about
+        // this member: nobody can report someone else's address as failing.
+        let bounces = format!("{}-bounces+{}@{}", list.local(), bounce_tag(secret.as_bytes(), list.id, member.id), list.domain());
         let message = [
             extra.as_bytes(),
             format!(
@@ -402,7 +434,8 @@ fn author(raw: &[u8], envelope: &str) -> String {
 }
 
 /// Handles mail to one of a list's addresses.
-pub async fn receive(app: &App, list_id: i64, role: Role, envelope_sender: &str, raw: &[u8], junk: bool) -> anyhow::Result<()> {
+pub async fn receive(app: &App, list_id: i64, role: Role, sender: Sender<'_>, raw: &[u8], junk: bool) -> anyhow::Result<()> {
+    let envelope_sender = sender.envelope;
     let Some(list) = load(app, list_id).await? else { return Ok(()) };
     match role {
         Role::Post => {
@@ -411,16 +444,23 @@ pub async fn receive(app: &App, list_id: i64, role: Role, envelope_sender: &str,
                 return Ok(());
             }
             let from = author(raw, envelope_sender);
-            let membership: Option<String> = sqlx::query_scalar("SELECT role FROM list_members WHERE list_id = ? AND email IN (?, ?)")
-                .bind(list.id)
-                .bind(&from)
-                .bind(envelope_sender.to_ascii_lowercase())
-                .fetch_optional(&app.db)
-                .await?;
+            // Only authenticated addresses count: anyone can write a member's address into From.
+            let role_of = |email: String| async move {
+                sqlx::query_scalar::<_, String>("SELECT role FROM list_members WHERE list_id = ? AND email = ?").bind(list.id).bind(email).fetch_optional(&app.db).await
+            };
+            let by_author = if sender.author_verified { role_of(from.clone()).await? } else { None };
+            let by_envelope = if sender.envelope_verified && !envelope_sender.is_empty() { role_of(envelope_sender.to_ascii_lowercase()).await? } else { None };
+            let membership = match (by_author, by_envelope) {
+                (Some(a), Some(b)) => Some(if a == "member" { b } else { a }),
+                (a, b) => a.or(b),
+            };
+            // Claims a member's address without proof: a moderator decides.
+            let claimed = membership.is_none() && role_of(from.clone()).await?.is_some();
             let moderator = membership.as_deref().is_some_and(|r| r != "member");
             let decision = match list.posting.as_str() {
                 _ if junk => Err("classified as spam"),
                 "anyone" => Ok(()),
+                _ if claimed => Err("the sender's address could not be verified"),
                 "members" if membership.is_some() => Ok(()),
                 "members" => Err("the sender is not a member"),
                 _ if moderator => Ok(()),
@@ -446,18 +486,25 @@ pub async fn receive(app: &App, list_id: i64, role: Role, envelope_sender: &str,
             Ok(())
         }
         Role::Bounces => {
-            // Count failed copies per member (RFC 3464 reports).
+            // Copies go out from per-member addresses; the bare one never gets genuine reports.
+            Ok(())
+        }
+        Role::MemberBounces(member_id) => {
+            // A failure report (RFC 3464) counts once against the member its address names,
+            // whatever recipients the report itself lists.
             let text = String::from_utf8_lossy(raw).to_ascii_lowercase();
             if !text.contains("action: failed") {
                 return Ok(());
             }
-            for line in text.lines().filter_map(|l| l.trim().strip_prefix("final-recipient:")) {
-                let address = line.split(';').nth(1).unwrap_or("").trim().trim_matches(['<', '>']).to_owned();
-                sqlx::query("UPDATE list_members SET bounces = bounces + 1 WHERE list_id = ? AND email = ?").bind(list.id).bind(&address).execute(&app.db).await?;
-                let removed = sqlx::query("DELETE FROM list_members WHERE list_id = ? AND email = ? AND bounces >= ? AND role = 'member'").bind(list.id).bind(&address).bind(MAX_BOUNCES).execute(&app.db).await?;
-                if removed.rows_affected() > 0 {
-                    crate::db::audit(&app.db, "system", "list.member_bounced_out", &list.address, "", &address).await;
-                }
+            sqlx::query("UPDATE list_members SET bounces = bounces + 1 WHERE list_id = ? AND id = ?").bind(list.id).bind(member_id).execute(&app.db).await?;
+            let removed: Option<String> = sqlx::query_scalar("DELETE FROM list_members WHERE list_id = ? AND id = ? AND bounces >= ? AND role = 'member' RETURNING email")
+                .bind(list.id)
+                .bind(member_id)
+                .bind(MAX_BOUNCES)
+                .fetch_optional(&app.db)
+                .await?;
+            if let Some(address) = removed {
+                crate::db::audit(&app.db, "system", "list.member_bounced_out", &list.address, "", &address).await;
             }
             Ok(())
         }

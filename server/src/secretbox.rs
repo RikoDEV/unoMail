@@ -2,7 +2,9 @@
 //! (identity SMTP passwords, LDAP bind password, OAuth client secret, webhook secrets).
 //!
 //! The key lives in its own file in the data directory, not in the database, so a leaked
-//! database dump or backup alone does not reveal those credentials.
+//! database dump or backup alone does not reveal those credentials. A second key derived from
+//! it keys the digests of short secrets (recovery codes) that would otherwise be guessed
+//! offline from a dump.
 
 use std::path::Path;
 
@@ -11,7 +13,7 @@ use ring::aead::{Aad, CHACHA20_POLY1305, LessSafeKey, NONCE_LEN, Nonce, UnboundK
 
 const PREFIX: &str = "v1:";
 
-pub struct SecretBox(LessSafeKey);
+pub struct SecretBox(LessSafeKey, Vec<u8>);
 
 impl SecretBox {
     /// Loads the key from `<data_dir>/secret.key`, creating it on first start.
@@ -36,7 +38,13 @@ impl SecretBox {
     }
 
     fn from_key(key: &[u8]) -> Self {
-        SecretBox(LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, key).expect("the key is 32 bytes")))
+        let mac_key = crate::util::hmac_sha256(key, b"unomail digest key");
+        SecretBox(LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, key).expect("the key is 32 bytes")), mac_key)
+    }
+
+    /// A keyed digest (HMAC-SHA256, hex) of `data`: comparable, but useless without the key.
+    pub fn digest(&self, data: &[u8]) -> String {
+        hex::encode(crate::util::hmac_sha256(&self.1, data))
     }
 
     /// Encrypts `plaintext`. An empty value stays empty so "no password" needs no special case.

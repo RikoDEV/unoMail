@@ -64,13 +64,22 @@ function sameSite(a: string, b: string): boolean {
   return x === y || x.endsWith(`.${y}`) || y.endsWith(`.${x}`);
 }
 
+/** `value` percent-decoded, or as it is when its encoding is broken (hostile links often are). */
+function decodeOr(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 /** Why a link deserves a second look before it is followed, or null. */
 export function linkWarning(href: string, text: string): string | null {
   const url = hostOf(href);
   if (!url || url.protocol === 'mailto:') return null;
   const host = url.hostname.toLowerCase();
   if (url.username || url.password) {
-    return t('The address hides its real destination: it goes to {{host}}, not to “{{shown}}”.', { host, shown: decodeURIComponent(url.username) });
+    return t('The address hides its real destination: it goes to {{host}}, not to “{{shown}}”.', { host, shown: decodeOr(url.username) });
   }
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[')) {
     return t('It goes to a bare numeric address ({{host}}) instead of a named website.', { host });

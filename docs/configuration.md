@@ -33,7 +33,7 @@ Everything is configured through environment variables; the full list with defau
 | `UNOMAIL_PUBLIC_URL` | `https://<hostname>` | Address users reach the web interface at (used for the single sign-on redirect) |
 | `UNOMAIL_ALLOW_PRIVATE_DESTINATIONS` | `false` | Lets identity SMTP servers, the image proxy and the identity provider be on private addresses or plain HTTP. For tests and closed networks only |
 | `UNOMAIL_SIEVE_PORT` | `4190` | ManageSieve (STARTTLS); `0` turns it off |
-| `UNOMAIL_LMTP_PORT` | `0` (off) | LMTP for a mail server in front of this one; only clients on private networks or the SMTP allow list may connect |
+| `UNOMAIL_LMTP_PORT` | `0` (off) | LMTP for a mail server in front of this one; only loopback, `UNOMAIL_TRUSTED_NETWORKS` or the SMTP allow list may connect, since LMTP mail skips SPF, DKIM and DMARC |
 | `UNOMAIL_MILTERS`, `UNOMAIL_MILTER_FAIL_OPEN` | –, `false` | Content filters speaking the milter protocol (`host:port,...`), run on incoming mail in order; unreachable ones defer mail unless fail-open |
 | `UNOMAIL_ARC_TRUSTED_SEALERS` | Google, Microsoft, Yahoo, Apple, Fastmail, Zoho, Proton | Domains whose ARC seal may override a failed DMARC check (mailing lists, forwarders) |
 | `UNOMAIL_S3_BUCKET`, `UNOMAIL_S3_ENDPOINT`, `UNOMAIL_S3_REGION`, `UNOMAIL_S3_ACCESS_KEY`, `UNOMAIL_S3_SECRET_KEY`, `UNOMAIL_S3_PREFIX`, `UNOMAIL_S3_PATH_STYLE` | – | Keep message contents in an S3-compatible bucket instead of `<data>/blobs` |

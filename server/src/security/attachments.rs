@@ -1,10 +1,13 @@
 //! Attachment policy: messages carrying programs (`.exe`, `.js`, `.scr`, ...) are refused, the
 //! way the large mail providers do it. The check works on file names, which is what decides
-//! how the recipient's computer opens a file; it looks into attached messages and into the
-//! file list of ZIP archives, which costs nothing to read. Other archive formats and
+//! how the recipient's computer opens a file; it looks into attached messages, into the file
+//! list of ZIP archives and into ZIP archives inside those. Other archive formats and
 //! password-protected contents are left to the virus scanner.
+//!
+//! Whatever is too deep or too large to look at is refused rather than let through: an
+//! attacker would otherwise only need to hide the program one level further down.
 
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 use mail_parser::{Message, MessageParser, MimeHeaders, PartType};
 
@@ -17,10 +20,12 @@ const BLOCKED: &[&str] = &[
     "sct", "shb", "sys", "vb", "vbe", "vbs", "vxd", "ws", "wsc", "wsf", "wsh", "xll",
 ];
 
-/// How deep attached messages are followed (each level can hold more attachments).
+/// How deep attached messages and archives inside archives are followed.
 const MAX_DEPTH: usize = 8;
-/// ZIP entries looked at per archive; an archive with more is judged by the first ones.
+/// ZIP entries per archive; an archive with more is refused.
 const MAX_ZIP_ENTRIES: usize = 10_000;
+/// Bytes unpacked from nested archives per message, against archive bombs.
+const MAX_UNPACKED: u64 = 64 * 1024 * 1024;
 
 /// Characters that change how a name is displayed: "invoice\u{202e}fdp.exe" reads as
 /// "invoiceexe.pdf".
@@ -49,13 +54,44 @@ fn is_zip(name: Option<&str>, content_type: Option<(&str, Option<&str>)>, data: 
         || content_type.is_some_and(|(kind, sub)| kind.eq_ignore_ascii_case("application") && sub.is_some_and(|s| s.eq_ignore_ascii_case("zip") || s.eq_ignore_ascii_case("x-zip-compressed")))
 }
 
-/// Names inside a ZIP archive that would be refused as attachments.
-fn blocked_in_zip(data: &[u8]) -> Option<String> {
-    let archive = zip::ZipArchive::new(Cursor::new(data)).ok()?;
-    archive.file_names().take(MAX_ZIP_ENTRIES).filter_map(Result::ok).find(|name| is_blocked_name(name)).map(|name| name.into_owned())
+/// Names inside a ZIP archive (and the archives in it) that would be refused as attachments.
+fn blocked_in_zip(data: &[u8], depth: usize, budget: &mut u64) -> Option<String> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(data)).ok()?;
+    if archive.len() > MAX_ZIP_ENTRIES {
+        return Some(format!("an archive of more than {MAX_ZIP_ENTRIES} files"));
+    }
+    if let Some(name) = archive.file_names().filter_map(Result::ok).find(|name| is_blocked_name(name)) {
+        return Some(name.into_owned());
+    }
+    for index in 0..archive.len() {
+        let Ok(mut entry) = archive.by_index(index) else { continue };
+        let Ok(name) = entry.name().map(|name| name.into_owned()) else { continue };
+        if !name.to_ascii_lowercase().ends_with(".zip") {
+            continue;
+        }
+        if depth >= MAX_DEPTH {
+            return Some(format!("{name}, archives nested too deeply"));
+        }
+        if entry.size() > *budget {
+            return Some(format!("{name}, too large to unpack"));
+        }
+        let mut inner = Vec::with_capacity(entry.size() as usize);
+        // The declared size can lie; never read past what is left of the budget.
+        if (&mut entry).take(*budget + 1).read_to_end(&mut inner).is_err() {
+            continue;
+        }
+        if inner.len() as u64 > *budget {
+            return Some(format!("{name}, too large to unpack"));
+        }
+        *budget -= inner.len() as u64;
+        if let Some(found) = blocked_in_zip(&inner, depth + 1, budget) {
+            return Some(format!("{found} in {name}"));
+        }
+    }
+    None
 }
 
-fn find_blocked(message: &Message<'_>, depth: usize) -> Option<String> {
+fn find_blocked(message: &Message<'_>, depth: usize, budget: &mut u64) -> Option<String> {
     for part in &message.parts {
         let name = part.attachment_name();
         if let Some(name) = name
@@ -64,8 +100,9 @@ fn find_blocked(message: &Message<'_>, depth: usize) -> Option<String> {
             return Some(name.to_owned());
         }
         match &part.body {
-            PartType::Message(inner) if depth < MAX_DEPTH => {
-                if let Some(found) = find_blocked(inner, depth + 1) {
+            PartType::Message(_) if depth >= MAX_DEPTH => return Some("attached messages nested too deeply".into()),
+            PartType::Message(inner) => {
+                if let Some(found) = find_blocked(inner, depth + 1, budget) {
                     return Some(found);
                 }
             }
@@ -73,7 +110,7 @@ fn find_blocked(message: &Message<'_>, depth: usize) -> Option<String> {
                 let content_type = part.content_type().map(|ct| (ct.ctype(), ct.subtype()));
                 let data = part.contents();
                 if is_zip(name, content_type, data)
-                    && let Some(inner) = blocked_in_zip(data)
+                    && let Some(inner) = blocked_in_zip(data, depth, budget)
                 {
                     return Some(format!("{} in {}", inner, name.unwrap_or("an archive")));
                 }
@@ -87,7 +124,7 @@ fn find_blocked(message: &Message<'_>, depth: usize) -> Option<String> {
 /// The first attachment (or archive member) of a raw message that runs code when opened.
 pub fn blocked_attachment(raw: &[u8]) -> Option<String> {
     let message = MessageParser::default().parse(raw)?;
-    find_blocked(&message, 0).map(|name| crate::util::sanitize_line(&name).chars().take(120).collect())
+    find_blocked(&message, 0, &mut MAX_UNPACKED.clone()).map(|name| crate::util::sanitize_line(&name).chars().take(120).collect())
 }
 
 /// The SMTP reply refusing a message that carries a program.
@@ -148,6 +185,44 @@ mod tests {
         );
         assert_eq!(blocked_attachment(forwarded.as_bytes()).as_deref(), Some("tool.exe"));
         assert_eq!(blocked_attachment(b"From: a@example.org\r\nSubject: plain\r\n\r\nno attachments\r\n"), None);
+    }
+
+    fn zip_with(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, data) in entries {
+            out.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            out.write_all(data).unwrap();
+        }
+        out.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn programs_cannot_hide_past_the_limits() {
+        // In an archive inside an archive.
+        let inner = zip_of(&["setup.exe"]);
+        let outer = zip_with(&[("readme.txt", b"hi"), ("more.zip", &inner)]);
+        assert_eq!(blocked_attachment(&message_with("files.zip", "application/zip", &outer)).as_deref(), Some("setup.exe in more.zip in files.zip"));
+        let harmless = zip_with(&[("more.zip", &zip_of(&["a.jpg"]))]);
+        assert_eq!(blocked_attachment(&message_with("files.zip", "application/zip", &harmless)), None);
+
+        // Behind more entries than are read.
+        let names: Vec<String> = (0..=MAX_ZIP_ENTRIES).map(|i| format!("{i}.txt")).collect();
+        let crowded = zip_of(&names.iter().map(String::as_str).collect::<Vec<_>>());
+        assert!(blocked_attachment(&message_with("many.zip", "application/zip", &crowded)).is_some());
+
+        // Deeper than archives are followed.
+        let mut nested = zip_of(&["a.txt"]);
+        for _ in 0..=MAX_DEPTH {
+            nested = zip_with(&[("next.zip", &nested)]);
+        }
+        assert!(blocked_attachment(&message_with("deep.zip", "application/zip", &nested)).unwrap().contains("nested too deeply"));
+
+        // Deeper than attached messages are followed.
+        let mut raw = String::from_utf8(message_with("a.txt", "text/plain", b"x")).unwrap();
+        for _ in 0..=MAX_DEPTH {
+            raw = format!("From: a@example.org\r\nSubject: Fwd\r\nMIME-Version: 1.0\r\nContent-Type: message/rfc822\r\n\r\n{raw}");
+        }
+        assert!(blocked_attachment(raw.as_bytes()).is_some());
     }
 
     #[test]

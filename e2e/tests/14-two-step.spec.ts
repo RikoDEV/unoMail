@@ -54,6 +54,7 @@ test.describe('2-step verification and app passwords', () => {
     await expect(setup.getByRole('img', { name: 'QR code for the authenticator app' })).toBeVisible();
     const secret = (await setup.getByTestId('totp-secret').textContent())!.replace(/\s/g, '');
     expect(secret).toMatch(/^[A-Z2-7]{32}$/);
+    await setup.getByLabel('Your password').fill(USER_PASSWORD);
     await setup.getByLabel('Code from the app').fill('000000');
     await setup.getByRole('button', { name: 'Turn on' }).click();
     await expect(setup.getByRole('alert')).toContainText('not correct');

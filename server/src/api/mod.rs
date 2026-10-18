@@ -154,10 +154,18 @@ pub enum LiveAuth {
 }
 
 impl LiveAuth {
+    /// The credential, as recorded with what it schedules (see `email_submissions.origin`).
+    pub fn origin(&self) -> String {
+        match self {
+            Self::Session(hash) => format!("session:{hash}"),
+            Self::Credential(grant, _) => grant.origin(),
+        }
+    }
+
     pub async fn account(&self, state: &AppState) -> Option<Account> {
         match self {
             Self::Session(hash) => Account::by_session(&state.db, hash).await.ok().flatten().map(|(account, _)| account),
-            Self::Credential(grant, id) if grant.valid(&state.db).await => Account::by_id(&state.db, *id).await.ok().flatten(),
+            Self::Credential(grant, id) if grant.valid(state).await => Account::by_id(&state.db, *id).await.ok().flatten(),
             _ => None,
         }
     }
@@ -347,9 +355,15 @@ async fn request_limits(mut request: Request, next: Next) -> Response {
     // Only body-heavy endpoints share the small pool; /jmap/api has its own per-account slot.
     static LARGE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(8);
     let Ok(_request) = REQUESTS.try_acquire() else { return StatusCode::TOO_MANY_REQUESTS.into_response() };
-    let large = request.uri().path().starts_with("/jmap/upload/") || request.uri().path().ends_with("/import");
+    // Mailbox imports take bodies of up to 256 MiB, held in memory while they are stored.
+    static IMPORTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+    let import = request.uri().path().ends_with("/import");
+    let large = request.uri().path().starts_with("/jmap/upload/") || import;
     let _large = if large {
         match LARGE.try_acquire() { Ok(permit) => Some(permit), Err(_) => return StatusCode::TOO_MANY_REQUESTS.into_response() }
+    } else { None };
+    let _import = if import {
+        match IMPORTS.try_acquire() { Ok(permit) => Some(permit), Err(_) => return StatusCode::TOO_MANY_REQUESTS.into_response() }
     } else { None };
     let body = std::mem::replace(request.body_mut(), axum::body::Body::empty());
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
@@ -558,18 +572,35 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
+/// Whether `host` is a name this server answers for.
+async fn served_name(state: &AppState, host: &str) -> bool {
+    if host.eq_ignore_ascii_case(&state.cfg.hostname) {
+        return true;
+    }
+    let parent = host.split_once('.').map(|(_, rest)| rest);
+    for domain in std::iter::once(host).chain(parent) {
+        if crate::smtp::delivery::is_local_domain(state, domain).await.unwrap_or(false) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Redirects everything except ACME challenges to HTTPS.
 pub fn redirect_router(state: AppState) -> Router {
     async fn redirect(State(state): State<AppState>, request: Request) -> Response {
-        let host = request
+        let claimed = request
             .headers()
             .get(header::HOST)
             .and_then(|h| h.to_str().ok())
-            .map(|h| h.rsplit_once(':').map_or(h, |(name, _)| name))
-            .filter(|h| crate::util::is_valid_domain(&h.to_ascii_lowercase()))
-            .map(str::to_owned)
-            // Never build a redirect from an attacker-controlled Host header we cannot validate.
-            .unwrap_or_else(|| state.cfg.hostname.clone());
+            .map(|h| h.rsplit_once(':').map_or(h, |(name, _)| name).to_ascii_lowercase())
+            .filter(|h| crate::util::is_valid_domain(h));
+        // The Host header is the client's to write: redirect only to names this server answers
+        // for (its own, a hosted domain or a name under one), never to someone else's site.
+        let host = match claimed {
+            Some(host) if served_name(&state, &host).await => host,
+            _ => state.cfg.hostname.clone(),
+        };
         let port = if state.cfg.public_https_port == 443 { String::new() } else { format!(":{}", state.cfg.public_https_port) };
         let path = request.uri().path_and_query().map_or("/", |p| p.as_str());
         match HeaderValue::from_str(&format!("https://{host}{port}{path}")) {

@@ -209,16 +209,34 @@ pub struct Grant {
     /// `None` for a token from the identity provider, which only it could revoke.
     credential: Option<Credential>,
     password_hash: String,
+    /// The access token of a single sign-on login, checked again with the provider.
+    token: Option<String>,
     checked: std::time::Instant,
 }
 
 impl Grant {
     pub fn new(account: &Account, protocol: Protocol, credential: Option<Credential>) -> Grant {
-        Grant { account_id: account.id, protocol, credential, password_hash: account.password_hash.clone(), checked: std::time::Instant::now() }
+        Grant { account_id: account.id, protocol, credential, password_hash: account.password_hash.clone(), token: None, checked: std::time::Instant::now() }
+    }
+
+    /// A single sign-on login with `token`, which must stay valid at the provider.
+    pub fn with_token(mut self, token: String) -> Grant {
+        self.token = Some(token);
+        self
+    }
+
+    /// The credential, as recorded with what it schedules (see `email_submissions.origin`).
+    pub fn origin(&self) -> String {
+        match self.credential {
+            Some(Credential::Password) => "password".into(),
+            Some(Credential::AppPassword(id)) => format!("app:{id}"),
+            None => "oauth".into(),
+        }
     }
 
     /// True while the sign-in holds. Failure to verify authorization closes the connection.
-    pub async fn valid(&self, db: &SqlitePool) -> bool {
+    pub async fn valid(&self, app: &crate::app::App) -> bool {
+        let db = &app.db;
         let account = sqlx::query_as::<_, Account>(sqlx::AssertSqlSafe(format!("{ACCOUNT_COLUMNS} JOIN domains d ON d.id = a.domain_id WHERE a.id = ? AND d.enabled = 1")))
             .bind(self.account_id)
             .fetch_optional(db)
@@ -241,17 +259,21 @@ impl Grant {
                 account.password_hash == self.password_hash
                     && (self.protocol == Protocol::Web || crate::twofactor::factors(db, account.id).await.is_ok_and(|f| !f.enabled()))
             }
-            None => true,
+            // The provider's word, asked again (or a token login nobody can check: refused).
+            None => match &self.token {
+                Some(token) => crate::oauth::token_still_valid(app, &account.email, token).await,
+                None => false,
+            },
         }
     }
 
     /// [`Grant::valid`], checked at most once per [`RECHECK_INTERVAL`].
-    pub async fn recheck(&mut self, db: &SqlitePool) -> bool {
+    pub async fn recheck(&mut self, app: &crate::app::App) -> bool {
         if self.checked.elapsed() < RECHECK_INTERVAL {
             return true;
         }
         self.checked = std::time::Instant::now();
-        self.valid(db).await
+        self.valid(app).await
     }
 }
 

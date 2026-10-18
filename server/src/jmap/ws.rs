@@ -79,7 +79,7 @@ async fn session(state: AppState, user: JmapUser, mut socket: WebSocket) {
                 };
                 let id = object.get("id").cloned().unwrap_or(Value::Null);
                 let reply = match object["@type"].as_str() {
-                    Some("Request") => match process(&state, &account, ip, &object).await {
+                    Some("Request") => match process(&state, &account, ip, user.auth.origin(), &object).await {
                         Ok(mut response) => {
                             response["@type"] = json!("Response");
                             if !id.is_null() {

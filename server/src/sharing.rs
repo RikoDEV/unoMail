@@ -34,14 +34,16 @@ pub fn modify_rights(current: &str, change: &str) -> Option<String> {
 }
 
 /// The rights `account` holds on `mailbox`: everything for the owner, otherwise the union of
-/// the entries naming the account and, within the owner's domain, `anyone`.
+/// the entries naming the account and, within the owner's domain, `anyone`. A disabled owner
+/// (or domain) shares nothing: their mail is out of reach for everyone while it stays off.
 pub async fn rights(db: &SqlitePool, account: &Account, mailbox: &Mailbox) -> sqlx::Result<String> {
     if mailbox.account_id == account.id {
         return Ok(ALL_RIGHTS.to_owned());
     }
     let granted: Vec<String> = sqlx::query_scalar(
         "SELECT rights FROM mailbox_acl WHERE mailbox_id = ?1
-           AND (grantee_id = ?2 OR (grantee_id = 0 AND (SELECT domain_id FROM accounts WHERE id = ?3) = ?4))",
+           AND (grantee_id = ?2 OR (grantee_id = 0 AND (SELECT domain_id FROM accounts WHERE id = ?3) = ?4))
+           AND EXISTS (SELECT 1 FROM accounts o JOIN domains d ON d.id = o.domain_id WHERE o.id = ?3 AND o.enabled = 1 AND d.enabled = 1)",
     )
     .bind(mailbox.id)
     .bind(account.id)
@@ -85,7 +87,7 @@ pub async fn shared_with(db: &SqlitePool, account: &Account) -> sqlx::Result<Vec
     let ids: Vec<(i64, String)> = sqlx::query_as(
         "SELECT DISTINCT m.id, o.email FROM mailbox_acl a
            JOIN mailboxes m ON m.id = a.mailbox_id JOIN accounts o ON o.id = m.account_id
-         WHERE m.account_id != ?1 AND o.enabled = 1 AND (a.grantee_id = ?1 OR (a.grantee_id = 0 AND o.domain_id = ?2))
+         WHERE m.account_id != ?1 AND o.enabled = 1 AND (SELECT enabled FROM domains WHERE id = o.domain_id) = 1 AND (a.grantee_id = ?1 OR (a.grantee_id = 0 AND o.domain_id = ?2))
          ORDER BY o.email, m.name",
     )
     .bind(account.id)

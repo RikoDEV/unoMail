@@ -64,6 +64,15 @@ const ICONS: Record<string, ReactElement> = { inbox: <Inbox />, drafts: <Drafts 
 const EMPTY_DRAFT: Draft = { to: '', cc: '', bcc: '', subject: '', html: '', attachments: [] };
 
 
+/** A label name from the address bar; a broken encoding is shown as typed rather than crashing the page. */
+function decodeLabel(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function prefixed(subject: string, prefix: string): string {
   return subject.toLowerCase().startsWith(prefix.toLowerCase()) ? subject : `${prefix} ${subject}`;
 }
@@ -158,7 +167,7 @@ export default function MailPage() {
 
   const mailbox = useMemo(() => mailboxes.find((m) => m.id === mailboxSlug) ?? mailboxes.find((m) => m.role === (mailboxSlug || 'inbox')), [mailboxes, mailboxSlug]);
   // "label:<name>" in the URL shows every conversation carrying that label.
-  const label = mailboxSlug?.startsWith('label:') ? decodeURIComponent(mailboxSlug.slice(6)) : null;
+  const label = mailboxSlug?.startsWith('label:') ? decodeLabel(mailboxSlug.slice(6)) : null;
   const unreadInbox = mailboxes.find((m) => m.role === 'inbox')?.unreadEmails ?? 0;
   useTitle(
     thread ? thread[0]?.subject || t('(no subject)') : null,

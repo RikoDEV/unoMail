@@ -100,12 +100,13 @@ pub async fn set(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodResu
                 } else {
                     on_success.clone()
                 };
-                let id: i64 = sqlx::query_scalar("INSERT INTO email_submissions (account_id, message_id, send_at, on_success, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id")
+                let id: i64 = sqlx::query_scalar("INSERT INTO email_submissions (account_id, message_id, send_at, on_success, created_at, origin) VALUES (?, ?, ?, ?, ?, ?) RETURNING id")
                     .bind(ctx.account.id)
                     .bind(message_id)
                     .bind(at)
                     .bind(stored.to_string())
                     .bind(now())
+                    .bind(&ctx.origin)
                     .fetch_one(&ctx.app.db)
                     .await?;
                 set_scheduled(ctx, message_id, true).await;
@@ -237,6 +238,34 @@ pub async fn cancel_pending(db: impl sqlx::SqliteExecutor<'_>, account_id: i64) 
     Ok(())
 }
 
+/// Calls off what revoked credentials scheduled: other browser sessions than `kept_session`
+/// (a token hash), and also the password and all app passwords when they were replaced. A
+/// thief who scheduled mail and is then locked out must not still have it sent.
+pub async fn cancel_revoked(db: impl sqlx::SqliteExecutor<'_>, account_id: i64, kept_session: &str, password: bool, app_passwords: bool) -> sqlx::Result<()> {
+    sqlx::query(
+        "UPDATE email_submissions SET undo_status = 'canceled', error = 'canceled when the credential that scheduled it was revoked'
+         WHERE account_id = ?1 AND undo_status = 'pending'
+           AND ((origin LIKE 'session:%' AND origin != 'session:' || ?2) OR (?3 AND origin IN ('password', 'oauth')) OR (?4 AND origin LIKE 'app:%'))",
+    )
+    .bind(account_id)
+    .bind(kept_session)
+    .bind(password)
+    .bind(app_passwords)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Calls off what one app password scheduled, when it is revoked.
+pub async fn cancel_from_app_password(db: impl sqlx::SqliteExecutor<'_>, account_id: i64, app_password_id: i64) -> sqlx::Result<()> {
+    sqlx::query("UPDATE email_submissions SET undo_status = 'canceled', error = 'canceled when the app password that scheduled it was revoked' WHERE account_id = ? AND undo_status = 'pending' AND origin = ?")
+        .bind(account_id)
+        .bind(format!("app:{app_password_id}"))
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
 pub async fn release_due(app: &AppState) {
     let due: Vec<(i64, i64, i64, String)> = sqlx::query_as("SELECT id, account_id, message_id, on_success FROM email_submissions WHERE undo_status = 'pending' AND send_at <= ? ORDER BY send_at LIMIT 50")
         .bind(now())
@@ -262,7 +291,7 @@ pub async fn release_due(app: &AppState) {
             continue;
         }
         let Ok(Some(account)) = Account::by_id(&app.db, account).await else { continue };
-        let ctx = Context { app, account: &account, ip: std::net::IpAddr::from([127, 0, 0, 1]), created: Default::default() };
+        let ctx = Context { app, account: &account, ip: std::net::IpAddr::from([127, 0, 0, 1]), origin: String::new(), created: Default::default() };
         set_scheduled(&ctx, message_id, false).await;
         match email::send_email(&ctx, message_id).await {
             Ok(()) => {

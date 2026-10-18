@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { downloadUrl, formatBytes, post, errorText } from '../api';
 import { blockSender, CATEGORIES, type CategoryName, listBlockedSenders, unblockSender } from './extra';
 import { type EmailFull, setCategory } from './jmapClient';
+import type { Security } from './Sender';
 
 import { t } from '../i18n';
 const MAX_ORIGINAL_BYTES = 2 * 1024 * 1024;
@@ -36,15 +37,14 @@ export function parseHeaders(raw: string): [string, string][] {
   return headers;
 }
 
-/** The verdicts of the receiving server's sender checks, from Authentication-Results. */
-export function authenticationResults(headers: [string, string][]): { check: string; result: string }[] {
-  const value = headers.find(([name]) => name.toLowerCase() === 'authentication-results')?.[1] ?? '';
-  const found: { check: string; result: string }[] = [];
-  for (const check of ['spf', 'dkim', 'dmarc']) {
-    const match = value.match(new RegExp(`\\b${check}=([a-z]+)`, 'i'));
-    if (match) found.push({ check: check.toUpperCase(), result: match[1].toLowerCase() });
-  }
-  return found;
+/**
+ * The verdicts of this server's sender checks, as it worked them out on delivery. Not read
+ * from the Authentication-Results headers: anyone can write those, so the first one may
+ * well be the sender's own.
+ */
+export function authenticationResults(security: Security | null | undefined): { check: string; result: string }[] {
+  if (!security) return [];
+  return (['spf', 'dkim', 'dmarc'] as const).flatMap((check) => (security[check] ? [{ check: check.toUpperCase(), result: security[check].toLowerCase() }] : []));
 }
 
 function OriginalDialog({ email, accountId, onClose }: { email: EmailFull; accountId: string; onClose: () => void }) {
@@ -74,7 +74,7 @@ function OriginalDialog({ email, accountId, onClose }: { email: EmailFull; accou
 
   const headers = raw ? parseHeaders(raw.text) : [];
   const header = (name: string) => headers.find(([key]) => key.toLowerCase() === name)?.[1] ?? '';
-  const checks = authenticationResults(headers);
+  const checks = authenticationResults(email.security);
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="lg">
       <DialogTitle>{t('Original message')}</DialogTitle>

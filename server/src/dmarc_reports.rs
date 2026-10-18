@@ -137,6 +137,31 @@ pub async fn ingest(app: &App, data: &[u8]) -> Result<Ingested, String> {
     store(app, &report).await
 }
 
+/// How long received reports (DMARC and TLS) are kept.
+const RETENTION_DAYS: i64 = 400;
+/// Report messages accepted per sending domain and day: the big providers send one per domain
+/// a day, so this is generous, but it bounds what a single sender can add.
+const REPORTS_PER_SENDER_PER_DAY: u32 = 100;
+
+static SENDERS: std::sync::LazyLock<parking_lot::Mutex<std::collections::HashMap<String, (i64, u32)>>> = std::sync::LazyLock::new(Default::default);
+
+/// Whether a report message from `author_domain` (already authenticated) may be stored today.
+pub fn report_allowed(author_domain: &str) -> bool {
+    let today = crate::util::now() / 86400;
+    let mut senders = SENDERS.lock();
+    senders.retain(|_, (day, _)| *day == today);
+    let entry = senders.entry(author_domain.to_ascii_lowercase()).or_insert((today, 0));
+    entry.1 += 1;
+    entry.1 <= REPORTS_PER_SENDER_PER_DAY
+}
+
+/// Drops received reports past their retention.
+pub async fn prune(app: &App) {
+    let cutoff = crate::util::now() - RETENTION_DAYS * 86400;
+    let _ = sqlx::query("DELETE FROM dmarc_reports WHERE received_at < ?").bind(cutoff).execute(&app.db).await;
+    let _ = sqlx::query("DELETE FROM tls_reports WHERE received_at < ?").bind(cutoff).execute(&app.db).await;
+}
+
 /// Called for every accepted inbound message: stores it when it is a DMARC aggregate report.
 pub async fn ingest_mail(app: &App, raw: &[u8]) {
     // Cheap pre-filter on the headers; aggregate reports carry "Report Domain:" in the subject.
@@ -267,6 +292,15 @@ pub(crate) mod tests {
     use std::io::Write;
 
     use super::*;
+
+    #[test]
+    fn one_sender_cannot_flood_the_report_tables() {
+        for _ in 0..REPORTS_PER_SENDER_PER_DAY {
+            assert!(report_allowed("flood.example"));
+        }
+        assert!(!report_allowed("FLOOD.example"), "the daily allowance is used up");
+        assert!(report_allowed("google.com"), "others are not affected");
+    }
 
     pub const SAMPLE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <feedback>

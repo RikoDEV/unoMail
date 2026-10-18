@@ -454,6 +454,16 @@ impl Store {
         internal_date: Option<i64>,
         keywords: &[String],
     ) -> Result<Appended, StoreError> {
+        // Refuse before writing: a full account would otherwise leave a blob on disk with each
+        // try, until the collector gets to it. The transaction below checks again.
+        let fits: Option<bool> = sqlx::query_scalar("SELECT quota_bytes = 0 OR used_bytes + ? <= quota_bytes FROM accounts WHERE id = ?")
+            .bind(raw.len() as i64)
+            .bind(account_id)
+            .fetch_optional(&self.db)
+            .await?;
+        if fits == Some(false) {
+            return Err(StoreError::QuotaExceeded);
+        }
         let hash = self.put_blob(raw).await?;
         // Parsing and text extraction happen before the write turn is taken.
         let parsed = parse_metadata(raw);
@@ -1029,9 +1039,12 @@ In-Reply-To: <one@example.com>\r\n\r\nReply\r\n";
         let inbox = store.mailbox_by_name(account, "INBOX").await.unwrap().unwrap();
         let big = vec![b'x'; 600];
         store.append(account, inbox.id, &big, Flags::default(), None).await.unwrap();
-        let err = store.append(account, inbox.id, &big, Flags::default(), None).await.unwrap_err();
+        let other = vec![b'y'; 600];
+        let err = store.append(account, inbox.id, &other, Flags::default(), None).await.unwrap_err();
         assert!(matches!(err, StoreError::QuotaExceeded));
         assert_eq!(store.messages_in(inbox.id).await.unwrap().len(), 1);
+        let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM blobs WHERE hash = ?").bind(sha256_hex(&other)).fetch_one(&store.db).await.unwrap();
+        assert_eq!(left, 0, "a refused message leaves nothing on disk");
     }
 
     #[tokio::test]

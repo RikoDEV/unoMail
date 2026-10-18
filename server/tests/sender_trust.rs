@@ -13,8 +13,17 @@ use common::{Api, Client, TestEnv, message};
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-/// Stores a raw message in the inbox as an import would, and returns its JMAP id.
-async fn import(env: &TestEnv, api: &Api, email: &str, raw: &str) -> String {
+/// Stores a raw message in the inbox as delivery would, verdict headers and all, and returns
+/// its JMAP id. (Uploads cannot do this: the server's own verdicts are removed from them.)
+async fn import(env: &TestEnv, _api: &Api, email: &str, raw: &str) -> String {
+    let owner = unomail::auth::Account::by_email(&env.app.db, email).await.unwrap().unwrap();
+    let inbox = env.app.store.mailbox_by_role(owner.id, "inbox").await.unwrap().unwrap().id;
+    let stored = env.app.store.append(owner.id, inbox, raw.as_bytes(), Default::default(), None).await.unwrap();
+    format!("m{}", stored.id)
+}
+
+/// Uploads a raw message and adds it with `Email/import`, as a mail client would.
+async fn upload(api: &Api, email: &str, raw: &str, env: &TestEnv) -> String {
     let account = api.jmap_account().await;
     let owner = unomail::auth::Account::by_email(&env.app.db, email).await.unwrap().unwrap();
     let inbox = env.app.store.mailbox_by_role(owner.id, "inbox").await.unwrap().unwrap().id;
@@ -56,6 +65,10 @@ async fn the_reader_learns_how_a_message_was_authenticated() {
     let genuine = import(&env, &bob, "bob@example.org", &stored("dkim=pass header.d=partner.example header.s=s1; spf=pass smtp.mailfrom=bounces@mail.partner.example; dmarc=pass header.from=partner.example")).await;
     let seen = security(&bob, &genuine).await;
     assert_eq!(seen, json!({ "origin": "remote", "verdict": "verified", "spf": "pass", "dkim": "pass", "dmarc": "pass", "mailed_by": "mail.partner.example", "signed_by": ["partner.example"], "from_domain": "partner.example", "tls": true, "virus": null, "problems": [] }));
+
+    // The same message uploaded by a user carries no verdict of ours: anyone could write one.
+    let uploaded = upload(&bob, "bob@example.org", &stored("dkim=pass header.d=partner.example header.s=s1; spf=pass smtp.mailfrom=bounces@mail.partner.example; dmarc=pass header.from=partner.example"), &env).await;
+    assert_ne!(security(&bob, &uploaded).await["verdict"], "verified");
 
     let spoofed = import(&env, &bob, "bob@example.org", &stored("dkim=none; spf=fail smtp.mailfrom=anna@partner.example; dmarc=fail header.from=partner.example")).await;
     let seen = security(&bob, &spoofed).await;

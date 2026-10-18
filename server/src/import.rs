@@ -133,7 +133,10 @@ impl Progress {
                 return Ok(());
             }
         }
-        match self.app.store.append(self.account_id, mailbox, raw, flags, date).await {
+        // The account's own mail, brought over from elsewhere: kept whole, but without
+        // verdicts claiming to be this server's.
+        let raw = crate::security::admit_stored(&self.app, raw, false)?;
+        match self.app.store.append(self.account_id, mailbox, &raw, flags, date).await {
             Ok(appended) => {
                 if !keywords.is_empty() {
                     let _ = self.app.store.set_flags_and_keywords(self.account_id, appended.id, flags, keywords).await;

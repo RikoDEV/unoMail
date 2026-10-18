@@ -263,6 +263,7 @@ pub async fn change_password(State(state): State<AppState>, session: Session, Js
     if req.revoke_app_passwords {
         sqlx::query("DELETE FROM app_passwords WHERE account_id = ?").bind(session.account.id).execute(&mut *tx).await?;
     }
+    crate::jmap::submission::cancel_revoked(&mut *tx, session.account.id, &session.token_hash, true, req.revoke_app_passwords).await?;
     tx.commit().await?;
     session.audit(&state, "account.password_changed", &session.account.email, if req.revoke_app_passwords { "app passwords revoked" } else { "" }).await;
     Ok(Json(json!({ "ok": true })))
@@ -297,6 +298,7 @@ pub async fn revoke_other_sessions(State(state): State<AppState>, session: Sessi
         .execute(&state.db)
         .await?
         .rows_affected();
+    crate::jmap::submission::cancel_revoked(&state.db, session.account.id, &session.token_hash, false, false).await?;
     session.audit(&state, "sessions.revoked", &session.account.email, &revoked.to_string()).await;
     Ok(Json(json!({ "revoked": revoked })))
 }

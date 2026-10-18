@@ -274,3 +274,18 @@ async fn one_network_cannot_crowd_out_everybody_elses_sign_ins() {
     browser.peer = "203.0.113.78:40000".parse().unwrap();
     assert_eq!(browser.get("/api/auth/oauth/callback?error=access_denied").await.headers["location"], "/login?sso=1");
 }
+
+#[tokio::test]
+async fn token_sessions_end_when_the_provider_or_the_server_stops_vouching() {
+    use unomail::auth::{Account, Grant, Protocol};
+    let (env, admin, addr, _) = env_with_sso().await;
+    let bob = Account::by_email(&env.app.db, "bob@example.org").await.unwrap().unwrap();
+    let session = |token: &str| Grant::new(&bob, Protocol::Imap, None).with_token(token.into());
+    assert!(session("token-bob").valid(&env.app).await);
+    // Revoked (or never issued) at the provider: the open connection is closed too.
+    assert!(!session("token-forged").valid(&env.app).await);
+    assert!(!session("token-stranger").valid(&env.app).await, "a token for someone else");
+    // Single sign-on turned off here.
+    admin.put("/api/oauth", json!({ "enabled": false, "issuer": format!("http://{addr}"), "client_id": "unomail" })).await;
+    assert!(!session("token-bob").valid(&env.app).await);
+}

@@ -84,7 +84,7 @@ pub async fn notify(app: &App, original_sender: &str, recipient: &str, action: A
                 Target::Trap => {}
                 // A report about a list's copy: the list counts it against the member.
                 Target::List { list_id, role } => {
-                    if let Err(err) = crate::lists::receive(app, list_id, role, "", &report, false).await {
+                    if let Err(err) = crate::lists::receive(app, list_id, role, crate::lists::Sender { envelope: "", envelope_verified: false, author_verified: false }, &report, false).await {
                         tracing::warn!(error = ?err, "list could not process a delivery report");
                     }
                 }

@@ -98,13 +98,15 @@ impl Access {
 /// A shared calendar's columns, the owner's address, and whether it may be written.
 type SharedRow = (i64, i64, String, String, String, String, i64, String, i64);
 
-/// Every calendar the account can see: its own first, then those shared with it.
+/// Every calendar the account can see: its own first, then those shared with it by accounts
+/// that are not disabled.
 pub async fn accessible(db: &SqlitePool, account: &crate::auth::Account) -> sqlx::Result<Vec<Access>> {
     let mut out: Vec<Access> = list(db, account.id).await?.into_iter().map(|calendar| Access { calendar, owner: account.email.clone(), shared: false, writable: true }).collect();
     let rows: Vec<SharedRow> = sqlx::query_as(
         "SELECT c.id, c.account_id, c.slug, c.name, c.color, c.description, c.sync_token, a.email, s.writable
            FROM calendar_shares s JOIN calendars c ON c.id = s.calendar_id JOIN accounts a ON a.id = c.account_id
-          WHERE s.account_id = ? ORDER BY a.email, c.id",
+                JOIN domains d ON d.id = a.domain_id
+          WHERE s.account_id = ? AND a.enabled = 1 AND d.enabled = 1 ORDER BY a.email, c.id",
     )
     .bind(account.id)
     .fetch_all(db)

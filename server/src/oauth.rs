@@ -349,26 +349,7 @@ pub async fn authenticate_token(app: &App, user: &str, token: &str, ip: IpAddr, 
     };
     let Some(config) = active(app).await else { return fail().await };
 
-    let key = sha256_hex(token.as_bytes());
-    let cached = app.oauth.tokens.lock().get(&key).filter(|(_, at)| at.elapsed() < TOKEN_CACHE_TTL).map(|(email, _)| email.clone());
-    let email = match cached {
-        Some(email) => email,
-        None => match identify(app, &config, token).await {
-            Ok((_, email)) => {
-                if let Err(reason) = check_audience(app, &config, token).await {
-                    tracing::info!(reason, "token sign-in refused");
-                    return fail().await;
-                }
-                let mut tokens = app.oauth.tokens.lock();
-                tokens.retain(|_, (_, at)| at.elapsed() < TOKEN_CACHE_TTL);
-                if tokens.len() < MAX_PENDING {
-                    tokens.insert(key, (email.clone(), Instant::now()));
-                }
-                email
-            }
-            Err(_) => return fail().await,
-        },
-    };
+    let Some(email) = token_email(app, &config, token).await else { return fail().await };
     // A valid token for somebody else must not open this mailbox.
     if email != user {
         return fail().await;
@@ -380,6 +361,35 @@ pub async fn authenticate_token(app: &App, user: &str, token: &str, ip: IpAddr, 
     }
     app.limiter.forgive(&user, ip);
     Ok(account)
+}
+
+/// The address an access token stands for, if the identity provider still vouches for it and
+/// it was issued to this server. Answers are cached for [`TOKEN_CACHE_TTL`].
+async fn token_email(app: &App, config: &OauthConfig, token: &str) -> Option<String> {
+    let key = sha256_hex(token.as_bytes());
+    let cached = app.oauth.tokens.lock().get(&key).filter(|(_, at)| at.elapsed() < TOKEN_CACHE_TTL).map(|(email, _)| email.clone());
+    if cached.is_some() {
+        return cached;
+    }
+    let (_, email) = identify(app, config, token).await.ok()?;
+    if let Err(reason) = check_audience(app, config, token).await {
+        tracing::info!(reason, "token sign-in refused");
+        return None;
+    }
+    let mut tokens = app.oauth.tokens.lock();
+    tokens.retain(|_, (_, at)| at.elapsed() < TOKEN_CACHE_TTL);
+    if tokens.len() < MAX_PENDING {
+        tokens.insert(key, (email.clone(), Instant::now()));
+    }
+    Some(email)
+}
+
+/// Whether a connection signed in with `token` may stay open: single sign-on is still on and
+/// the provider still accepts the token for `email`. Revoking it there, or turning SSO off
+/// here, ends the session within a few minutes.
+pub async fn token_still_valid(app: &App, email: &str, token: &str) -> bool {
+    let Some(config) = active(app).await else { return false };
+    token_email(app, &config, token).await.is_some_and(|found| found == email)
 }
 
 /// Extracts (user, token) from a decoded SASL XOAUTH2 or OAUTHBEARER initial response.

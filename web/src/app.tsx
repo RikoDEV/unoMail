@@ -2,6 +2,7 @@ import { Alert, Button, CssBaseline, ThemeProvider, useMediaQuery } from '@mui/m
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { type Account, get, post, setCsrfToken, setUnauthorizedHandler } from './api';
+import { PageBoundary } from './errorBoundary';
 import { Login } from './login';
 import { clearAccountCache, closeCache } from './mail/cache';
 import { clearSensitiveSessionState } from './sessionCleanup';
@@ -326,6 +327,7 @@ export function App() {
             <BrowserRouter>
               {/* A boundary of its own: loading the reminders must not suspend (and remount) the pages. */}
               <Suspense fallback={null}>{account && <Reminders />}</Suspense>
+              <PageBoundary>
               <Suspense fallback={null}>
                 <Routes>
                   <Route path="/login" element={<LoginRoute />} />
@@ -337,6 +339,7 @@ export function App() {
                   <Route path="*" element={<Navigate to="/mail" replace />} />
                 </Routes>
               </Suspense>
+              </PageBoundary>
             </BrowserRouter>
           )}
         </AuthContext.Provider>

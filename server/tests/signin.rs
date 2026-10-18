@@ -56,11 +56,16 @@ async fn an_authenticator_app_guards_the_sign_in() {
     assert!(setup["uri"].as_str().unwrap().starts_with("otpauth://totp/example.org:bob@example.org?secret="));
     let (_, plain) = password_step(&env).await;
     assert!(plain["account"].is_object(), "not active yet: {plain}");
-    assert_eq!(bob.put("/api/me/two-factor/totp", json!({ "code": "000000" })).await.status, StatusCode::BAD_REQUEST);
-    let enabled = bob.put("/api/me/two-factor/totp", json!({ "code": code(&secret, 0) })).await;
+    assert_eq!(bob.put("/api/me/two-factor/totp", json!({ "code": "000000", "password": PASSWORD })).await.status, StatusCode::BAD_REQUEST);
+    // A session alone cannot enrol an authenticator: that would let a thief lock the owner out.
+    assert_eq!(bob.put("/api/me/two-factor/totp", json!({ "code": code(&secret, 0), "password": "not the password" })).await.status, StatusCode::UNAUTHORIZED);
+    let enabled = bob.put("/api/me/two-factor/totp", json!({ "code": code(&secret, 0), "password": PASSWORD })).await;
     assert_eq!(enabled.status, StatusCode::OK, "{}", enabled.text);
     let recovery: Vec<String> = serde_json::from_value(enabled.body["recovery_codes"].clone()).unwrap();
     assert_eq!(recovery.len(), 10, "recovery codes come with the first factor");
+    assert_eq!(recovery[0].len(), 19, "80 bits each: {}", recovery[0]);
+    let stored: String = sqlx::query_scalar("SELECT code_hash FROM recovery_codes LIMIT 1").fetch_one(&env.app.db).await.unwrap();
+    assert!(!recovery.iter().any(|c| unomail::util::sha256_hex(c.replace('-', "").as_bytes()) == stored), "stored keyed, not as a plain hash");
     assert_eq!(bob.get("/api/me/two-factor").await.body["recovery_codes_left"], 10);
     // Starting a new setup must not quietly switch the working authenticator off (that needs
     // the password).
@@ -148,7 +153,7 @@ async fn programs_need_app_passwords_once_two_step_sign_in_is_on() {
 
     // With an authenticator app on, the account password no longer opens programs.
     let secret = bob.post("/api/me/two-factor/totp", json!({})).await.body["secret"].as_str().unwrap().to_owned();
-    bob.put("/api/me/two-factor/totp", json!({ "code": code(&secret, 0) })).await;
+    bob.put("/api/me/two-factor/totp", json!({ "code": code(&secret, 0), "password": PASSWORD })).await;
     for protocol in [Protocol::Imap, Protocol::Smtp, Protocol::Pop3, Protocol::Dav, Protocol::Jmap, Protocol::Sieve] {
         assert_eq!(programs(&env, PASSWORD, protocol).await, Err(AuthError::Invalid), "{protocol:?}");
     }

@@ -251,7 +251,7 @@ pub async fn second_factor(State(state): State<AppState>, ClientIp(ip): ClientIp
     let ok = if let Some(code) = &input.code {
         twofactor::check_totp(&state.db, &state.secrets, account.id, code).await?
     } else if let Some(code) = &input.recovery_code {
-        twofactor::use_recovery_code(&state.db, account.id, code).await?
+        twofactor::use_recovery_code(&state.db, &state.secrets, account.id, code).await?
     } else if let Some(answer) = &input.passkey {
         check_passkey(&state, Some(account.id), answer, &format!("login:{key}")).await?.is_some()
     } else {
@@ -315,7 +315,7 @@ async fn tidy(state: &AppState, account_id: i64) -> Result<(), ApiError> {
 
 /// Recovery codes for an account that just got its first factor.
 async fn first_codes(state: &AppState, account_id: i64) -> Result<Option<Vec<String>>, ApiError> {
-    Ok(if twofactor::recovery_codes_left(&state.db, account_id).await? == 0 { Some(twofactor::new_recovery_codes(&state.db, account_id).await?) } else { None })
+    Ok(if twofactor::recovery_codes_left(&state.db, account_id).await? == 0 { Some(twofactor::new_recovery_codes(&state.db, &state.secrets, account_id).await?) } else { None })
 }
 
 /// id, name, created, last used, backup eligible, backed up, discoverable.
@@ -363,11 +363,15 @@ pub async fn totp_setup(State(state): State<AppState>, session: Session) -> Json
 }
 
 #[derive(Deserialize)]
-pub struct CodeInput {
+pub struct EnableInput {
     code: String,
+    password: String,
 }
 
-pub async fn totp_enable(State(state): State<AppState>, session: Session, Json(input): Json<CodeInput>) -> JsonResult<Value> {
+/// Turns a new authenticator on. This changes how the account signs in, so a borrowed session
+/// is not enough: someone who could enrol their own phone could then lock the owner out.
+pub async fn totp_enable(State(state): State<AppState>, session: Session, Json(input): Json<EnableInput>) -> JsonResult<Value> {
+    confirm_password(&state, &session, &input.password).await?;
     let sealed: Option<String> = sqlx::query_scalar("SELECT secret FROM totp_secrets WHERE account_id = ?").bind(session.account.id).fetch_optional(&state.db).await?;
     let secret = sealed.and_then(|sealed| state.secrets.open(&sealed)).and_then(|text| twofactor::unbase32(&text)).ok_or_else(|| ApiError::bad("set up the authenticator first"))?;
     let step = twofactor::matching_step(&secret, &input.code, now()).ok_or_else(|| ApiError::bad("the code is not correct; check the time on the phone"))?;
@@ -394,7 +398,7 @@ pub async fn recovery_codes(State(state): State<AppState>, session: Session, Jso
     if !twofactor::factors(&state.db, session.account.id).await?.enabled() {
         return Err(ApiError::bad("set up two-step sign-in first"));
     }
-    let codes = twofactor::new_recovery_codes(&state.db, session.account.id).await?;
+    let codes = twofactor::new_recovery_codes(&state.db, &state.secrets, session.account.id).await?;
     session.audit(&state, "twofactor.recovery_codes_renewed", "", "").await;
     Ok(Json(json!({ "recovery_codes": codes })))
 }
@@ -557,6 +561,7 @@ pub async fn app_password_create(State(state): State<AppState>, session: Session
 pub async fn app_password_delete(State(state): State<AppState>, session: Session, Path(id): Path<i64>) -> JsonResult<Value> {
     let name: Option<String> = sqlx::query_scalar("DELETE FROM app_passwords WHERE id = ? AND account_id = ? RETURNING name").bind(id).bind(session.account.id).fetch_optional(&state.db).await?;
     let name = name.ok_or(ApiError::NotFound)?;
+    crate::jmap::submission::cancel_from_app_password(&state.db, session.account.id, id).await?;
     session.audit(&state, "app_password.revoked", &name, "").await;
     Ok(Json(json!({ "ok": true })))
 }

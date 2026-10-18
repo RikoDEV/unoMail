@@ -402,7 +402,7 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
                 }
                 // Already learned from above; nobody receives it.
                 Target::Trap => delivered += 1,
-                Target::List { list_id, role } => match crate::lists::receive(app, *list_id, *role, msg.sender, &message, junk).await {
+                Target::List { list_id, role } => match crate::lists::receive(app, *list_id, *role, crate::lists::Sender { envelope: msg.sender, envelope_verified: sender_verified, author_verified }, &message, junk).await {
                     Ok(()) => delivered += 1,
                     Err(err) => return internal("mailing list failed", err),
                 },
@@ -438,10 +438,19 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
     for address in &quota_failures {
         queue::bounce(app, msg.sender, address, "552 5.2.2 Mailbox full", &message).await;
     }
-    // Aggregate reports sent to a hosted domain feed the DMARC dashboard.
-    crate::dmarc_reports::ingest_mail(app, &stripped).await;
-    // So do TLS reports (RFC 8460) about how other servers reach ours.
-    crate::smtp::transport::ingest_mail(app, &stripped).await;
+    // Aggregate reports sent to a hosted domain feed the DMARC dashboard, and TLS reports
+    // (RFC 8460) show how other servers reach ours. Only from senders who are who they say
+    // (reporters sign their mail), and not without limit: otherwise anyone could fill the
+    // dashboard with made-up results.
+    if author_verified && !junk {
+        let author_domain = MessageParser::default().parse_headers(&stripped).and_then(|m| m.from()?.first()?.address.as_deref().and_then(Address::parse)).map(|a| a.domain);
+        if let Some(domain) = author_domain
+            && crate::dmarc_reports::report_allowed(&domain)
+        {
+            crate::dmarc_reports::ingest_mail(app, &stripped).await;
+            crate::smtp::transport::ingest_mail(app, &stripped).await;
+        }
+    }
     Outcome::Accepted(format!("250 2.0.0 Ok: queued as {id}"))
 }
 
@@ -731,7 +740,7 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
                 }
             }
             Target::List { list_id, role } => {
-                if let Err(err) = crate::lists::receive(app, *list_id, *role, &sender, &message, false).await {
+                if let Err(err) = crate::lists::receive(app, *list_id, *role, crate::lists::Sender { envelope: &sender, envelope_verified: true, author_verified: rt.strict_from_check }, &message, false).await {
                     return internal("mailing list failed", err);
                 }
             }

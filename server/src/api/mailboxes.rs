@@ -55,35 +55,42 @@ pub fn to_mbox_entry(sender: &str, date: i64, raw: &[u8]) -> Vec<u8> {
 
 /// Splits an mbox file into messages with CRLF line endings, undoing the `From ` quoting.
 pub fn parse_mbox(data: &[u8]) -> Vec<Vec<u8>> {
-    let mut messages: Vec<Vec<u8>> = Vec::new();
+    mbox_messages(data).collect()
+}
+
+/// [`parse_mbox`], one message at a time: a large archive is never held twice in memory.
+pub fn mbox_messages(data: &[u8]) -> impl Iterator<Item = Vec<u8>> + '_ {
+    let mut lines = data.split_inclusive(|b| *b == b'\n');
     let mut current: Option<Vec<u8>> = None;
     let mut previous_blank = true;
-    for line in data.split_inclusive(|b| *b == b'\n') {
-        let content = line.strip_suffix(b"\n").unwrap_or(line);
-        let content = content.strip_suffix(b"\r").unwrap_or(content);
-        if previous_blank && content.starts_with(b"From ") {
-            if let Some(done) = current.take() {
-                messages.push(done);
+    let next = std::iter::from_fn(move || {
+        for line in lines.by_ref() {
+            let content = line.strip_suffix(b"\n").unwrap_or(line);
+            let content = content.strip_suffix(b"\r").unwrap_or(content);
+            if previous_blank && content.starts_with(b"From ") {
+                previous_blank = false;
+                if let Some(done) = current.replace(Vec::new()) {
+                    return Some(done);
+                }
+                continue;
             }
-            current = Some(Vec::new());
-            previous_blank = false;
-            continue;
+            previous_blank = content.is_empty();
+            let Some(message) = current.as_mut() else { continue };
+            let quotes = content.iter().take_while(|b| **b == b'>').count();
+            let unquoted = if quotes > 0 && content[quotes..].starts_with(b"From ") { &content[1..] } else { content };
+            message.extend_from_slice(unquoted);
+            message.extend_from_slice(b"\r\n");
         }
-        previous_blank = content.is_empty();
-        let Some(message) = current.as_mut() else { continue };
-        let quotes = content.iter().take_while(|b| **b == b'>').count();
-        let unquoted = if quotes > 0 && content[quotes..].starts_with(b"From ") { &content[1..] } else { content };
-        message.extend_from_slice(unquoted);
-        message.extend_from_slice(b"\r\n");
-    }
-    messages.extend(current);
+        current.take()
+    });
     // The blank line that separates entries is not part of the message.
-    for message in &mut messages {
+    next.map(|mut message| {
         while message.ends_with(b"\r\n\r\n") {
             message.truncate(message.len() - 2);
         }
-    }
-    messages.into_iter().filter(|m| !m.is_empty()).collect()
+        message
+    })
+    .filter(|m| !m.is_empty())
 }
 
 /// Downloads a folder as an mbox file.
@@ -116,7 +123,7 @@ pub async fn import(State(state): State<AppState>, session: Session, Path(id): P
     if body.is_empty() {
         return Err(ApiError::bad("the file is empty"));
     }
-    let messages = if body.starts_with(b"From ") { parse_mbox(&body) } else { vec![body.to_vec()] };
+    let messages: Box<dyn Iterator<Item = Vec<u8>> + Send> = if body.starts_with(b"From ") { Box::new(mbox_messages(&body)) } else { Box::new(std::iter::once(body.to_vec())) };
     let limit = state.rt().max_message_size;
     let (mut imported, mut skipped) = (0, 0);
     for raw in messages {
@@ -135,6 +142,10 @@ pub async fn import(State(state): State<AppState>, session: Session, Path(id): P
             }
         }
         let date = (meta.sent_date > 0).then_some(meta.sent_date);
+        let Ok(raw) = crate::security::admit_stored(&state, &raw, mailbox.account_id != session.account.id) else {
+            skipped += 1;
+            continue;
+        };
         state.store.append(mailbox.account_id, mailbox.id, &raw, Flags { seen: true, ..Default::default() }, date).await?;
         imported += 1;
     }

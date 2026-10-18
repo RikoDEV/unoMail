@@ -19,7 +19,10 @@ use ring::{hmac, signature};
 use serde_json::Value;
 use sqlx::SqlitePool;
 
-use crate::util::{now, random_bytes, sha256, sha256_hex};
+use crate::{
+    secretbox::SecretBox,
+    util::{now, random_bytes, sha256, sha256_hex},
+};
 
 // --- TOTP --------------------------------------------------------------------------------------
 
@@ -96,26 +99,40 @@ fn normalize_code(code: &str) -> String {
     code.chars().filter(char::is_ascii_alphanumeric).collect::<String>().to_ascii_lowercase()
 }
 
+/// How a recovery code is stored: keyed with the server's secret, so that a copy of the
+/// database alone is no help in guessing the codes.
+fn code_digest(secrets: &SecretBox, code: &str) -> String {
+    secrets.digest(format!("recovery:{}", normalize_code(code)).as_bytes())
+}
+
 /// Makes new recovery codes (replacing the old ones) and returns them for showing once.
-pub async fn new_recovery_codes(db: &SqlitePool, account_id: i64) -> sqlx::Result<Vec<String>> {
+pub async fn new_recovery_codes(db: &SqlitePool, secrets: &SecretBox, account_id: i64) -> sqlx::Result<Vec<String>> {
+    // 80 bits each: out of reach of guessing even with the digests in hand.
     let codes: Vec<String> = (0..RECOVERY_CODES)
         .map(|_| {
-            let raw = base32(&random_bytes::<5>()).to_ascii_lowercase();
-            format!("{}-{}", &raw[..4], &raw[4..8])
+            let raw = base32(&random_bytes::<10>()).to_ascii_lowercase();
+            format!("{}-{}-{}-{}", &raw[..4], &raw[4..8], &raw[8..12], &raw[12..16])
         })
         .collect();
     let mut tx = db.begin().await?;
     sqlx::query("DELETE FROM recovery_codes WHERE account_id = ?").bind(account_id).execute(&mut *tx).await?;
     for code in &codes {
-        sqlx::query("INSERT INTO recovery_codes (account_id, code_hash) VALUES (?, ?)").bind(account_id).bind(sha256_hex(normalize_code(code).as_bytes())).execute(&mut *tx).await?;
+        sqlx::query("INSERT INTO recovery_codes (account_id, code_hash) VALUES (?, ?)").bind(account_id).bind(code_digest(secrets, code)).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(codes)
 }
 
-/// Uses up a recovery code; true when it was valid and unused.
-pub async fn use_recovery_code(db: &SqlitePool, account_id: i64, code: &str) -> sqlx::Result<bool> {
-    let used = sqlx::query("UPDATE recovery_codes SET used_at = ? WHERE account_id = ? AND code_hash = ? AND used_at IS NULL").bind(now()).bind(account_id).bind(sha256_hex(normalize_code(code).as_bytes())).execute(db).await?;
+/// Uses up a recovery code; true when it was valid and unused. Codes made before they were
+/// keyed (plain SHA-256) still work until they are replaced.
+pub async fn use_recovery_code(db: &SqlitePool, secrets: &SecretBox, account_id: i64, code: &str) -> sqlx::Result<bool> {
+    let used = sqlx::query("UPDATE recovery_codes SET used_at = ? WHERE account_id = ? AND code_hash IN (?, ?) AND used_at IS NULL")
+        .bind(now())
+        .bind(account_id)
+        .bind(code_digest(secrets, code))
+        .bind(sha256_hex(normalize_code(code).as_bytes()))
+        .execute(db)
+        .await?;
     Ok(used.rows_affected() == 1)
 }
 

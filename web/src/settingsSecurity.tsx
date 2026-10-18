@@ -99,6 +99,7 @@ function TotpSetup({ onDone, onClose }: { onDone: (codes: string[] | null) => vo
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
   const [qr, setQr] = useState('');
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -114,7 +115,7 @@ function TotpSetup({ onDone, onClose }: { onDone: (codes: string[] | null) => vo
 
   async function confirm() {
     try {
-      const result = await put<{ recovery_codes: string[] | null }>('/api/me/two-factor/totp', { code });
+      const result = await put<{ recovery_codes: string[] | null }>('/api/me/two-factor/totp', { code, password });
       onDone(result.recovery_codes);
     } catch (err) {
       setError(errorText(err, t('The code is not correct')));
@@ -140,13 +141,14 @@ function TotpSetup({ onDone, onClose }: { onDone: (codes: string[] | null) => vo
             value={code}
             onChange={(e) => setCode(e.target.value)}
             slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'one-time-code', maxLength: 7 } }}
-            onKeyDown={(e) => e.key === 'Enter' && code.trim() && void confirm()}
+            onKeyDown={(e) => e.key === 'Enter' && code.trim() && password && void confirm()}
           />
+          <TextField label={t('Your password')} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && code.trim() && password && void confirm()} />
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void confirm()} disabled={!setup || !code.trim()}>{t('Turn on')}</Button>
+        <Button variant="contained" onClick={() => void confirm()} disabled={!setup || !code.trim() || !password}>{t('Turn on')}</Button>
       </DialogActions>
     </Dialog>
   );
