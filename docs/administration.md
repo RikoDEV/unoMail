@@ -110,6 +110,15 @@ beyond `UNOMAIL_BACKUP_KEEP` are removed together with the messages no remaining
 needs. The keys in the data directory (`secret.key`, `blob.key`, `vapid.key`) are deliberately
 not in the backup: keep a copy of them somewhere safe.
 
+Signing keys and secrets in the database (DKIM and TLS private keys, the SRS and list secrets)
+are sealed with `secret.key`, so a backup restored without that file cannot sign mail: DKIM
+keys must be generated again and a self-signed certificate replaces the TLS one. If a backup or
+database copy made by a version before this sealing leaked, treat those keys as exposed: add a
+new DKIM selector and retire the old one, reissue the TLS certificate, and delete the
+`srs.secret` and `lists.secret` settings so new ones are generated (outstanding SRS bounces and
+unsubscribe links stop working). If `secret.key` itself leaked, all of the above applies too:
+stop the server, move `secret.key` aside and re-enter the credentials it protected.
+
 ```sh
 unomail backup                     # take one now
 unomail backups                    # list the snapshots

@@ -236,7 +236,7 @@ async fn send_reply(app: &App, account_id: i64, recipient: &str, sender: &str, r
         let reply = build_reply(vacation, recipient, &display_name, &sender, raw);
         let domain = recipient.rsplit_once('@').map_or("", |(_, d)| d);
         let mut message = format!("Received: by {} (autoreply); {}\r\n", app.cfg.hostname, rfc2822_now()).into_bytes();
-        message.extend_from_slice(&dkim::sign(&app.db, domain, &reply).await?);
+        message.extend_from_slice(&dkim::sign(&app.db, &app.secrets, domain, &reply).await?);
 
         // The envelope sender is null so that a bounce or another autoresponder cannot loop.
         let targets = match delivery::resolve(app, &sender_address).await? {

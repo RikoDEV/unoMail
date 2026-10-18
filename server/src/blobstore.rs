@@ -34,7 +34,11 @@ pub struct Blobs {
 pub fn load_key(data_dir: &Path) -> std::io::Result<[u8; 32]> {
     let path = data_dir.join("blob.key");
     match std::fs::read(&path) {
-        Ok(bytes) => bytes.try_into().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "blob.key must be exactly 32 bytes")),
+        Ok(bytes) => {
+            let key = bytes.try_into().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "blob.key must be exactly 32 bytes"))?;
+            crate::secretbox::restrict_key_file(&path)?;
+            Ok(key)
+        }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             let key = crate::util::random_bytes::<32>();
             std::fs::write(&path, key)?;

@@ -32,9 +32,11 @@ The threat model and review record are in [SECURITY.md](../SECURITY.md).
   sign-in on, mail programs need an app password, scoped to what it is for. Administrators can
   reset a mailbox's second factors.
 - **Stored credentials.** Passwords the server must be able to use again (identity SMTP
-  servers, the LDAP bind, the identity provider's client secret, webhook secrets) and S/MIME
-  private keys are encrypted with a key kept in its own file (`secret.key`) next to the
-  database, and are never returned by the API.
+  servers, the LDAP bind, the identity provider's client secret, webhook secrets), S/MIME,
+  DKIM and TLS private keys, stored OpenPGP private keys and the SRS and mailing-list HMAC
+  secrets are encrypted with a key kept in its own file (`secret.key`, mode 0600, repaired at
+  startup if looser) next to the database, so a database copy or backup alone does not reveal
+  them. Values stored in plain text by older versions are sealed at the next start.
 - **Stored mail.** Message contents optionally sealed at rest (`UNOMAIL_ENCRYPT_MAIL`, key in
   `blob.key`; the database with its search index is not), and per user encrypted to their
   OpenPGP key on arrival. The server and its operator can read everything else; only OpenPGP

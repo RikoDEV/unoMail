@@ -1,5 +1,7 @@
 //! Encryption at rest for third-party credentials the server has to be able to use again
-//! (identity SMTP passwords, LDAP bind password, OAuth client secret, webhook secrets).
+//! (identity SMTP passwords, LDAP bind password, OAuth client secret, webhook secrets) and
+//! long-lived signing keys and secrets (DKIM and TLS private keys, PGP private keys, the SRS
+//! and list HMAC secrets).
 //!
 //! The key lives in its own file in the data directory, not in the database, so a leaked
 //! database dump or backup alone does not reveal those credentials. A second key derived from
@@ -20,7 +22,10 @@ impl SecretBox {
     pub fn load(data_dir: &Path) -> std::io::Result<Self> {
         let path = data_dir.join("secret.key");
         let key = match std::fs::read(&path) {
-            Ok(bytes) if bytes.len() == 32 => bytes,
+            Ok(bytes) if bytes.len() == 32 => {
+                restrict_key_file(&path)?;
+                bytes
+            }
             Ok(_) => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "secret.key must be exactly 32 bytes")),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 let bytes = crate::util::random_bytes::<32>().to_vec();
@@ -37,7 +42,7 @@ impl SecretBox {
         Ok(Self::from_key(&key))
     }
 
-    fn from_key(key: &[u8]) -> Self {
+    pub(crate) fn from_key(key: &[u8]) -> Self {
         let mac_key = crate::util::hmac_sha256(key, b"unomail digest key");
         SecretBox(LessSafeKey::new(UnboundKey::new(&CHACHA20_POLY1305, key).expect("the key is 32 bytes")), mac_key)
     }
@@ -78,6 +83,62 @@ impl SecretBox {
     }
 }
 
+/// Makes a key file readable by its owner only, repairing looser permissions (a copy restored
+/// with the wrong mode) instead of carrying on with a key others can read.
+pub fn restrict_key_file(path: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path)?.permissions().mode();
+        if mode & 0o077 != 0 {
+            tracing::warn!(path = %path.display(), mode = format!("{:o}", mode & 0o777), "key file was readable by others; restricting it to 0600");
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// Columns that hold a sealed value, as (select plain-text rows, update one row) statements;
+/// rows written before they were sealed are sealed in place.
+const SEALED_COLUMNS: &[(&str, &str)] = &[
+    ("SELECT rowid, private_key FROM dkim_keys WHERE private_key != '' AND private_key NOT LIKE 'v1:%'", "UPDATE dkim_keys SET private_key = ? WHERE rowid = ?"),
+    ("SELECT rowid, key_pem FROM certificates WHERE key_pem != '' AND key_pem NOT LIKE 'v1:%'", "UPDATE certificates SET key_pem = ? WHERE rowid = ?"),
+    ("SELECT rowid, private_key FROM pgp_keys WHERE private_key != '' AND private_key NOT LIKE 'v1:%'", "UPDATE pgp_keys SET private_key = ? WHERE rowid = ?"),
+];
+/// Settings that hold a sealed value.
+pub const SEALED_SETTINGS: &[&str] = &["srs.secret", "lists.secret"];
+
+/// Seals any value in a sealed column or setting still stored in plain text (written by an
+/// older version, or restored from an old backup). Runs at startup; a no-op once done.
+pub async fn seal_plaintext(db: &sqlx::SqlitePool, secrets: &SecretBox) -> sqlx::Result<()> {
+    let mut tx = db.begin().await?;
+    let mut sealed = 0usize;
+    for (select, update) in SEALED_COLUMNS {
+        let rows: Vec<(i64, String)> = sqlx::query_as(*select).fetch_all(&mut *tx).await?;
+        for (rowid, plain) in rows {
+            sqlx::query(*update).bind(secrets.seal(&plain)).bind(rowid).execute(&mut *tx).await?;
+            sealed += 1;
+        }
+    }
+    for key in SEALED_SETTINGS {
+        let plain: Option<String> = sqlx::query_scalar("SELECT value FROM settings WHERE key = ? AND value != '' AND value NOT LIKE 'v1:%'")
+            .bind(key)
+            .fetch_optional(&mut *tx)
+            .await?;
+        if let Some(plain) = plain {
+            sqlx::query("UPDATE settings SET value = ? WHERE key = ?").bind(secrets.seal(&plain)).bind(key).execute(&mut *tx).await?;
+            sealed += 1;
+        }
+    }
+    tx.commit().await?;
+    if sealed > 0 {
+        tracing::info!(sealed, "sealed stored keys and secrets with secret.key");
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +159,23 @@ mod tests {
         assert_eq!(secrets.open(&tampered), None);
         assert_eq!(SecretBox::from_key(&[8u8; 32]).open(&sealed), None, "a different key cannot open it");
         assert_eq!(secrets.open("plain text"), None);
+    }
+
+    #[tokio::test]
+    async fn plain_text_keys_are_sealed_at_startup() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::open(&dir.path().join("t.db")).await.unwrap();
+        let secrets = SecretBox::from_key(&[9u8; 32]);
+        sqlx::query("INSERT INTO settings (key, value) VALUES ('srs.secret', 'legacy')").execute(&db).await.unwrap();
+        seal_plaintext(&db, &secrets).await.unwrap();
+        let stored = crate::db::get_setting(&db, "srs.secret").await.unwrap().unwrap();
+        assert!(stored.starts_with(PREFIX));
+        assert_eq!(crate::db::get_or_create_secret(&db, &secrets, "srs.secret").await.unwrap(), "legacy");
+        seal_plaintext(&db, &secrets).await.unwrap();
+        assert_eq!(crate::db::get_setting(&db, "srs.secret").await.unwrap().unwrap(), stored, "sealing twice is a no-op");
+        let fresh = crate::db::get_or_create_secret(&db, &secrets, "lists.secret").await.unwrap();
+        assert!(!crate::db::get_setting(&db, "lists.secret").await.unwrap().unwrap().contains(&fresh));
+        assert!(crate::db::get_or_create_secret(&db, &SecretBox::from_key(&[1u8; 32]), "srs.secret").await.is_err());
     }
 
     #[test]

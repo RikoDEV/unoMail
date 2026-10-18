@@ -56,16 +56,21 @@ pub async fn delete_setting(db: &SqlitePool, key: &str) -> sqlx::Result<()> {
 }
 
 /// Returns the stored secret for `key`, generating and persisting a random one on first use.
-pub async fn get_or_create_secret(db: &SqlitePool, key: &str) -> sqlx::Result<String> {
-    if let Some(v) = get_setting(db, key).await? {
-        return Ok(v);
-    }
-    sqlx::query("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)")
-        .bind(key)
-        .bind(crate::util::random_token())
-        .execute(db)
-        .await?;
-    Ok(get_setting(db, key).await?.expect("secret was just inserted"))
+/// It is stored sealed with `secret.key`, so a database copy alone does not reveal it.
+pub async fn get_or_create_secret(db: &SqlitePool, secrets: &crate::secretbox::SecretBox, key: &str) -> sqlx::Result<String> {
+    debug_assert!(crate::secretbox::SEALED_SETTINGS.contains(&key), "{key} must be listed as a sealed setting");
+    let sealed = match get_setting(db, key).await? {
+        Some(v) => v,
+        None => {
+            sqlx::query("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)")
+                .bind(key)
+                .bind(secrets.seal(&crate::util::random_token()))
+                .execute(db)
+                .await?;
+            get_setting(db, key).await?.expect("secret was just inserted")
+        }
+    };
+    secrets.open(&sealed).ok_or_else(|| sqlx::Error::Decode(format!("the stored {key} cannot be decrypted with secret.key").into()))
 }
 
 /// Records a security-relevant action. Failures are logged rather than propagated: an audit

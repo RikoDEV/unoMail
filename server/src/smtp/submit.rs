@@ -184,7 +184,7 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
         // we found before the sender was rewritten.
         let forwarding_domain = msg.recipients.iter().find(|(_, targets)| targets.iter().any(|t| matches!(t, Target::Remote(_)))).map(|(rcpt, _)| rcpt.domain.clone());
         let sealer = match &forwarding_domain {
-            Some(domain) => crate::security::dkim::arc_key(&app.db, domain).await,
+            Some(domain) => crate::security::dkim::arc_key(&app.db, &app.secrets, domain).await,
             None => None,
         };
         match authn::verify(authenticator, &app.cfg.hostname, msg.ip, msg.helo, msg.sender, &stripped, &app.cfg.arc_trusted_sealers, sealer).await {
@@ -721,7 +721,7 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
     let signed = match relay {
         // The other server signs for its own domain.
         Some(_) => body,
-        None => match dkim::sign(&app.db, &from_addresses[0].domain, &body).await {
+        None => match dkim::sign(&app.db, &app.secrets, &from_addresses[0].domain, &body).await {
             Ok(signed) => signed,
             Err(err) => return internal("DKIM signing failed", err),
         },

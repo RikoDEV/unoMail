@@ -66,7 +66,7 @@ pub async fn create(State(state): State<AppState>, session: Session, Json(req): 
     session.require_super()?;
     let id = directory::create_domain(&state.db, &req.name).await?;
     // Every domain starts with a signing key so that outgoing mail is authenticated from day one.
-    dkim::create_key(&state.db, id, &default_selector(), Algorithm::Rsa).await?;
+    dkim::create_key(&state.db, &state.secrets, id, &default_selector(), Algorithm::Rsa).await?;
     directory::ensure_postmaster(&state, id).await?;
     let domain = load(&state, id).await?;
     session.audit(&state, "domain.created", &domain.name, "").await;
@@ -237,7 +237,7 @@ pub async fn dkim_create(
     if exists.is_some() {
         return Err(ApiError::Conflict("a key with this selector already exists".into()));
     }
-    let key = dkim::create_key(&state.db, id, &selector, algorithm).await?;
+    let key = dkim::create_key(&state.db, &state.secrets, id, &selector, algorithm).await?;
     session.audit(&state, "dkim.created", &domain.name, &selector).await;
     Ok(Json(dkim_view(key, &domain.name)))
 }

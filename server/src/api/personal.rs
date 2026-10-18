@@ -947,7 +947,10 @@ pub async fn pgp_get(State(state): State<AppState>, session: Session) -> JsonRes
     let row: Option<(String, String, i64)> =
         sqlx::query_as("SELECT public_key, private_key, updated_at FROM pgp_keys WHERE account_id = ?").bind(session.account.id).fetch_optional(&state.db).await?;
     Ok(Json(match row {
-        Some((public_key, private_key, updated_at)) => json!({ "public_key": public_key, "private_key": private_key, "updated_at": updated_at }),
+        Some((public_key, private_key, updated_at)) => {
+            let private_key = state.secrets.open(&private_key).ok_or_else(|| ApiError::bad("the stored private key cannot be decrypted; save it again"))?;
+            json!({ "public_key": public_key, "private_key": private_key, "updated_at": updated_at })
+        }
         None => Value::Null,
     }))
 }
@@ -966,7 +969,7 @@ pub async fn pgp_put(State(state): State<AppState>, session: Session, Json(input
     )
     .bind(session.account.id)
     .bind(public_key)
-    .bind(private_key)
+    .bind(state.secrets.seal(private_key))
     .bind(now())
     .execute(&state.db)
     .await?;

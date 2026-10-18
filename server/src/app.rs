@@ -173,7 +173,9 @@ impl App {
         restrict_permissions(&cfg.data_dir);
         let db = crate::db::open(&cfg.data_dir.join("unomail.db")).await?;
         let store = Store::with_blobs(db.clone(), blob_backend(&cfg)?);
-        let tls = TlsManager::load(db.clone(), &cfg.hostname).await?;
+        let secrets = Arc::new(crate::secretbox::SecretBox::load(&cfg.data_dir)?);
+        crate::secretbox::seal_plaintext(&db, &secrets).await?;
+        let tls = TlsManager::load(db.clone(), secrets.clone(), &cfg.hostname).await?;
         let http = reqwest::Client::builder()
             .use_preconfigured_tls(
                 rustls::ClientConfig::builder_with_provider(crate::tls::provider())
@@ -184,7 +186,6 @@ impl App {
             .timeout(std::time::Duration::from_secs(15))
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
-        let secrets = Arc::new(crate::secretbox::SecretBox::load(&cfg.data_dir)?);
         let filter_client = |socket: &Option<std::path::PathBuf>| -> anyhow::Result<reqwest::Client> {
             let builder = reqwest::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none())
                 .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone());

@@ -128,7 +128,7 @@ fn bounce_tag(secret: &[u8], list_id: i64, member_id: i64) -> String {
 /// The member a VERP bounce tag stands for, if the tag is genuine.
 async fn bounce_member(app: &App, list_id: i64, tag: &str) -> sqlx::Result<Option<i64>> {
     let Some(member_id) = tag.split_once('.').and_then(|(id, _)| id.parse::<i64>().ok()) else { return Ok(None) };
-    let secret = crate::db::get_or_create_secret(&app.db, "lists.secret").await?;
+    let secret = crate::db::get_or_create_secret(&app.db, &app.secrets, "lists.secret").await?;
     Ok(crate::util::ct_eq(bounce_tag(secret.as_bytes(), list_id, member_id).as_bytes(), tag.to_ascii_lowercase().as_bytes()).then_some(member_id))
 }
 
@@ -183,7 +183,7 @@ async fn notice(app: &App, list: &List, recipient: &str, subject: &str, text: &s
         list_id = list.list_id(),
         text = text.replace('\n', "\r\n").replace("\r\r\n", "\r\n"),
     );
-    let signed = crate::security::dkim::sign(&app.db, list.domain(), raw.as_bytes()).await.unwrap_or_else(|_| raw.into_bytes());
+    let signed = crate::security::dkim::sign(&app.db, &app.secrets, list.domain(), raw.as_bytes()).await.unwrap_or_else(|_| raw.into_bytes());
     // A null sender: nothing answers a notice automatically.
     if let Err(err) = send(app, "", recipient, &signed).await {
         tracing::warn!(%err, "list notice not sent");
@@ -249,7 +249,7 @@ fn unsubscribe_token(secret: &[u8], member: &Member) -> String {
 pub async fn member_for_token(app: &App, token: &str) -> sqlx::Result<Option<Member>> {
     let Some(id) = token.split_once('.').and_then(|(id, _)| id.parse::<i64>().ok()) else { return Ok(None) };
     let Some(member) = sqlx::query_as::<_, Member>("SELECT * FROM list_members WHERE id = ?").bind(id).fetch_optional(&app.db).await? else { return Ok(None) };
-    let secret = crate::db::get_or_create_secret(&app.db, "lists.secret").await?;
+    let secret = crate::db::get_or_create_secret(&app.db, &app.secrets, "lists.secret").await?;
     let expected = unsubscribe_token(secret.as_bytes(), &member);
     Ok(bool::from(subtle::ConstantTimeEq::ct_eq(expected.as_bytes(), token.as_bytes())).then_some(member))
 }
@@ -300,7 +300,7 @@ async fn distribute(app: &App, list: &List, raw: &[u8]) -> anyhow::Result<usize>
         request = list.special("request"),
         owner = list.special("owner"),
     ));
-    let secret = crate::db::get_or_create_secret(&app.db, "lists.secret").await?;
+    let secret = crate::db::get_or_create_secret(&app.db, &app.secrets, "lists.secret").await?;
     let base = app.cfg.public_url();
     let members = members(app, list.id).await?;
     // Posts come from outside, so no account's sending limit covers what a list sends out.
@@ -323,7 +323,7 @@ async fn distribute(app: &App, list: &List, raw: &[u8]) -> anyhow::Result<usize>
             &copy,
         ]
         .concat();
-        let signed = crate::security::dkim::sign(&app.db, list.domain(), &message).await.unwrap_or(message);
+        let signed = crate::security::dkim::sign(&app.db, &app.secrets, list.domain(), &message).await.unwrap_or(message);
         match send(app, &bounces, &member.email, &signed).await {
             Ok(()) => sent += 1,
             Err(err) => tracing::warn!(%err, member = member.email, "list copy not sent"),

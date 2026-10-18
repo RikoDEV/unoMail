@@ -285,7 +285,7 @@ async fn outbound_mail_is_signed_queued_and_delivered() {
     let env = TestEnv::start_with(|cfg| cfg.outbound_relay = Some(relay)).await;
     let domain_id = env.domain("example.org").await;
     env.account("bob@example.org").await;
-    dkim::create_key(&env.app.db, domain_id, "s1", Algorithm::Ed25519).await.unwrap();
+    dkim::create_key(&env.app.db, &env.app.secrets, domain_id, "s1", Algorithm::Ed25519).await.unwrap();
 
     let mut c = submission_client(&env, "bob@example.org").await;
     let msg = "From: bob@example.org\r\nTo: friend@remote.example\r\nSubject: Outbound\r\n\r\nline one\r\n..dotted\r\n";

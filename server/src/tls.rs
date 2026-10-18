@@ -16,7 +16,7 @@ use serde::Serialize;
 use sqlx::SqlitePool;
 use x509_parser::prelude::{FromDer, GeneralName, X509Certificate};
 
-use crate::util::now;
+use crate::{secretbox::SecretBox, util::now};
 
 /// Certificates expiring within this window produce a warning and trigger ACME renewal.
 pub const RENEW_BEFORE_SECS: i64 = 30 * 24 * 3600;
@@ -195,6 +195,8 @@ impl ResolvesServerCert for Resolver {
 
 pub struct TlsManager {
     db: SqlitePool,
+    /// Seals the private key in the database.
+    secrets: Arc<SecretBox>,
     hostname: String,
     current: Arc<ArcSwap<CertifiedKey>>,
     info: ArcSwap<CertInfo>,
@@ -205,7 +207,7 @@ pub struct TlsManager {
 impl TlsManager {
     /// Loads the active certificate, falling back to (and persisting) a self-signed one so that
     /// TLS listeners can always start.
-    pub async fn load(db: SqlitePool, hostname: &str) -> anyhow::Result<Arc<Self>> {
+    pub async fn load(db: SqlitePool, secrets: Arc<SecretBox>, hostname: &str) -> anyhow::Result<Arc<Self>> {
         let active = crate::db::get_setting(&db, SETTING_ACTIVE).await?.and_then(|v| v.parse::<i64>().ok());
         if let Some(id) = active
             && let Some((cert_pem, key_pem, kind)) =
@@ -214,8 +216,9 @@ impl TlsManager {
                     .fetch_optional(&db)
                     .await?
         {
-            match validate(&cert_pem, &key_pem, hostname) {
-                Ok(v) => return Ok(Arc::new(Self::from_validated(db, hostname, id, kind, v))),
+            let key_pem = secrets.open(&key_pem).ok_or_else(|| "the stored private key cannot be decrypted with secret.key".to_owned());
+            match key_pem.and_then(|key_pem| validate(&cert_pem, &key_pem, hostname)) {
+                Ok(v) => return Ok(Arc::new(Self::from_validated(db, secrets, hostname, id, kind, v))),
                 Err(reason) => {
                     tracing::error!(reason, "stored certificate is unusable, falling back to a self-signed certificate")
                 }
@@ -223,11 +226,11 @@ impl TlsManager {
         }
         let (cert_pem, key_pem) = generate_self_signed(hostname)?;
         let validated = validate(&cert_pem, &key_pem, hostname).map_err(|e| anyhow::anyhow!(e))?;
-        let id = store(&db, CertKind::SelfSigned, &cert_pem, &key_pem, &validated).await?;
-        Ok(Arc::new(Self::from_validated(db, hostname, id, CertKind::SelfSigned, validated)))
+        let id = store(&db, &secrets, CertKind::SelfSigned, &cert_pem, &key_pem, &validated).await?;
+        Ok(Arc::new(Self::from_validated(db, secrets, hostname, id, CertKind::SelfSigned, validated)))
     }
 
-    fn from_validated(db: SqlitePool, hostname: &str, id: i64, kind: CertKind, v: Validated) -> Self {
+    fn from_validated(db: SqlitePool, secrets: Arc<SecretBox>, hostname: &str, id: i64, kind: CertKind, v: Validated) -> Self {
         let info = CertInfo {
             id,
             kind,
@@ -238,6 +241,7 @@ impl TlsManager {
         };
         TlsManager {
             db,
+            secrets,
             hostname: hostname.to_owned(),
             current: Arc::new(ArcSwap::from_pointee(v.key)),
             info: ArcSwap::from_pointee(info),
@@ -254,7 +258,7 @@ impl TlsManager {
     pub async fn install(&self, kind: CertKind, cert_pem: &str, key_pem: &str) -> Result<(Arc<CertInfo>, Vec<String>), String> {
         let mut validated = validate(cert_pem, key_pem, &self.hostname)?;
         let warnings = std::mem::take(&mut validated.warnings);
-        let id = store(&self.db, kind, cert_pem, key_pem, &validated).await.map_err(|e| {
+        let id = store(&self.db, &self.secrets, kind, cert_pem, key_pem, &validated).await.map_err(|e| {
             tracing::error!(error = ?e, "failed to store certificate");
             "failed to store certificate".to_owned()
         })?;
@@ -291,7 +295,7 @@ impl TlsManager {
     }
 }
 
-async fn store(db: &SqlitePool, kind: CertKind, cert_pem: &str, key_pem: &str, v: &Validated) -> anyhow::Result<i64> {
+async fn store(db: &SqlitePool, secrets: &SecretBox, kind: CertKind, cert_pem: &str, key_pem: &str, v: &Validated) -> anyhow::Result<i64> {
     let mut tx = db.begin().await?;
     let id = sqlx::query(
         "INSERT INTO certificates (kind, domains, cert_pem, key_pem, not_before, not_after, issuer, created_at)
@@ -300,7 +304,7 @@ async fn store(db: &SqlitePool, kind: CertKind, cert_pem: &str, key_pem: &str, v
     .bind(kind)
     .bind(serde_json::to_string(&v.domains)?)
     .bind(cert_pem)
-    .bind(key_pem)
+    .bind(secrets.seal(key_pem))
     .bind(v.not_before)
     .bind(v.not_after)
     .bind(&v.issuer)
@@ -421,13 +425,19 @@ pub(crate) mod tests {
     async fn manager_falls_back_to_self_signed_and_hot_swaps() {
         let dir = tempfile::tempdir().unwrap();
         let db = crate::db::open(&dir.path().join("t.db")).await.unwrap();
-        let manager = TlsManager::load(db.clone(), "mail.example.com").await.unwrap();
+        let secrets = Arc::new(SecretBox::from_key(&[5u8; 32]));
+        let manager = TlsManager::load(db.clone(), secrets.clone(), "mail.example.com").await.unwrap();
         assert_eq!(manager.info().kind, CertKind::SelfSigned);
         let first_id = manager.info().id;
 
         // Reloading keeps using the persisted certificate instead of generating a new one.
-        let reloaded = TlsManager::load(db.clone(), "mail.example.com").await.unwrap();
+        let reloaded = TlsManager::load(db.clone(), secrets.clone(), "mail.example.com").await.unwrap();
         assert_eq!(reloaded.info().id, first_id);
+        let stored: String = sqlx::query_scalar("SELECT key_pem FROM certificates").fetch_one(&db).await.unwrap();
+        assert!(stored.starts_with("v1:") && !stored.contains("PRIVATE KEY"), "the private key is stored sealed");
+        // Without the right secret.key the stored key is unusable, and a new certificate replaces it.
+        let other = TlsManager::load(db.clone(), Arc::new(SecretBox::from_key(&[6u8; 32])), "mail.example.com").await.unwrap();
+        assert_ne!(other.info().id, first_id);
 
         let config = manager.server_config(&[b"h2"]);
         let (leaf, key, ca) = ca_signed(&["mail.example.com"]);

@@ -71,7 +71,7 @@ pub async fn resolve(app: &App, recipient: &Address) -> sqlx::Result<Resolution>
     }
     // Bounces for mail we forwarded come back to an SRS address; route them to the original sender.
     if srs::is_srs(&recipient.local) {
-        let secret = crate::db::get_or_create_secret(&app.db, "srs.secret").await?;
+        let secret = crate::db::get_or_create_secret(&app.db, &app.secrets, "srs.secret").await?;
         return Ok(match srs::reverse(&secret, &recipient.local) {
             Some(original) => Resolution::Deliver(vec![Target::Remote(original)]),
             None => Resolution::NoSuchUser,
@@ -460,7 +460,7 @@ pub async fn enqueue_via(
 /// The envelope sender to use when forwarding mail from `sender` on behalf of `forwarder_domain`.
 pub async fn forwarding_sender(app: &App, sender: &str, forwarder_domain: &str) -> sqlx::Result<String> {
     let Some(address) = Address::parse(sender) else { return Ok(String::new()) };
-    let secret = crate::db::get_or_create_secret(&app.db, "srs.secret").await?;
+    let secret = crate::db::get_or_create_secret(&app.db, &app.secrets, "srs.secret").await?;
     // If the address cannot be rewritten, forward with a null sender rather than break SPF.
     Ok(srs::forward(&secret, &address, forwarder_domain).unwrap_or_default())
 }

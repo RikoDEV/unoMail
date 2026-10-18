@@ -508,7 +508,7 @@ pub async fn report_sender(app: &App) -> Option<(String, String)> {
 
 /// Sends a finished message from the server itself: signed, queued, with a null return path.
 pub async fn send_system_mail(app: &App, domain: &str, recipient: &str, raw: Vec<u8>) -> anyhow::Result<()> {
-    let signed = crate::security::dkim::sign(&app.db, domain, &raw).await.unwrap_or(raw);
+    let signed = crate::security::dkim::sign(&app.db, &app.secrets, domain, &raw).await.unwrap_or(raw);
     let Some(address) = crate::util::Address::parse(recipient) else { anyhow::bail!("invalid report address") };
     let hash = app.store.put_blob(&signed).await?;
     crate::smtp::delivery::enqueue(app, "", &address, &hash, signed.len(), None).await?;

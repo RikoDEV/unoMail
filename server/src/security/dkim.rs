@@ -13,7 +13,7 @@ use rustls::pki_types::{PrivateKeyDer, pem::PemObject};
 use serde::Serialize;
 use sqlx::SqlitePool;
 
-use crate::util::now;
+use crate::{secretbox::SecretBox, util::now};
 
 const SIGNED_HEADERS: [&str; 14] = [
     // From is listed twice ("oversigned") so a second From header cannot be appended to a
@@ -56,6 +56,7 @@ pub struct DkimKey {
     pub domain_id: i64,
     pub selector: String,
     pub algorithm: Algorithm,
+    /// Sealed with `secret.key`; see `private_pem`.
     #[serde(skip)]
     pub private_key: String,
     pub public_key: String,
@@ -64,6 +65,11 @@ pub struct DkimKey {
 }
 
 impl DkimKey {
+    /// The private key in its stored encoding (PKCS#8 PEM for RSA, base64 PKCS#8 for Ed25519).
+    fn private_pem(&self, secrets: &SecretBox) -> anyhow::Result<String> {
+        secrets.open(&self.private_key).ok_or_else(|| anyhow::anyhow!("stored DKIM key for selector {} cannot be decrypted with secret.key", self.selector))
+    }
+
     pub fn dns_name(&self, domain: &str) -> String {
         format!("{}._domainkey.{}", self.selector, domain)
     }
@@ -120,7 +126,7 @@ fn generate(algorithm: Algorithm) -> anyhow::Result<(String, String)> {
     }
 }
 
-pub async fn create_key(db: &SqlitePool, domain_id: i64, selector: &str, algorithm: Algorithm) -> anyhow::Result<DkimKey> {
+pub async fn create_key(db: &SqlitePool, secrets: &SecretBox, domain_id: i64, selector: &str, algorithm: Algorithm) -> anyhow::Result<DkimKey> {
     anyhow::ensure!(is_valid_selector(selector), "invalid selector");
     let (private, public) = tokio::task::spawn_blocking(move || generate(algorithm)).await??;
     let id = sqlx::query(
@@ -129,7 +135,7 @@ pub async fn create_key(db: &SqlitePool, domain_id: i64, selector: &str, algorit
     .bind(domain_id)
     .bind(selector)
     .bind(algorithm)
-    .bind(private)
+    .bind(secrets.seal(&private))
     .bind(public)
     .bind(now())
     .execute(db)
@@ -145,11 +151,12 @@ pub async fn keys_for_domain(db: &SqlitePool, domain_id: i64) -> sqlx::Result<Ve
         .await
 }
 
-fn sign_with(key: &DkimKey, domain: &str, message: &[u8]) -> anyhow::Result<String> {
+fn sign_with(key: &DkimKey, secrets: &SecretBox, domain: &str, message: &[u8]) -> anyhow::Result<String> {
     let err = |e: mail_auth::Error| anyhow::anyhow!("DKIM signing failed for selector {}: {e}", key.selector);
+    let private = key.private_pem(secrets)?;
     let header = match key.algorithm {
         Algorithm::Rsa => {
-            let der = PrivateKeyDer::from_pem_slice(key.private_key.as_bytes())
+            let der = PrivateKeyDer::from_pem_slice(private.as_bytes())
                 .map_err(|e| anyhow::anyhow!("stored DKIM key for selector {} is unreadable: {e}", key.selector))?;
             DkimSigner::from_key(RsaKey::<Sha256>::from_key_der(der).map_err(err)?)
                 .domain(domain)
@@ -160,7 +167,7 @@ fn sign_with(key: &DkimKey, domain: &str, message: &[u8]) -> anyhow::Result<Stri
                 .to_header()
         }
         Algorithm::Ed25519 => {
-            let der = STANDARD.decode(&key.private_key)?;
+            let der = STANDARD.decode(&private)?;
             DkimSigner::from_key(Ed25519Key::from_pkcs8_der(&der).map_err(err)?)
                 .domain(domain)
                 .selector(&key.selector)
@@ -186,18 +193,19 @@ pub struct ArcSealKey {
 }
 
 /// The first active DKIM key of a domain, ready to seal with.
-pub async fn arc_key(db: &SqlitePool, domain: &str) -> Option<ArcSealKey> {
+pub async fn arc_key(db: &SqlitePool, secrets: &SecretBox, domain: &str) -> Option<ArcSealKey> {
     let key: DkimKey = sqlx::query_as("SELECT k.* FROM dkim_keys k JOIN domains d ON d.id = k.domain_id WHERE d.name = ? AND k.active = 1 ORDER BY k.id LIMIT 1").bind(domain).fetch_optional(db).await.ok()??;
+    let private = key.private_pem(secrets).inspect_err(|e| tracing::error!(error = %e, "ARC sealing skipped")).ok()?;
     let seal = match key.algorithm {
-        Algorithm::Rsa => SealKey::Rsa(RsaKey::<Sha256>::from_key_der(PrivateKeyDer::from_pem_slice(key.private_key.as_bytes()).ok()?).ok()?),
-        Algorithm::Ed25519 => SealKey::Ed25519(Ed25519Key::from_pkcs8_der(&STANDARD.decode(&key.private_key).ok()?).ok()?),
+        Algorithm::Rsa => SealKey::Rsa(RsaKey::<Sha256>::from_key_der(PrivateKeyDer::from_pem_slice(private.as_bytes()).ok()?).ok()?),
+        Algorithm::Ed25519 => SealKey::Ed25519(Ed25519Key::from_pkcs8_der(&STANDARD.decode(&private).ok()?).ok()?),
     };
     Some(ArcSealKey { domain: domain.to_owned(), selector: key.selector, key: seal })
 }
 
 /// Returns `message` with one `DKIM-Signature` header per active key of `domain` prepended.
 /// A domain without keys is returned unsigned.
-pub async fn sign(db: &SqlitePool, domain: &str, message: &[u8]) -> anyhow::Result<Vec<u8>> {
+pub async fn sign(db: &SqlitePool, secrets: &SecretBox, domain: &str, message: &[u8]) -> anyhow::Result<Vec<u8>> {
     let keys: Vec<DkimKey> = sqlx::query_as(
         "SELECT k.* FROM dkim_keys k JOIN domains d ON d.id = k.domain_id WHERE d.name = ? AND k.active = 1 ORDER BY k.id",
     )
@@ -206,7 +214,7 @@ pub async fn sign(db: &SqlitePool, domain: &str, message: &[u8]) -> anyhow::Resu
     .await?;
     let mut out = Vec::with_capacity(message.len() + keys.len() * 600);
     for key in &keys {
-        out.extend_from_slice(sign_with(key, domain, message)?.as_bytes());
+        out.extend_from_slice(sign_with(key, secrets, domain, message)?.as_bytes());
     }
     out.extend_from_slice(message);
     Ok(out)
@@ -231,28 +239,33 @@ mod tests {
     async fn generates_keys_and_signs_with_every_active_selector() {
         let dir = tempfile::tempdir().unwrap();
         let db = crate::db::open(&dir.path().join("t.db")).await.unwrap();
+        let secrets = SecretBox::from_key(&[3u8; 32]);
         sqlx::query("INSERT INTO domains (name, created_at) VALUES ('example.org', 0)").execute(&db).await.unwrap();
 
-        assert_eq!(sign(&db, "example.org", MESSAGE).await.unwrap(), MESSAGE, "no keys: message is unchanged");
+        assert_eq!(sign(&db, &secrets, "example.org", MESSAGE).await.unwrap(), MESSAGE, "no keys: message is unchanged");
 
-        let rsa = create_key(&db, 1, "rsa1", Algorithm::Rsa).await.unwrap();
-        let ed = create_key(&db, 1, "ed1", Algorithm::Ed25519).await.unwrap();
-        assert!(rsa.private_key.starts_with("-----BEGIN PRIVATE KEY-----"));
+        let rsa = create_key(&db, &secrets, 1, "rsa1", Algorithm::Rsa).await.unwrap();
+        let ed = create_key(&db, &secrets, 1, "ed1", Algorithm::Ed25519).await.unwrap();
+        assert!(rsa.private_key.starts_with("v1:"), "the private key is stored sealed");
+        assert!(rsa.private_pem(&secrets).unwrap().starts_with("-----BEGIN PRIVATE KEY-----"));
         assert!(rsa.dns_value().starts_with("v=DKIM1; k=rsa; p=MII"));
         assert_eq!(rsa.dns_name("example.org"), "rsa1._domainkey.example.org");
         assert_eq!(STANDARD.decode(&ed.public_key).unwrap().len(), 32);
-        assert!(create_key(&db, 1, "rsa1", Algorithm::Ed25519).await.is_err(), "selectors are unique per domain");
-        assert!(create_key(&db, 1, "Bad Selector", Algorithm::Ed25519).await.is_err());
+        assert!(create_key(&db, &secrets, 1, "rsa1", Algorithm::Ed25519).await.is_err(), "selectors are unique per domain");
+        assert!(create_key(&db, &secrets, 1, "Bad Selector", Algorithm::Ed25519).await.is_err());
 
-        let signed = String::from_utf8(sign(&db, "example.org", MESSAGE).await.unwrap()).unwrap();
+        let signed = String::from_utf8(sign(&db, &secrets, "example.org", MESSAGE).await.unwrap()).unwrap();
         assert!(signed.ends_with(std::str::from_utf8(MESSAGE).unwrap()));
         assert_eq!(signed.matches("DKIM-Signature:").count(), 2);
         assert!(signed.contains("a=rsa-sha256") && signed.contains("a=ed25519-sha256"));
         assert!(signed.contains("s=rsa1") && signed.contains("s=ed1") && signed.contains("d=example.org"));
 
         sqlx::query("UPDATE dkim_keys SET active = 0 WHERE selector = 'rsa1'").execute(&db).await.unwrap();
-        let signed = String::from_utf8(sign(&db, "example.org", MESSAGE).await.unwrap()).unwrap();
+        let signed = String::from_utf8(sign(&db, &secrets, "example.org", MESSAGE).await.unwrap()).unwrap();
         assert_eq!(signed.matches("DKIM-Signature:").count(), 1);
+
+        let other = SecretBox::from_key(&[4u8; 32]);
+        assert!(sign(&db, &other, "example.org", MESSAGE).await.is_err(), "a different secret.key cannot sign");
 
         // The private key must never be serialized into API responses.
         assert!(!serde_json::to_string(&rsa).unwrap().contains("PRIVATE"));
