@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile && pnpm run build
         working-directory: web
       - uses: actions/upload-artifact@v7
@@ -132,11 +134,16 @@ jobs:
       contents: read
       packages: read
     strategy:
+      # One architecture's result should not cancel the other's scan.
+      fail-fast: false
       matrix:
         arch: [amd64, arm64]
     env:
       TRIVY_USERNAME: ${{ github.actor }}
       TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      # Each digest is an index (image plus build attestation); without this Trivy looks for
+      # the runner's own platform in it and fails on the arm64 one.
+      TRIVY_PLATFORM: linux/${{ matrix.arch }}
     steps:
       - uses: actions/download-artifact@v8
         with:

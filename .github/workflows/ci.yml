@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches: [main]
+    tags: ["v*"]
   pull_request:
   schedule:
     # Weekly dependency audit, so new advisories surface even without code changes.
@@ -11,8 +13,45 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same branch or PR makes the running checks moot.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # No debuginfo: faster linking and a much smaller cache.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_TERM_COLOR: always
+
 jobs:
+  changes:
+    # Lets a web-only change skip the Rust jobs and the reverse. Scheduled, manual and tag
+    # runs check everything.
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server || 'true' }}
+      web: ${{ steps.filter.outputs.web || 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push' && github.ref_type == 'branch' || github.event_name == 'pull_request'
+      - id: filter
+        if: github.event_name == 'push' && github.ref_type == 'branch' || github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            server:
+              - 'server/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'web/**'
+              - '.github/workflows/ci.yml'
+
   server:
+    # Also runs the live ACME (Pebble, Let's Encrypt's test CA) and LDAP tests, so the
+    # workspace is compiled once instead of once per service.
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -22,56 +61,43 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: rui314/setup-mold@v1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: server
-      - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked
-
-  acme:
-    # Certificate issuance against Pebble, Let's Encrypt's test CA.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: server
-      - run: |
+          shared-key: server
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Start Pebble and LDAP
+        working-directory: .
+        run: |
           # HTTP-01: Pebble validates against the test's listener on the runner (port 5002).
-          docker run -d --name pebble -p 14000:14000 -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0 \
-            --add-host host.docker.internal:host-gateway ghcr.io/letsencrypt/pebble:latest
+          docker run -d --name pebble -p 14000:14000 -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0             --add-host host.docker.internal:host-gateway ghcr.io/letsencrypt/pebble:latest
           # DNS-01: a second Pebble resolving through the challenge test DNS server.
           # Authorization reuse is off, so every order really goes through the DNS provider.
           docker network create acme
-          docker run -d --name challtestsrv --network acme -p 8055:8055 ghcr.io/letsencrypt/pebble-challtestsrv:latest \
-            -http01 "" -https01 "" -tlsalpn01 "" -doh ""
-          docker run -d --name pebble-dns --network acme -p 14001:14000 -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0 -e PEBBLE_AUTHZREUSE=0 \
-            ghcr.io/letsencrypt/pebble:latest -config /test/config/pebble-config.json -dnsserver challtestsrv:8053
-          sleep 3
-          docker cp pebble:/test/certs/pebble.minica.pem "$RUNNER_TEMP/pebble-root.pem"
-          echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
-      - run: cargo test --locked --test acme_live -- --ignored
-        working-directory: server
-        env:
-          UNOMAIL_PEBBLE_ROOT: ${{ runner.temp }}/pebble-root.pem
-
-  ldap:
-    # Address book lookups against a real LDAP directory.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: server
-      - run: |
+          docker run -d --name challtestsrv --network acme -p 8055:8055 ghcr.io/letsencrypt/pebble-challtestsrv:latest             -http01 "" -https01 "" -tlsalpn01 "" -doh ""
+          docker run -d --name pebble-dns --network acme -p 14001:14000 -e PEBBLE_VA_NOSLEEP=1 -e PEBBLE_WFE_NONCEREJECT=0 -e PEBBLE_AUTHZREUSE=0             ghcr.io/letsencrypt/pebble:latest -config /test/config/pebble-config.json -dnsserver challtestsrv:8053
+          # Address book lookups against a real LDAP directory.
           docker run -d --name ldap -p 10389:10389 ghcr.io/rroemhild/docker-test-openldap:master
+          echo "127.0.0.1 host.docker.internal" | sudo tee -a /etc/hosts
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo nextest run --locked --no-fail-fast
+      # nextest does not run doctests.
+      - run: cargo test --locked --doc
+      - name: Live ACME and LDAP tests
+        run: |
+          # The containers had the whole build to start; wait in case they are still going.
           for i in $(seq 1 30); do docker logs ldap 2>&1 | grep -q "slapd starting" && break; sleep 2; done
-      - run: cargo test --locked --test ldap_live -- --ignored
-        working-directory: server
+          docker cp pebble:/test/certs/pebble.minica.pem "$RUNNER_TEMP/pebble-root.pem"
+          UNOMAIL_PEBBLE_ROOT="$RUNNER_TEMP/pebble-root.pem" cargo test --locked --test acme_live -- --ignored
+          cargo test --locked --test ldap_live -- --ignored
 
   web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -84,6 +110,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
       - run: pnpm test
@@ -94,18 +122,36 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: server
+          shared-key: server
+          save-if: false
       - uses: pnpm/action-setup@v6
         with:
           version: 11
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            web/pnpm-lock.yaml
+            e2e/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile && pnpm run build
         working-directory: web
-      - run: pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium
+      - run: pnpm install --frozen-lockfile
+        working-directory: e2e
+      - id: playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/pnpm-lock.yaml') }}
+      - if: steps.playwright.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: e2e
+      - if: steps.playwright.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
         working-directory: e2e
       - run: pnpm test
         working-directory: e2e
@@ -115,8 +161,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo install cargo-audit --locked
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
       - run: cargo audit
         working-directory: server
       - uses: pnpm/action-setup@v6
