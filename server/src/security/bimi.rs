@@ -62,10 +62,39 @@ pub fn candidates(domain: &str) -> Vec<String> {
     (0..labels.len().saturating_sub(1)).take(3).map(|skip| labels[skip..].join(".")).collect()
 }
 
+/// Elements a logo may use: the shapes, paint and text of SVG Tiny. Anything else is left out
+/// of the result, along with what it contains.
+const ELEMENTS: &[&str] = &[
+    "svg", "g", "defs", "title", "desc", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "linearGradient", "radialGradient", "stop", "solidColor", "clipPath", "mask", "use", "text", "tspan",
+];
+/// Elements that make a file something other than a picture; their presence refuses it.
+const FORBIDDEN: &[&str] = &["script", "foreignObject", "iframe", "embed", "object", "image", "a", "handler", "listener", "feImage"];
+/// Attributes kept; all others are dropped.
+const ATTRIBUTES: &[&str] = &[
+    "xmlns", "xmlns:xlink", "xml:space", "version", "baseProfile", "id", "viewBox", "preserveAspectRatio", "width", "height", "x", "y", "x1", "y1", "x2", "y2", "cx", "cy", "r", "rx", "ry", "fx", "fy", "d", "points",
+    "transform", "fill", "fill-rule", "fill-opacity", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stroke-dasharray", "stroke-dashoffset", "stroke-opacity", "opacity",
+    "color", "display", "visibility", "vector-effect", "offset", "stop-color", "stop-opacity", "solid-color", "solid-opacity", "gradientUnits", "gradientTransform", "spreadMethod", "clip-path", "clip-rule",
+    "clipPathUnits", "mask", "maskUnits", "maskContentUnits", "font-family", "font-size", "font-weight", "font-style", "text-anchor", "style", "href", "xlink:href",
+];
+
+/// Whether an attribute value stays inside the file: links only to fragments (`#id`), and
+/// `url()` paint only as `url(#id)`. CSS escapes and at-rules are refused outright.
+fn local_only(name: &str, value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    if name.ends_with("href") {
+        return lower.trim_start().starts_with('#');
+    }
+    !lower.contains('\\') && !lower.contains('@') && lower.match_indices("url(").all(|(at, _)| lower[at + 4..].trim_start_matches([' ', '"', '\'']).starts_with('#'))
+}
+
 /// Checks that an image is a harmless SVG and returns it as text. Logos may be gzip
-/// compressed. Scripts, event handlers, embedded documents and references to anything
-/// outside the file are refused: a logo is a picture, nothing else.
+/// compressed. The file is parsed and written out again from an allowlist of elements and
+/// attributes, so what comes back holds nothing the parser did not understand. Scripts,
+/// event handlers, embedded documents, entity declarations and references to anything outside
+/// the file refuse the logo: a logo is a picture, nothing else.
 pub fn clean_svg(data: &[u8]) -> Option<String> {
+    use quick_xml::{escape::escape, events::Event, Reader, XmlVersion};
+
     let text = if data.starts_with(&[0x1f, 0x8b]) {
         let mut out = String::new();
         flate2::read::GzDecoder::new(data).take(MAX_LOGO_BYTES as u64 + 1).read_to_string(&mut out).ok()?;
@@ -76,21 +105,92 @@ pub fn clean_svg(data: &[u8]) -> Option<String> {
     if text.len() > MAX_LOGO_BYTES {
         return None;
     }
-    let lower = text.to_ascii_lowercase();
-    if !lower.contains("<svg") || ["<script", "<foreignobject", "<iframe", "<!entity", "javascript:", "<a ", "<image"].iter().any(|bad| lower.contains(bad)) {
-        return None;
-    }
-    // Event handlers (onload=, onclick=, ...) and links leaving the file.
-    let bytes = lower.as_bytes();
-    let handler = bytes.windows(3).enumerate().any(|(index, window)| {
-        (window[0].is_ascii_whitespace() || window[0] == b'"' || window[0] == b'\'') && &window[1..] == b"on" && {
-            let rest = &bytes[index + 3..];
-            let letters = rest.iter().take_while(|b| b.is_ascii_lowercase()).count();
-            letters > 0 && rest[letters..].iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'=')
+
+    let mut reader = Reader::from_str(&text);
+    let mut out = String::with_capacity(text.len());
+    // Open elements, and whether each is kept; a dropped element drops all it contains.
+    let mut open: Vec<bool> = Vec::new();
+    let mut seen_root = false;
+    loop {
+        let event = reader.read_event().ok()?;
+        let keeping = open.last().copied().unwrap_or(true);
+        match event {
+            Event::Start(ref element) | Event::Empty(ref element) => {
+                let name = element.name().as_ref().to_owned();
+                if FORBIDDEN.iter().any(|bad| bad.eq_ignore_ascii_case(name.rsplit(':').next().unwrap_or(&name))) {
+                    return None;
+                }
+                if open.is_empty() {
+                    // Exactly one root, and it is the picture.
+                    if seen_root || name != "svg" {
+                        return None;
+                    }
+                    seen_root = true;
+                }
+                let kept = keeping && ELEMENTS.contains(&name.as_str());
+                if kept {
+                    out.push('<');
+                    out.push_str(&name);
+                }
+                for attribute in element.attributes() {
+                    let attribute = attribute.ok()?;
+                    let key: &str = attribute.key.as_ref();
+                    let value = attribute.normalized_value(XmlVersion::Implicit1_0).ok()?;
+                    let local = key.rsplit(':').next().unwrap_or(key).to_ascii_lowercase();
+                    if local.starts_with("on") || !local_only(&local, &value) {
+                        return None;
+                    }
+                    if kept && ATTRIBUTES.contains(&key) {
+                        out.push_str(&format!(" {key}=\"{}\"", escape(value.as_ref())));
+                    }
+                }
+                if matches!(event, Event::Start(_)) {
+                    open.push(kept);
+                    if kept {
+                        out.push('>');
+                    }
+                } else if kept {
+                    out.push_str("/>");
+                }
+            }
+            Event::End(ref element) => {
+                if open.pop()? {
+                    out.push_str(&format!("</{}>", element.name().as_ref() as &str));
+                }
+            }
+            Event::Text(ref content) if !open.is_empty() => {
+                if keeping {
+                    out.push_str(&escape(&**content));
+                }
+            }
+            Event::CData(ref content) if !open.is_empty() => {
+                if keeping {
+                    out.push_str(&escape(&**content));
+                }
+            }
+            Event::Text(ref content) if content.trim().is_empty() => {}
+            Event::GeneralRef(ref reference) if !open.is_empty() => {
+                // Only character references and the five predefined entities exist here.
+                let character = match reference.resolve_char_ref().ok()? {
+                    Some(character) => character,
+                    None => match reference.as_ref() {
+                        "lt" => '<',
+                        "gt" => '>',
+                        "amp" => '&',
+                        "quot" => '"',
+                        "apos" => '\'',
+                        _ => return None,
+                    },
+                };
+                if keeping {
+                    out.push_str(&escape(character.to_string().as_str()));
+                }
+            }
+            Event::Comment(_) | Event::Decl(_) | Event::PI(_) => {}
+            Event::Eof if seen_root && open.is_empty() => return Some(out),
+            _ => return None,
         }
-    });
-    let external = ["href=\"http", "href='http", "href=\"//", "href='//", "url(http", "url(\"http", "url('http", "url(//", "href=\"data:", "href='data:"].iter().any(|bad| lower.replace(' ', "").contains(bad));
-    (!handler && !external).then_some(text)
+    }
 }
 
 /// What a valid mark certificate says.
@@ -221,12 +321,26 @@ mod tests {
             "<!DOCTYPE svg [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><svg>&x;</svg>",
             "<html><body>not a picture</body></html>",
             "\u{1f}\u{8b}not really gzip",
+            "<svg/onload=\"alert(1)\"></svg>",
+            "<svg><use href=\"https://evil.example/x.svg#a\"/></svg>",
+            "<svg><rect style=\"fill:url( 'https://evil.example/x')\"/></svg>",
+            "<svg><rect style=\"background:\\75rl(x)\"/></svg>",
+            "<svg><rect fill=\"&ext;\"/></svg>",
+            "<svg></svg><svg></svg>",
+            "<svg><circle>",
         ] {
             assert_eq!(clean_svg(bad.as_bytes()), None, "{bad}");
         }
         assert_eq!(clean_svg(format!("<svg>{}</svg>", "x".repeat(MAX_LOGO_BYTES)).as_bytes()), None);
         // Words that merely contain "on" are fine.
         assert!(clean_svg(b"<svg><title>Position one</title><path d=\"M0 0\" font=\"x\"/></svg>").is_some());
+        // A name the parser does not recognise is no element a browser would run.
+        assert_eq!(clean_svg(b"<svg><g/onload=\"alert(1)\"/></svg>").as_deref(), Some("<svg></svg>"));
+        // What is not on the allowlist is left out, even where it would be harmless.
+        assert_eq!(
+            clean_svg(b"<?xml version=\"1.0\"?><!-- made by hand --><svg xmlns:ink=\"x\" ink:label=\"a\"><metadata><x/></metadata><style>*{}</style><set attributeName=\"fill\"/><rect fill=\"url(#g)\" data-x=\"1\"/><title>A &amp; B</title></svg>").as_deref(),
+            Some("<svg><rect fill=\"url(#g)\"/><title>A &amp; B</title></svg>")
+        );
     }
 
     struct Authority {
