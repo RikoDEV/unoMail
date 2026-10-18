@@ -12,7 +12,7 @@ const folders = (page: Page) => page.getByRole('navigation', { name: 'Folders' }
 async function openSettings(page: Page, tab: string) {
   await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Settings' }).click();
-  await page.getByRole('tab', { name: tab }).click();
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: tab }).click();
 }
 
 test.describe('spam reports and interface language', () => {

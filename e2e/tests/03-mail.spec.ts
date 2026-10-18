@@ -134,7 +134,9 @@ test.describe('web mail', () => {
     await page.waitForTimeout(500);
 
     expect(await page.evaluate(() => (window as unknown as { __xss?: string }).__xss)).toBeUndefined();
-    expect(await page.title()).toBe('unoMail');
+    // The subject appears in the tab title as plain text; the mail's script did not set it.
+    expect(await page.title()).not.toContain('pwned');
+    expect(await page.title()).toMatch(/ · unoMail$/);
     expect(dialogs).toBe(0);
     expect(external, 'no request may leave for remote hosts').toEqual([]);
 

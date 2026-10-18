@@ -62,6 +62,7 @@ test.describe('calendar', () => {
     await page.getByRole('option', { name: 'Every day' }).click();
     await editor.getByRole('button', { name: 'Save' }).click();
     await expect(chips(page, 'Team lunch')).toHaveCount(0);
+    await expect(chips(page, 'Daily lunch').first()).toBeVisible();
     const repeated = await chips(page, 'Daily lunch').count();
     expect(repeated).toBeGreaterThan(1);
 
