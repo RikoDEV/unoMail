@@ -138,23 +138,36 @@ jobs:
           cache-dependency-path: |
             web/pnpm-lock.yaml
             e2e/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile && pnpm run build
-        working-directory: web
-      - run: pnpm install --frozen-lockfile
-        working-directory: e2e
+      - name: Build the server, web UI and test browser side by side
+        # The server is built up front (the same build `cargo run` in the Playwright config
+        # would make), so the slow compile overlaps with the Node work instead of following it.
+        run: |
+          cargo build --manifest-path server/Cargo.toml --locked &
+          server=$!
+          (cd web && pnpm install --frozen-lockfile && pnpm run build)
+          (cd e2e && pnpm install --frozen-lockfile)
+          wait $server
       - id: playwright
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/pnpm-lock.yaml') }}
+          key: playwright-shell-${{ runner.os }}-${{ hashFiles('e2e/pnpm-lock.yaml') }}
+      # Headless runs only need the small headless shell, not the full browser.
       - if: steps.playwright.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
         working-directory: e2e
       - if: steps.playwright.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
         working-directory: e2e
       - run: pnpm test
         working-directory: e2e
+      # Traces and screenshots of failed tests, which are otherwise lost with the runner.
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-results
+          path: e2e/test-results
+          retention-days: 7
 
   audit:
     # Known-vulnerability scan of every dependency tree.
