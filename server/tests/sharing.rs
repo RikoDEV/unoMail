@@ -328,3 +328,27 @@ async fn ready_made_messages_are_imported_and_sent_unchanged() {
         .await;
     assert_eq!(reply[1][1]["notCreated"]["s"]["type"], "forbiddenToSend", "{reply}");
 }
+
+#[tokio::test]
+async fn searching_a_shared_folder_stays_within_it() {
+    let w = world().await;
+    let inbox = w.env.app.store.mailbox_by_name(w.bob.id, "INBOX").await.unwrap().unwrap().id;
+    let raw = b"From: hr@example.org\r\nTo: bob@example.org\r\nSubject: Salary review\r\n\r\nprivate\r\n";
+    w.env.app.store.append(w.bob.id, inbox, raw, Default::default(), None).await.unwrap();
+    share(&w.bob_api, w.projects, "carol@example.org", "lr").await;
+    let account = w.carol_api.jmap_account().await;
+    let shared = format!("b{}", w.projects);
+
+    // An operator with a stray inMailbox beside it is refused rather than searching Bob's account.
+    let mixed = json!({ "operator": "OR", "conditions": [{ "subject": "salary" }], "inMailbox": shared });
+    let reply = w.carol_api.jmap(json!([["Email/query", { "accountId": account, "filter": mixed, "calculateTotal": true }, "q"]])).await;
+    assert_eq!(reply[0][0], "error", "{reply}");
+    let nested = json!({ "operator": "AND", "conditions": [{ "operator": "OR", "conditions": [{ "subject": "salary" }], "inMailbox": shared }] });
+    let reply = w.carol_api.jmap(json!([["Email/query", { "accountId": account, "filter": nested }, "q"]])).await;
+    assert_eq!(reply[0][0], "error", "{reply}");
+
+    // A proper search of the shared folder finds its messages and nothing from Bob's inbox.
+    let fine = json!({ "operator": "AND", "conditions": [{ "inMailbox": shared }, { "operator": "OR", "conditions": [{ "subject": "salary" }, { "subject": "project" }] }] });
+    let reply = w.carol_api.jmap(json!([["Email/query", { "accountId": account, "filter": fine, "calculateTotal": true }, "q"]])).await;
+    assert_eq!(reply[0][1]["total"], 2, "{reply}");
+}

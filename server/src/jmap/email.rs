@@ -270,6 +270,11 @@ fn compile_filter(filter: &Map<String, Value>, binds: &mut Vec<Bind>, depth: usi
         return Err(MethodError("unsupportedFilter", "the filter is nested too deeply".into()));
     }
     if let Some(operator) = filter.get("operator") {
+        // An operator carries only its conditions: anything else beside it would be ignored
+        // here yet could be read elsewhere (`filter_mailbox`).
+        if filter.keys().any(|key| key != "operator" && key != "conditions") {
+            return Err(MethodError("unsupportedFilter", "an operator cannot be combined with conditions in the same object".into()));
+        }
         let conditions = filter.get("conditions").and_then(Value::as_array).ok_or_else(|| MethodError("unsupportedFilter", "an operator needs conditions".into()))?;
         let parts = conditions
             .iter()
@@ -367,13 +372,13 @@ fn compile_filter(filter: &Map<String, Value>, binds: &mut Vec<Bind>, depth: usi
 /// The mailbox a filter is confined to as a whole, if any (it decides whose messages are
 /// searched, and which messages of a thread represent it).
 fn filter_mailbox(filter: &Map<String, Value>) -> Option<i64> {
-    let direct = filter.get("inMailbox").and_then(Value::as_str).and_then(|id| parse_id(id, 'b'));
-    direct.or_else(|| {
-        (filter.get("operator").and_then(Value::as_str) == Some("AND"))
-            .then(|| filter.get("conditions").and_then(Value::as_array))
-            .flatten()
-            .and_then(|conditions| conditions.iter().filter_map(Value::as_object).find_map(filter_mailbox))
-    })
+    if !filter.contains_key("operator") {
+        return filter.get("inMailbox").and_then(Value::as_str).and_then(|id| parse_id(id, 'b'));
+    }
+    (filter.get("operator").and_then(Value::as_str) == Some("AND"))
+        .then(|| filter.get("conditions").and_then(Value::as_array))
+        .flatten()
+        .and_then(|conditions| conditions.iter().filter_map(Value::as_object).find_map(filter_mailbox))
 }
 
 async fn query_inner(ctx: &Context<'_>, args: &Map<String, Value>, cap: i64) -> MethodResult {
@@ -415,7 +420,9 @@ async fn query_inner(ctx: &Context<'_>, args: &Map<String, Value>, cap: i64) -> 
         }
         out
     };
-    let conditions = format!("m.account_id = ?1 AND {} {thread}", numbered(&condition));
+    // Another account's messages are only ever searched within the shared mailbox itself.
+    let confined = if owner == ctx.account.id { "" } else { "AND m.mailbox_id = ?2" };
+    let conditions = format!("m.account_id = ?1 {confined} AND {} {thread}", numbered(&condition));
     // Listing one mailbox, newest first: the mailbox's date index yields the page directly
     // (`+` keeps SQLite from scanning the whole account through another index and sorting).
     let page_conditions = if mailbox.is_some() { format!("+{conditions}") } else { conditions.clone() };
