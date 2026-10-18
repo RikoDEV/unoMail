@@ -16,6 +16,34 @@ env:
   TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  verify:
+    # The tagged commit must have passed CI on main; the release does not test it again.
+    # Builds start right away, only publishing waits for this.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          sha=$(gh api "repos/$REPO/commits/$TAG" --jq .sha)
+          # CI for the commit may still be running when the tag is pushed right after it.
+          for i in $(seq 1 60); do
+            run=$(gh run list --repo "$REPO" --workflow ci.yml --commit "$sha" --event push               --json status,conclusion,url --jq 'first // empty')
+            [ -z "$run" ] && { echo "::error::No CI run on main for $sha; push the commit to main first."; exit 1; }
+            status=$(jq -r .status <<< "$run")
+            if [ "$status" = completed ]; then
+              conclusion=$(jq -r .conclusion <<< "$run")
+              echo "CI for $sha: $conclusion ($(jq -r .url <<< "$run"))"
+              [ "$conclusion" = success ] && exit 0
+              echo "::error::CI did not pass for $sha"; exit 1
+            fi
+            sleep 60
+          done
+          echo "::error::CI for $sha still not finished after an hour"; exit 1
+
   web:
     runs-on: ubuntu-latest
     steps:
@@ -170,7 +198,7 @@ jobs:
           path: unomail-*-sbom.json
 
   manifest:
-    needs: [image, scan]
+    needs: [verify, image, scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -203,7 +231,7 @@ jobs:
             $(printf "$IMAGE@sha256:%s " *)
 
   release:
-    needs: [binaries, manifest]
+    needs: [verify, binaries, manifest]
     runs-on: ubuntu-latest
     permissions:
       contents: write
