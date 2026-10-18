@@ -14,6 +14,10 @@ import { readLocal, writeLocal } from './storage';
 export const LANGUAGES: { code: string; name: string }[] = [
   { code: 'en', name: 'English' },
   { code: 'pl', name: 'Polski' },
+  { code: 'de', name: 'Deutsch' },
+  { code: 'fr', name: 'Français' },
+  { code: 'cs', name: 'Čeština' },
+  { code: 'sk', name: 'Slovenčina' },
 ];
 const TRANSLATIONS = import.meta.glob<Record<string, string>>(['./locales/*.json', '!./locales/en.json'], { import: 'default' });
 const STORAGE_KEY = 'unomail.language';

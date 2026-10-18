@@ -4,10 +4,15 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { t } from './i18n';
 import en from './locales/en.json';
+import cs from './locales/cs.json';
+import de from './locales/de.json';
+import fr from './locales/fr.json';
 import pl from './locales/pl.json';
+import sk from './locales/sk.json';
 
-const PLURAL_FORMS = ['_one', '_few', '_many', '_other'];
-const translations: Record<string, Record<string, string>> = { pl };
+const translations: Record<string, Record<string, string>> = { pl, de, fr, cs, sk };
+/** The plural suffixes i18next looks up for a language, e.g. `_one`, `_other`. */
+const pluralForms = (language: string) => new Intl.PluralRules(language).resolvedOptions().pluralCategories.map((form) => `_${form}`);
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -36,21 +41,24 @@ const base = (key: string) => key.replace(/_(one|few|many|other|folder)$/, '');
 describe('translations', () => {
   it('cover every text of the interface', () => {
     for (const [language, table] of Object.entries(translations)) {
-      const missing = [...usedKeys()].filter((key) => !(key in table) && !PLURAL_FORMS.every((form) => key + form in table));
+      const forms = pluralForms(language);
+      const missing = [...usedKeys()].filter((key) => !(key in table) && !forms.every((form) => key + form in table));
       expect(missing, `untranslated in ${language}`).toEqual([]);
     }
   });
 
   it('keep the placeholders and give plurals every form', () => {
-    for (const table of [en, pl] as Record<string, string>[]) {
+    for (const table of [en, ...Object.values(translations)]) {
       for (const [key, value] of Object.entries(table)) {
         expect(placeholders(value), key).toEqual(placeholders(base(key)));
       }
     }
-    const pluralKeys = new Set(Object.keys(pl).filter((key) => /_(one|few|many|other)$/.test(key)).map(base));
-    for (const key of pluralKeys) {
-      for (const form of PLURAL_FORMS) expect(pl, `${key}${form}`).toHaveProperty([key + form]);
-      expect(en, `${key}_one`).toHaveProperty([`${key}_one`]);
+    for (const [language, table] of Object.entries(translations)) {
+      const pluralKeys = new Set(Object.keys(table).filter((key) => /_(one|few|many|other)$/.test(key)).map(base));
+      for (const key of pluralKeys) {
+        for (const form of pluralForms(language)) expect(table, `${language}: ${key}${form}`).toHaveProperty([key + form]);
+        expect(en, `${key}_one`).toHaveProperty([`${key}_one`]);
+      }
     }
   });
 
