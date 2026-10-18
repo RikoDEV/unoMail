@@ -10,10 +10,8 @@ const rows = (page: Page) => page.getByTestId('email-row');
 const row = (page: Page, text: string) => rows(page).filter({ hasText: text });
 const folders = (page: Page) => page.getByRole('navigation', { name: 'Folders' });
 
-const HOSTNAME = 'mail.e2e.test';
-
-/** Puts a raw message into the signed-in user's inbox, as an import would. */
-async function importMessage(page: Page, raw: string) {
+/** Puts a raw message into the signed-in user's inbox, as an import would, and returns its id. */
+async function importMessage(page: Page, raw: string): Promise<string> {
   const session = await (await page.request.get('/jmap/session')).json();
   const account = session.primaryAccounts['urn:ietf:params:jmap:mail'] as string;
   const csrf = (await (await page.request.get('/api/auth/me')).json()).csrf_token as string;
@@ -24,7 +22,31 @@ async function importMessage(page: Page, raw: string) {
   const mailboxes = await call([['Mailbox/get', { accountId: account }, 'm']]);
   const inbox = mailboxes[0][1].list.find((mailbox: { role: string | null }) => mailbox.role === 'inbox').id as string;
   const imported = await call([['Email/import', { accountId: account, emails: { e: { blobId: (await upload.json()).blobId, mailboxIds: { [inbox]: true } } } }, 'i']]);
-  expect(imported[0][1].created?.e?.id, JSON.stringify(imported)).toBeTruthy();
+  const id = imported[0][1].created?.e?.id as string | undefined;
+  expect(id, JSON.stringify(imported)).toBeTruthy();
+  return id!;
+}
+
+type Security = Record<string, unknown>;
+
+/** What the server reports as `security` for a message it received from another server. */
+const received = (fields: Security): Security => ({ origin: 'remote', spf: null, dkim: null, dmarc: null, mailed_by: null, signed_by: [], from_domain: null, tls: false, virus: null, problems: [], ...fields });
+
+/**
+ * Makes the server's Email/get answers report `verdicts` for these messages. The server drops
+ * its own verdicts from uploaded mail (anyone could write them) and the test server checks no
+ * delivery, so this is how the web client gets to see checked messages.
+ */
+async function reportVerdicts(page: Page, verdicts: Record<string, Security>) {
+  await page.route('**/jmap/api', async (route) => {
+    const response = await route.fetch();
+    const json = await response.json();
+    for (const [name, result] of json.methodResponses ?? []) {
+      if (name !== 'Email/get') continue;
+      for (const email of result.list ?? []) if (verdicts[email.id]) email.security = verdicts[email.id];
+    }
+    await route.fulfill({ response, json });
+  });
 }
 
 test.describe('sender details, warnings and navigation', () => {
@@ -43,13 +65,24 @@ test.describe('sender details, warnings and navigation', () => {
 
   test('hovering the sender shows the details; doubtful senders and malware get a warning', async ({ page }) => {
     await login(page, HANK, USER_PASSWORD);
-    // As the server would have stored them after checking the sender (the test server sees
-    // every connection coming from this machine and checks none, so they are put in place).
-    const found = (results: string) => `Received: from out.remote.test ([203.0.113.9])\r\n\tby ${HOSTNAME} with ESMTP id abc; Tue, 13 Oct 2026 10:00:00 +0000\r\nAuthentication-Results: ${HOSTNAME}; ${results}\r\n`;
+    // The verdicts the server would have found on delivery (see `reportVerdicts`).
     const body = (subject: string) => `From: Ann Example <ann@remote.test>\r\nTo: Hank <${HANK}>\r\nCc: team@remote.test\r\nSubject: ${subject}\r\n\r\nPlease pay.\r\n`;
-    await importMessage(page, found('dkim=none; spf=none smtp.mailfrom=bounce@mailer.remote.test; dmarc=none header.from=remote.test') + body('Wire transfer today'));
-    await importMessage(page, 'X-Virus-Status: Infected (Eicar-Signature)\r\n' + found('dkim=fail header.d=remote.test; spf=softfail smtp.mailfrom=ann@remote.test; dmarc=fail header.from=remote.test') + body('Invoice attached'));
-    await importMessage(page, found('dkim=pass header.d=remote.test header.s=s1; spf=pass smtp.mailfrom=bounce@mailer.remote.test; dmarc=pass header.from=remote.test').replace('with ESMTP id', 'with ESMTPS id') + body('All in order'));
+    const unverified = await importMessage(page, body('Wire transfer today'));
+    const malware = await importMessage(page, body('Invoice attached'));
+    const genuine = await importMessage(page, body('All in order'));
+    await reportVerdicts(page, {
+      [unverified]: received({ verdict: 'unverified', spf: 'none', dkim: 'none', dmarc: 'none', mailed_by: 'mailer.remote.test', from_domain: 'remote.test' }),
+      [malware]: received({
+        verdict: 'failed', spf: 'softfail', dkim: 'fail', dmarc: 'fail', mailed_by: 'remote.test', from_domain: 'remote.test', virus: 'Eicar-Signature',
+        problems: [
+          'The virus scanner found malware in this message: Eicar-Signature',
+          'DMARC: the message does not come from where remote.test says its mail comes from',
+          'SPF: the server that sent it is not one remote.test sends mail from',
+          'DKIM: the signature does not match; the message may have been altered on the way',
+        ],
+      }),
+      [genuine]: received({ verdict: 'verified', spf: 'pass', dkim: 'pass', dmarc: 'pass', mailed_by: 'mailer.remote.test', signed_by: ['remote.test'], from_domain: 'remote.test', tls: true }),
+    });
     await page.reload();
 
     await row(page, 'Wire transfer today').click();
