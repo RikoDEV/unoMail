@@ -76,6 +76,7 @@ impl Activity {
     pub fn reply(&self, ip: IpAddr, line: &str) {
         let Some(code) = line.get(..3).and_then(|c| c.parse::<u16>().ok()) else { return };
         let text: String = sanitize_line(line.get(4..).unwrap_or("")).chars().take(200).collect();
+        crate::logstream::record_smtp(&ip.to_string(), code, &text);
         let mut inner = self.0.lock();
         if inner.replies.len() >= MAX_REPLIES {
             inner.replies.pop_front();

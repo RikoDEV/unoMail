@@ -1860,5 +1860,6 @@
   "Forwarding": "Preposielanie",
   "Copies": "Kópie",
   "Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred": "Kópie preposlané na iné servery za poslednú hodinu; nad limitom je ďalšia pošta pre alias odložená",
-  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Kópie odoslané členom za poslednú hodinu; nad limitom sú ďalšie príspevky odložené"
+  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Kópie odoslané členom za poslednú hodinu; nad limitom sú ďalšie príspevky odložené",
+  "SMTP replies": "Odpovede SMTP"
 }

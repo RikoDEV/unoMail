@@ -1860,5 +1860,6 @@
   "Forwarding": "Przekazywanie",
   "Copies": "Kopie",
   "Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred": "Kopie przekazane na inne serwery w ostatniej godzinie; po przekroczeniu limitu dalsza poczta do aliasu jest odkładana",
-  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Kopie wysłane do członków w ostatniej godzinie; po przekroczeniu limitu kolejne posty są odkładane"
+  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Kopie wysłane do członków w ostatniej godzinie; po przekroczeniu limitu kolejne posty są odkładane",
+  "SMTP replies": "Odpowiedzi SMTP"
 }

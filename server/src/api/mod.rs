@@ -456,6 +456,7 @@ pub fn router(state: AppState) -> Router {
         .route("/logs/delivery", get(system::delivery_log))
         .route("/logs/audit", get(system::audit_log))
         .route("/logs/system", get(admin::system_log))
+        .route("/logs/smtp", get(admin::smtp_log))
         .route("/logs/stream", get(admin::log_stream))
         .route("/settings", get(admin::settings_get).patch(admin::settings_patch))
         .route("/dmarc", get(admin::dmarc_overview))

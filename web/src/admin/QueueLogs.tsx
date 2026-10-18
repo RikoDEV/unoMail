@@ -158,10 +158,18 @@ interface SystemRow {
   message: string;
 }
 
+interface SmtpRow {
+  id: number;
+  ts: number;
+  ip: string;
+  code: number;
+  text: string;
+}
+
 export function Logs() {
   const { account } = useAuth();
   const isSuper = account?.role === 'super_admin';
-  const [tab, setTab] = useState<'delivery' | 'audit' | 'system'>('delivery');
+  const [tab, setTab] = useState<'delivery' | 'audit' | 'system' | 'smtp'>('delivery');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [status, setStatus] = useState('');
@@ -177,7 +185,8 @@ export function Logs() {
   const delivery = useLogStream<DeliveryRow>('/api/logs/delivery', 'delivery', query, statusFilter || debounced, live, tab === 'delivery');
   const audit = useLogStream<AuditRow>('/api/logs/audit', 'audit', query, debounced, live, tab === 'audit' && isSuper);
   const system = useLogStream<SystemRow>('/api/logs/system', 'system', query, debounced, live, tab === 'system' && isSuper);
-  const active = tab === 'delivery' ? delivery : tab === 'audit' ? audit : system;
+  const smtp = useLogStream<SmtpRow>('/api/logs/smtp', 'smtp', query, debounced, live, tab === 'smtp' && isSuper);
+  const active = tab === 'delivery' ? delivery : tab === 'audit' ? audit : tab === 'smtp' ? smtp : system;
 
   return (
     <>
@@ -198,10 +207,35 @@ export function Logs() {
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 1 }}>
         <Tab value="delivery" label={t('Mail delivery')} />
         {isSuper && <Tab value="audit" label={t('Security audit')} />}
+        {isSuper && <Tab value="smtp" label={t('SMTP replies')} />}
         {isSuper && <Tab value="system" label={t('System')} />}
       </Tabs>
       {active.error && <Alert severity="error">{active.error}</Alert>}
-      {tab === 'system' ? (
+      {tab === 'smtp' ? (
+        <ScrollTable size="small" aria-label={t('SMTP replies')} sx={{ '& td': { fontSize: 13 } }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>{t('Time')}</TableCell>
+              <TableCell>{t('Status')}</TableCell>
+              <TableCell>{t('Message')}</TableCell>
+              <TableCell>{t('Sent to')}</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {smtp.rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
+                <TableCell>
+                  <StatusChip status={row.code >= 500 ? 'error' : row.code >= 400 ? 'warning' : 'ok'} />
+                  <Typography component="span" sx={{ ml: 1, fontFamily: 'monospace', fontSize: 13 }}>{row.code}</Typography>
+                </TableCell>
+                <TableCell sx={{ wordBreak: 'break-word' }}>{row.text}</TableCell>
+                <TableCell sx={{ fontFamily: 'monospace' }}>{row.ip}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </ScrollTable>
+      ) : tab === 'system' ? (
         <ScrollTable size="small" aria-label={t('System log')} sx={{ '& td': { fontSize: 13 } }}>
           <TableHead>
             <TableRow>
@@ -278,7 +312,7 @@ export function Logs() {
         </ScrollTable>
       )}
       {active.rows.length === 0 && !active.error && <Typography color="text.secondary" sx={{ mt: 2 }}>{t('No log entries match.')}</Typography>}
-      {active.rows.length >= 200 && tab !== 'system' && (
+      {active.rows.length >= 200 && tab !== 'system' && tab !== 'smtp' && (
         <Stack alignItems="center" sx={{ mt: 2 }}>
           <Button onClick={() => void active.loadOlder()}>{t('Load older entries')}</Button>
         </Stack>

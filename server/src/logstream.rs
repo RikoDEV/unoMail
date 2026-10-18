@@ -1,5 +1,5 @@
-//! Live log streaming: a process-wide bus carrying delivery, audit and system log entries to
-//! the admin panel, plus an in-memory buffer of recent system log lines.
+//! Live log streaming: a process-wide bus carrying delivery, audit, system and SMTP log entries
+//! to the admin panel, plus in-memory buffers of recent system log lines and SMTP replies.
 
 use std::{
     collections::VecDeque,
@@ -13,10 +13,11 @@ use tracing::{Event, Level, Subscriber, field::{Field, Visit}};
 use tracing_subscriber::{Layer, layer::Context};
 
 const SYSTEM_BUFFER: usize = 2000;
+const SMTP_BUFFER: usize = 2000;
 
 #[derive(Debug, Clone)]
 pub struct LogEvent {
-    /// `delivery`, `audit` or `system`.
+    /// `delivery`, `audit`, `system` or `smtp`.
     pub kind: &'static str,
     pub entry: Value,
 }
@@ -24,6 +25,8 @@ pub struct LogEvent {
 static BUS: LazyLock<broadcast::Sender<Arc<LogEvent>>> = LazyLock::new(|| broadcast::channel(1024).0);
 static SYSTEM: LazyLock<Mutex<VecDeque<Value>>> = LazyLock::new(|| Mutex::new(VecDeque::with_capacity(SYSTEM_BUFFER)));
 static SYSTEM_ID: AtomicI64 = AtomicI64::new(1);
+static SMTP: LazyLock<Mutex<VecDeque<Value>>> = LazyLock::new(|| Mutex::new(VecDeque::with_capacity(SMTP_BUFFER)));
+static SMTP_ID: AtomicI64 = AtomicI64::new(1);
 
 pub fn publish(kind: &'static str, entry: Value) {
     // No receivers simply means nobody is watching.
@@ -36,8 +39,17 @@ pub fn subscribe() -> broadcast::Receiver<Arc<LogEvent>> {
 
 /// The most recent system log lines, newest first.
 pub fn recent_system(limit: usize, query: &str) -> Vec<Value> {
+    recent(&SYSTEM, limit, query)
+}
+
+/// The most recent SMTP replies sent to clients, newest first.
+pub fn recent_smtp(limit: usize, query: &str) -> Vec<Value> {
+    recent(&SMTP, limit, query)
+}
+
+fn recent(buffer: &Mutex<VecDeque<Value>>, limit: usize, query: &str) -> Vec<Value> {
     let needle = query.to_lowercase();
-    SYSTEM
+    buffer
         .lock()
         .iter()
         .rev()
@@ -45,6 +57,14 @@ pub fn recent_system(limit: usize, query: &str) -> Vec<Value> {
         .take(limit)
         .cloned()
         .collect()
+}
+
+fn push(buffer: &Mutex<VecDeque<Value>>, capacity: usize, entry: Value) {
+    let mut buffer = buffer.lock();
+    if buffer.len() >= capacity {
+        buffer.pop_front();
+    }
+    buffer.push_back(entry);
 }
 
 pub fn record_system(level: &str, target: &str, message: &str) {
@@ -55,14 +75,21 @@ pub fn record_system(level: &str, target: &str, message: &str) {
         "target": target,
         "message": crate::util::sanitize_line(message),
     });
-    {
-        let mut buffer = SYSTEM.lock();
-        if buffer.len() >= SYSTEM_BUFFER {
-            buffer.pop_front();
-        }
-        buffer.push_back(entry.clone());
-    }
+    push(&SYSTEM, SYSTEM_BUFFER, entry.clone());
     publish("system", entry);
+}
+
+/// Records an SMTP reply line sent to `ip`; `text` must already be sanitized.
+pub fn record_smtp(ip: &str, code: u16, text: &str) {
+    let entry = json!({
+        "id": SMTP_ID.fetch_add(1, Ordering::Relaxed),
+        "ts": crate::util::now(),
+        "ip": ip,
+        "code": code,
+        "text": text,
+    });
+    push(&SMTP, SMTP_BUFFER, entry.clone());
+    publish("smtp", entry);
 }
 
 #[derive(Default)]
@@ -116,5 +143,19 @@ mod tests {
         }
         assert_eq!(SYSTEM.lock().len(), SYSTEM_BUFFER);
         assert!(recent_system(10, "marker-xyz").is_empty(), "old entries are evicted");
+    }
+
+    #[test]
+    fn smtp_replies_are_searchable_and_streamed() {
+        let mut receiver = subscribe();
+        record_smtp("192.0.2.7", 550, "5.7.1 rejected smtp-marker-abc");
+        let hits = recent_smtp(10, "SMTP-MARKER-ABC");
+        assert_eq!(hits.len(), 1);
+        assert_eq!((hits[0]["ip"].as_str(), hits[0]["code"].as_u64()), (Some("192.0.2.7"), Some(550)));
+        let mut seen = false;
+        while let Ok(event) = receiver.try_recv() {
+            seen |= event.kind == "smtp" && event.entry["text"].as_str().is_some_and(|m| m.contains("smtp-marker-abc"));
+        }
+        assert!(seen);
     }
 }

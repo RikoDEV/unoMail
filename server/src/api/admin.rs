@@ -233,12 +233,19 @@ pub async fn system_log(State(_state): State<AppState>, session: Session, Query(
     Ok(Json(logstream::recent_system(query.limit.unwrap_or(200).clamp(1, 2000), query.q.as_deref().unwrap_or("").trim())))
 }
 
+/// Recent SMTP replies the server sent to clients.
+pub async fn smtp_log(State(_state): State<AppState>, session: Session, Query(query): Query<SystemLogQuery>) -> JsonResult<Vec<Value>> {
+    session.require_super()?;
+    Ok(Json(logstream::recent_smtp(query.limit.unwrap_or(200).clamp(1, 2000), query.q.as_deref().unwrap_or("").trim())))
+}
+
 /// Server-sent events carrying new log entries of one kind as they are written.
 pub async fn log_stream(State(state): State<AppState>, session: Session, Query(query): Query<StreamQuery>) -> Result<impl IntoResponse, ApiError> {
     let kind: &'static str = match query.kind.as_str() {
         "delivery" => "delivery",
         "audit" => "audit",
         "system" => "system",
+        "smtp" => "smtp",
         _ => return Err(ApiError::bad("unknown log kind")),
     };
     // Domain administrators may follow the delivery log of their own domains only.

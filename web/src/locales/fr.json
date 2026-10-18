@@ -1819,5 +1819,6 @@
   "Forwarding": "Transfert",
   "Copies": "Copies",
   "Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred": "Copies transférées vers d'autres serveurs au cours de la dernière heure ; au-delà de la limite, le courrier vers l'alias est différé",
-  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Copies envoyées aux membres au cours de la dernière heure ; au-delà de la limite, les messages suivants sont différés"
+  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Copies envoyées aux membres au cours de la dernière heure ; au-delà de la limite, les messages suivants sont différés",
+  "SMTP replies": "Réponses SMTP"
 }
