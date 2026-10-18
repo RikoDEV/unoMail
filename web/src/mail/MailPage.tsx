@@ -31,7 +31,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { del, post, errorText } from '../api';
+import { del, post, errorText, formatBytes } from '../api';
 import { useAuth } from '../app';
 import { setPluginNotifier, usePlugins } from '../plugins';
 import { usePrefs } from '../prefs';
@@ -1051,7 +1051,22 @@ export default function MailPage() {
                 </ListItemButton>
               ))}
             </List>
-            <Copyright placement="sidebar" className="mini-hide" sx={{ mt: 'auto', px: 2, pt: 3, pb: 2, flexShrink: 0 }} />
+            {account && (
+              <Box className="mini-hide" sx={{ mt: 'auto', px: 2, pt: 3, flexShrink: 0 }}>
+                <Typography variant="caption" color="text.secondary" component="div">
+                  {t('{{used}} of {{quota}}', { used: formatBytes(account.used_bytes), quota: account.quota_bytes ? formatBytes(account.quota_bytes) : t('unlimited') })}
+                </Typography>
+                {account.quota_bytes > 0 && (
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(100, (account.used_bytes / account.quota_bytes) * 100)}
+                    aria-label={t('Storage')}
+                    sx={{ mt: 0.5, height: 4, borderRadius: 1 }}
+                  />
+                )}
+              </Box>
+            )}
+            <Copyright placement="sidebar" className="mini-hide" sx={{ mt: account ? 0 : 'auto', px: 2, pt: account ? 1 : 3, pb: 2, flexShrink: 0 }} />
           </Box>,
         )}
         <Paper elevation={0} sx={{ width: { xs: '100%', md: threadId ? 400 : '100%' }, flexShrink: { md: threadId ? 0 : 1 }, flex: threadId ? undefined : 1, display: { xs: threadId ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, overflow: 'hidden', minWidth: 0 }}>
