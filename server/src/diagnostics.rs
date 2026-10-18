@@ -113,6 +113,21 @@ pub fn eval_ptr(names: &[String], hostname: &str) -> Eval {
     }
 }
 
+/// Whether an SRV record (`priority weight port target`) sends clients to `port` on `hostname`.
+pub fn eval_srv(records: &[String], port: u16, hostname: &str) -> Eval {
+    let points_here = |record: &String| {
+        let parts: Vec<&str> = record.split_whitespace().collect();
+        parts.len() == 4 && parts[2] == port.to_string() && parts[3].eq_ignore_ascii_case(hostname)
+    };
+    if records.is_empty() {
+        (Status::Warning, "Optional: lets mail programs find this server on their own.".into())
+    } else if records.iter().any(points_here) {
+        (Status::Ok, "Mail programs find this server.".into())
+    } else {
+        (Status::Warning, format!("The record does not point to port {port} on {hostname}."))
+    }
+}
+
 fn lookup_failed<T>(result: Result<Vec<T>, DnsError>) -> Result<Vec<T>, Eval> {
     match result {
         Ok(v) => Ok(v),
@@ -299,6 +314,32 @@ pub async fn domain_report(app: &App, domain: &str, keys: &[DkimKey], mta_sts_mo
     };
     checks.push(check("tls", "TLS certificate", "", String::new(), String::new(), eval, cert.domains.clone()));
 
+    // Optional client auto-configuration (Outlook, Apple Mail, Thunderbird).
+    for prefix in ["autoconfig", "autodiscover"] {
+        let name = format!("{prefix}.{domain}");
+        let (eval, found) = match resolver {
+            Some(r) => match (lookup_failed(dns::ips(r, &name).await), dns::ips(r, hostname).await) {
+                (Ok(theirs), Ok(ours)) if theirs.iter().any(|ip| ours.contains(ip)) => ((Status::Ok, "Mail programs find their settings here.".into()), theirs.iter().map(ToString::to_string).collect()),
+                (Ok(theirs), _) if !theirs.is_empty() => ((Status::Warning, format!("{name} points elsewhere; the settings are served by {hostname}.")), theirs.iter().map(ToString::to_string).collect()),
+                (Ok(_), _) => ((Status::Warning, "Optional: lets mail programs set themselves up from the address alone.".into()), Vec::new()),
+                (Err(eval), _) => (eval, Vec::new()),
+            },
+            None => (unknown(), Vec::new()),
+        };
+        checks.push(check(prefix, &format!("Client autoconfiguration ({prefix})"), "CNAME", name, format!("{hostname}."), eval, found));
+    }
+    for (service, priority, port) in [("submission", 0, 587), ("imaps", 0, 993), ("pop3s", 10, 995)] {
+        let name = format!("_{service}._tcp.{domain}");
+        let (eval, found) = match resolver {
+            Some(r) => match lookup_failed(dns::srv(r, &name).await) {
+                Ok(records) => (eval_srv(&records, port, hostname), records),
+                Err(eval) => (eval, Vec::new()),
+            },
+            None => (unknown(), Vec::new()),
+        };
+        checks.push(check(&format!("srv:{service}"), &format!("Client autoconfiguration ({service})"), "SRV", name, format!("{priority} 1 {port} {hostname}."), eval, found));
+    }
+
     checks
 }
 
@@ -423,6 +464,15 @@ mod tests {
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn srv() {
+        let host = "mail.example.com";
+        assert_eq!(eval_srv(&[], 993, host).0, Status::Warning);
+        assert_eq!(eval_srv(&s(&["0 1 993 mail.example.com"]), 993, host).0, Status::Ok);
+        assert_eq!(eval_srv(&s(&["0 1 143 mail.example.com"]), 993, host).0, Status::Warning);
+        assert_eq!(eval_srv(&s(&["0 1 993 other.example.net"]), 993, host).0, Status::Warning);
     }
 
     #[test]

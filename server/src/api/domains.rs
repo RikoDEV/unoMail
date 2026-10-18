@@ -180,16 +180,7 @@ pub async fn dns_records(State(state): State<AppState>, session: Session, Path(i
     let domain = load(&state, id).await?;
     let keys = dkim::keys_for_domain(&state.db, id).await?;
     let checks = diagnostics::domain_report(&state, &domain.name, &keys, &domain.mta_sts_mode).await;
-    let host = &state.cfg.hostname;
-    // Client auto-configuration records (Outlook, Apple Mail, Thunderbird).
-    let autoconfig = json!([
-        { "type": "CNAME", "name": format!("autoconfig.{}", domain.name), "value": format!("{host}.") },
-        { "type": "CNAME", "name": format!("autodiscover.{}", domain.name), "value": format!("{host}.") },
-        { "type": "SRV", "name": format!("_submission._tcp.{}", domain.name), "value": format!("0 1 587 {host}.") },
-        { "type": "SRV", "name": format!("_imaps._tcp.{}", domain.name), "value": format!("0 1 993 {host}.") },
-        { "type": "SRV", "name": format!("_pop3s._tcp.{}", domain.name), "value": format!("10 1 995 {host}.") },
-    ]);
-    Ok(Json(json!({ "domain": domain.name, "checks": checks, "autoconfig": autoconfig })))
+    Ok(Json(json!({ "domain": domain.name, "checks": checks })))
 }
 
 #[derive(Serialize)]

@@ -156,10 +156,9 @@ async fn domain_lifecycle_with_dkim_and_dns_records() {
     let dns = api.get(&format!("/api/domains/{id}/dns")).await;
     let checks = dns.body["checks"].as_array().unwrap();
     let ids: Vec<&str> = checks.iter().map(|c| c["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["mx", "spf", "dkim:rotate-2026", "dmarc", "tls-rpt", "dane", "ptr", "tls"]);
+    assert_eq!(ids, ["mx", "spf", "dkim:rotate-2026", "dmarc", "tls-rpt", "dane", "ptr", "tls", "autoconfig", "autodiscover", "srv:submission", "srv:imaps", "srv:pop3s"]);
     assert_eq!(checks[0]["record_value"], "10 mail.test.example.");
     assert_eq!(checks[7]["status"], "warning", "self-signed certificate is flagged");
-    assert_eq!(dns.body["autoconfig"].as_array().unwrap().len(), 5);
 
     let updated = api.patch(&format!("/api/domains/{id}"), json!({ "catch_all": "all@new-domain.example", "max_mailboxes": 1 })).await;
     assert_eq!(updated.body["catch_all"], "all@new-domain.example");

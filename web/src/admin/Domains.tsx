@@ -181,7 +181,7 @@ export function DomainDetail() {
   const { account } = useAuth();
   const isSuper = account?.role === 'super_admin';
   const domain = useLoad(() => get<Domain>(`/api/domains/${id}`), [id]);
-  const dns = useLoad(() => get<{ checks: Check[]; autoconfig: { type: string; name: string; value: string }[] }>(`/api/domains/${id}/dns`), [id]);
+  const dns = useLoad(() => get<{ checks: Check[]}>(`/api/domains/${id}/dns`), [id]);
   const keys = useLoad(() => get<DkimKey[]>(`/api/domains/${id}/dkim`), [id]);
   const admins = useLoad(() => (isSuper ? get<string[]>(`/api/domains/${id}/admins`) : Promise.resolve([])), [id, isSuper]);
   const { run, feedback } = useAction();
@@ -270,19 +270,6 @@ export function DomainDetail() {
                     <CopyButton value={check.record_value} />
                   </>
                 )}
-              </TableCell>
-            </TableRow>
-          ))}
-          {(dns.data?.autoconfig ?? []).map((record) => (
-            <TableRow key={record.name}>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('Client autoconfiguration')}</TableCell>
-              <TableCell>
-                <Typography variant="caption" color="text.secondary">
-                  {t('optional')}
-                </Typography>
-              </TableCell>
-              <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}>
-                {record.type} {record.name} → {record.value}
               </TableCell>
             </TableRow>
           ))}

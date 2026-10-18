@@ -89,6 +89,25 @@ pub async fn tlsa(resolver: &MessageAuthenticator, name: &str) -> Result<Vec<Str
     }
 }
 
+/// SRV records as `priority weight port target`, the target lowercased without the final dot.
+pub async fn srv(resolver: &MessageAuthenticator, name: &str) -> Result<Vec<String>, DnsError> {
+    let lookup = resolver
+        .resolver()
+        .lookup(format!("{}.", name.trim_end_matches('.')), hickory_resolver::proto::rr::RecordType::SRV)
+        .await
+        .map_err(|e| if e.is_no_records_found() { DnsError::NotFound } else { DnsError::Temporary(e.to_string()) })?;
+    Ok(lookup
+        .answers()
+        .iter()
+        .filter_map(|record| match &record.data {
+            hickory_resolver::proto::rr::RData::SRV(srv) => {
+                Some(format!("{} {} {} {}", srv.priority, srv.weight, srv.port, srv.target.to_ascii().trim_end_matches('.').to_ascii_lowercase()))
+            }
+            _ => None,
+        })
+        .collect())
+}
+
 pub async fn txt(resolver: &MessageAuthenticator, name: &str) -> Result<Vec<String>, DnsError> {
     let lookup = resolver
         .resolver()
