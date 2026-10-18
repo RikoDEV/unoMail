@@ -369,6 +369,19 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
     let mut delivered = 0usize;
     let mut quota_failures: Vec<String> = Vec::new();
     let mut forward_blob: Option<String> = None;
+    // Before anything is delivered, so a refusal does not leave copies behind for the retry.
+    // Spam is not passed on: it would be our server sending it.
+    for (rcpt, targets) in msg.recipients {
+        let copies = targets.iter().filter(|t| matches!(t, Target::Remote(_))).count();
+        if copies > 0 && !junk {
+            // Tagged addresses reach the same alias, and share its allowance.
+            match outbound::register_forward(app, &rcpt.without_tag().to_string(), copies).await {
+                Ok(true) => {}
+                Ok(false) => return Outcome::Deferred("451 4.7.1 Forwarding limit reached, please try again later".into()),
+                Err(err) => return internal("forwarding limit check failed", err),
+            }
+        }
+    }
     for (rcpt, targets) in msg.recipients {
         for target in targets {
             match target {
@@ -406,6 +419,10 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
                     Ok(()) => delivered += 1,
                     Err(err) => return internal("mailing list failed", err),
                 },
+                Target::Remote(_) if junk => {
+                    tracing::info!(recipient = %rcpt, "spam not forwarded");
+                    delivered += 1;
+                }
                 Target::Remote(remote_addr) => {
                     // Forwarding through an alias: rewrite the sender so SPF keeps passing.
                     let result = async {

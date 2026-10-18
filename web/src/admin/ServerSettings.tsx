@@ -144,6 +144,8 @@ const GROUPS: Group[] = [
       { key: 'tls_reports_enabled', label: t('Send TLS reports'), help: t('Daily SMTP TLS reports to the domains that publish a TLS-RPT record (RFC 8460)'), kind: 'bool' },
       { key: 'outbound_max_messages_per_hour', label: t('Messages per account per hour'), help: t('Exceeding this blocks the account from sending'), kind: 'number', min: 1, max: 1000000 },
       { key: 'outbound_max_recipients_per_hour', label: t('Recipients per account per hour'), help: t('Exceeding this blocks the account from sending'), kind: 'number', min: 1, max: 10000000 },
+      { key: 'forward_max_copies_per_hour', label: t('Forwarded copies per alias or list per hour'), help: t('Further mail an alias or list would send on to other servers is deferred'), kind: 'number', min: 1, max: 10000000 },
+      { key: 'queue_max_entries', label: t('Outbound queue limit'), help: t('Above this many waiting messages, forwarded and list mail is deferred'), kind: 'number', min: 1, max: 100000000 },
     ],
   },
   {

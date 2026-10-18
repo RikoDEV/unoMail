@@ -1768,5 +1768,15 @@
   "Objects": "Objekte",
   "Symbols": "Symbole",
   "Try again": "Erneut versuchen",
-  "This page could not be shown.": "Diese Seite konnte nicht angezeigt werden."
+  "This page could not be shown.": "Diese Seite konnte nicht angezeigt werden.",
+  "Forwarded copies per alias or list per hour": "Weitergeleitete Kopien pro Alias oder Liste pro Stunde",
+  "Further mail an alias or list would send on to other servers is deferred": "Weitere Mail, die ein Alias oder eine Liste an andere Server senden würde, wird zurückgestellt",
+  "Outbound queue limit": "Limit der Ausgangswarteschlange",
+  "Above this many waiting messages, forwarded and list mail is deferred": "Ab so vielen wartenden Nachrichten wird weitergeleitete und Listen-Mail zurückgestellt",
+  "{{label}}: {{used}} of {{limit}}": "{{label}}: {{used}} von {{limit}}",
+  "Mail sent over the last hour against the hourly sending limits; going over them blocks the mailbox from sending": "In der letzten Stunde gesendete Mail im Vergleich zu den stündlichen Limits; wer sie überschreitet, wird für das Senden gesperrt",
+  "Forwarding": "Weiterleitung",
+  "Copies": "Kopien",
+  "Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred": "In der letzten Stunde an andere Server weitergeleitete Kopien; über dem Limit wird weitere Mail an den Alias zurückgestellt",
+  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "In der letzten Stunde an Mitglieder gesendete Kopien; über dem Limit werden weitere Beiträge zurückgestellt"
 }

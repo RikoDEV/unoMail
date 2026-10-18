@@ -51,6 +51,8 @@ pub async fn list(State(state): State<AppState>, session: Session, Query(query):
         let mut value = serde_json::to_value(&row).map_err(anyhow::Error::from)?;
         value["members"] = json!(members);
         value["held"] = json!(held);
+        value["forwarded"] = json!(crate::security::outbound::forwarded_recently(&state.db, &row.address).await?);
+        value["forward_limit"] = json!(state.rt().forward_max_copies_per_hour);
         out.push(value);
     }
     Ok(Json(out))

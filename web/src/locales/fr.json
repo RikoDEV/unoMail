@@ -1809,5 +1809,15 @@
   "Objects": "Objets",
   "Symbols": "Symboles",
   "Try again": "Réessayer",
-  "This page could not be shown.": "Impossible d’afficher cette page."
+  "This page could not be shown.": "Impossible d’afficher cette page.",
+  "Forwarded copies per alias or list per hour": "Copies transférées par alias ou liste par heure",
+  "Further mail an alias or list would send on to other servers is deferred": "Le courrier supplémentaire qu'un alias ou une liste enverrait à d'autres serveurs est différé",
+  "Outbound queue limit": "Limite de la file d'envoi",
+  "Above this many waiting messages, forwarded and list mail is deferred": "Au-delà de ce nombre de messages en attente, le courrier transféré et des listes est différé",
+  "{{label}}: {{used}} of {{limit}}": "{{label}} : {{used}} sur {{limit}}",
+  "Mail sent over the last hour against the hourly sending limits; going over them blocks the mailbox from sending": "Courrier envoyé au cours de la dernière heure par rapport aux limites horaires ; les dépasser bloque l'envoi depuis la boîte",
+  "Forwarding": "Transfert",
+  "Copies": "Copies",
+  "Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred": "Copies transférées vers d'autres serveurs au cours de la dernière heure ; au-delà de la limite, le courrier vers l'alias est différé",
+  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Copies envoyées aux membres au cours de la dernière heure ; au-delà de la limite, les messages suivants sont différés"
 }

@@ -6,7 +6,7 @@ import Delete from '@mui/icons-material/Delete';
 import { Alert, Badge, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { del, formatTime, get, patch, post } from '../api';
-import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
+import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, UsageBar, validators, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface MailingList {
@@ -21,6 +21,8 @@ interface MailingList {
   enabled: boolean;
   members?: number;
   held?: number;
+  forwarded?: number;
+  forward_limit?: number;
 }
 
 interface Member {
@@ -78,6 +80,11 @@ export function Lists() {
               <TableCell>{t('Who may post')}</TableCell>
               <TableCell align="right">{t('Members')}</TableCell>
               <TableCell align="right">{t('Waiting')}</TableCell>
+              <TableCell sx={{ width: 200 }}>
+                <Tooltip title={t('Copies sent to members over the last hour; beyond the limit, further posts are deferred')}>
+                  <span>{t('Sending')}</span>
+                </Tooltip>
+              </TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -91,6 +98,9 @@ export function Lists() {
                 <TableCell>{POSTING[list.posting]}</TableCell>
                 <TableCell align="right">{list.members}</TableCell>
                 <TableCell align="right">{list.held ? <Chip size="small" color="warning" label={list.held} /> : 0}</TableCell>
+                <TableCell data-sort={(list.forwarded ?? 0) / (list.forward_limit || 1)}>
+                  <UsageBar label={t('Copies')} used={list.forwarded ?? 0} limit={list.forward_limit ?? 0} />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

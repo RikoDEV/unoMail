@@ -4,7 +4,7 @@ import Edit from '@mui/icons-material/Edit';
 import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { del, get, patch, post } from '../api';
-import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
+import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, UsageBar, validators, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface Alias {
@@ -12,6 +12,8 @@ interface Alias {
   source: string;
   destinations: string[];
   enabled: boolean;
+  forwarded: number;
+  forward_limit: number;
 }
 
 interface FormState {
@@ -67,6 +69,11 @@ export function Aliases() {
           <TableRow>
             <TableCell>{t('Alias')}</TableCell>
             <TableCell>{t('Delivers to')}</TableCell>
+            <TableCell sx={{ width: 200 }}>
+              <Tooltip title={t('Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred')}>
+                <span>{t('Forwarding')}</span>
+              </Tooltip>
+            </TableCell>
             <TableCell>{t('Enabled')}</TableCell>
             <TableCell />
           </TableRow>
@@ -76,6 +83,9 @@ export function Aliases() {
             <TableRow key={alias.id} hover>
               <TableCell>{alias.source}</TableCell>
               <TableCell>{alias.destinations.join(', ')}</TableCell>
+              <TableCell data-sort={alias.forwarded / alias.forward_limit}>
+                <UsageBar label={t('Copies')} used={alias.forwarded} limit={alias.forward_limit} />
+              </TableCell>
               <TableCell>
                 <Switch
                   checked={alias.enabled}

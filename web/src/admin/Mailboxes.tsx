@@ -6,7 +6,7 @@ import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
 import { useEffect, useState } from 'react';
 import { del, formatBytes, get, patch, post } from '../api';
 import { useAuth } from '../app';
-import { ConfirmDialog, PageHeader, routeBy, StatusChip, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
+import { ConfirmDialog, PageHeader, routeBy, StatusChip, UsageBar, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
 
 import { t, uiLocale } from '../i18n';
 interface Mailbox {
@@ -25,6 +25,16 @@ interface Mailbox {
   send_only: boolean;
   /** Kept by the server (postmaster@): cannot be deleted. */
   system: boolean;
+  /** Submitted over the last hour or so, the window the sending limits are checked against. */
+  sent_messages: number;
+  sent_recipients: number;
+}
+
+interface MailboxList {
+  items: Mailbox[];
+  total: number;
+  max_messages_per_hour: number;
+  max_recipients_per_hour: number;
 }
 
 const MB = 1024 * 1024;
@@ -192,7 +202,7 @@ export function Mailboxes() {
   const isSuper = account?.role === 'super_admin';
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const { data, error, reload } = useLoad(() => get<{ items: Mailbox[]; total: number }>(`/api/accounts?limit=200&q=${encodeURIComponent(query)}`), [query]);
+  const { data, error, reload } = useLoad(() => get<MailboxList>(`/api/accounts?limit=200&q=${encodeURIComponent(query)}`), [query]);
   const { run, feedback, notify } = useAction();
   const [form, setForm] = useState<FormState | null>(null);
   const [removing, setRemoving] = useState<Mailbox | null>(null);
@@ -264,6 +274,11 @@ export function Mailboxes() {
             <TableCell>{t('Name')}</TableCell>
             <TableCell>{t('Role')}</TableCell>
             <TableCell sx={{ width: 220 }}>{t('Storage')}</TableCell>
+            <TableCell sx={{ width: 200 }}>
+              <Tooltip title={t('Mail sent over the last hour against the hourly sending limits; going over them blocks the mailbox from sending')}>
+                <span>{t('Sending')}</span>
+              </Tooltip>
+            </TableCell>
             <TableCell>{t('Access')}</TableCell>
             <TableCell />
           </TableRow>
@@ -289,6 +304,14 @@ export function Mailboxes() {
                   {t('{{used}} of {{quota}}', { used: formatBytes(box.used_bytes), quota: box.quota_bytes ? formatBytes(box.quota_bytes) : t('unlimited') })}
                 </Typography>
                 {box.quota_bytes > 0 && <LinearProgress variant="determinate" value={Math.min(100, (box.used_bytes / box.quota_bytes) * 100)} color={box.used_bytes > box.quota_bytes * 0.9 ? 'error' : 'primary'} />}
+              </TableCell>
+              <TableCell data-sort={data ? box.sent_recipients / data.max_recipients_per_hour : 0}>
+                {data && (
+                  <>
+                    <UsageBar label={t('Messages')} used={box.sent_messages} limit={data.max_messages_per_hour} />
+                    <UsageBar label={t('Recipients')} used={box.sent_recipients} limit={data.max_recipients_per_hour} />
+                  </>
+                )}
               </TableCell>
               <TableCell>
                 {[box.imap_enabled && 'IMAP', box.pop3_enabled && 'POP3', box.smtp_enabled && 'SMTP'].filter(Boolean).join(' · ')}

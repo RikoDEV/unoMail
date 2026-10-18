@@ -1,7 +1,7 @@
-import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, type TableProps, TableRow, TableSortLabel, Typography } from '@mui/material';
+import { Alert, Button, Chip, LinearProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, type TableProps, TableRow, TableSortLabel, Typography } from '@mui/material';
 import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode, useCallback, useState } from 'react';
 
-import { t } from '../i18n';
+import { t, uiLocale } from '../i18n';
 import { useTitle } from '../shell';
 import { errorText } from '../api';
 export { useLoad } from '../useLoad';
@@ -177,5 +177,18 @@ export function ScrollTable({ children, ...props }: TableProps) {
     <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
       <Table {...props}>{parts}</Table>
     </TableContainer>
+  );
+}
+
+/** How much of an hourly limit has been used, turning orange and then red as it fills. */
+export function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
+  const share = limit > 0 ? used / limit : 0;
+  return (
+    <>
+      <Typography variant="caption" display="block">
+        {t('{{label}}: {{used}} of {{limit}}', { label, used: used.toLocaleString(uiLocale()), limit: limit.toLocaleString(uiLocale()) })}
+      </Typography>
+      <LinearProgress variant="determinate" value={Math.min(100, share * 100)} color={share >= 0.9 ? 'error' : share >= 0.7 ? 'warning' : 'primary'} />
+    </>
   );
 }

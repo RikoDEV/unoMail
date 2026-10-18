@@ -84,6 +84,45 @@ pub async fn register_spam(app: &App, account: &Account) -> anyhow::Result<bool>
     Ok(false)
 }
 
+/// Copies `source` sent on to other servers over the window its forwarding limit covers.
+pub async fn forwarded_recently(db: &sqlx::SqlitePool, source: &str) -> sqlx::Result<i64> {
+    sqlx::query_scalar("SELECT COALESCE(SUM(copies), 0) FROM forward_stats WHERE source = ? AND bucket >= ?")
+        .bind(source)
+        .bind(now() / 3600 - 1)
+        .fetch_one(db)
+        .await
+}
+
+/// Accounts for `copies` copies an alias or list (`source`) is about to send on to other
+/// servers, refusing them when the source is over its hourly allowance or the queue is full.
+/// Such mail comes from outside, so no account's limit covers it.
+pub async fn register_forward(app: &App, source: &str, copies: usize) -> anyhow::Result<bool> {
+    if copies == 0 {
+        return Ok(true);
+    }
+    let waiting: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM queue").fetch_one(&app.db).await?;
+    if waiting + copies as i64 > app.rt().queue_max_entries {
+        tracing::warn!(source, waiting, "outbound queue full, not forwarding");
+        return Ok(false);
+    }
+    let sent = forwarded_recently(&app.db, source).await?;
+    if sent + copies as i64 > app.rt().forward_max_copies_per_hour {
+        tracing::warn!(source, sent, "hourly forwarding limit reached");
+        return Ok(false);
+    }
+    sqlx::query(
+        "INSERT INTO forward_stats (source, bucket, copies) VALUES (?, ?, ?)
+         ON CONFLICT(source, bucket) DO UPDATE SET copies = copies + excluded.copies",
+    )
+    .bind(source)
+    .bind(now() / 3600)
+    .bind(copies as i64)
+    .execute(&app.db)
+    .await?;
+    Ok(true)
+}
+
 pub async fn prune(app: &App) {
     let _ = sqlx::query("DELETE FROM outbound_stats WHERE bucket < ?").bind(now() / 3600 - 48).execute(&app.db).await;
+    let _ = sqlx::query("DELETE FROM forward_stats WHERE bucket < ?").bind(now() / 3600 - 48).execute(&app.db).await;
 }

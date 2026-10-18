@@ -11,6 +11,14 @@ use crate::{config::Config, util::normalize_domain};
 
 const SETTING_KEY: &str = "config.runtime";
 
+fn forward_max_copies_per_hour() -> i64 {
+    1000
+}
+
+fn queue_max_entries() -> i64 {
+    50_000
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Runtime {
     pub greylist_enabled: bool,
@@ -49,6 +57,12 @@ pub struct Runtime {
     pub rspamd_fail_open: bool,
     pub outbound_max_messages_per_hour: i64,
     pub outbound_max_recipients_per_hour: i64,
+    /// Copies one alias or mailing list may send on to other servers per hour.
+    #[serde(default = "forward_max_copies_per_hour")]
+    pub forward_max_copies_per_hour: i64,
+    /// Waiting outbound messages beyond which forwarded and list mail is deferred.
+    #[serde(default = "queue_max_entries")]
+    pub queue_max_entries: i64,
 
     // Spam and reputation.
     /// Scan mail from other servers with the content filter.
@@ -193,6 +207,8 @@ impl Runtime {
             rspamd_fail_open: cfg.rspamd_fail_open,
             outbound_max_messages_per_hour: cfg.outbound_max_messages_per_hour,
             outbound_max_recipients_per_hour: cfg.outbound_max_recipients_per_hour,
+            forward_max_copies_per_hour: forward_max_copies_per_hour(),
+            queue_max_entries: queue_max_entries(),
             spam_check_inbound: true,
             spam_check_outbound: true,
             spam_subject_enabled: false,
@@ -251,6 +267,9 @@ impl Runtime {
         }
         if self.outbound_max_messages_per_hour < 1 || self.outbound_max_recipients_per_hour < 1 {
             return Err("sending limits must be at least 1".into());
+        }
+        if self.forward_max_copies_per_hour < 1 || self.queue_max_entries < 1 {
+            return Err("forwarding and queue limits must be at least 1".into());
         }
         if self.dnsbl_zones.len() > 20 {
             return Err("at most 20 blocklist zones are supported".into());

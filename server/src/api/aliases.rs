@@ -33,6 +33,9 @@ pub struct AliasView {
     destinations: Vec<String>,
     enabled: bool,
     created_at: i64,
+    /// Copies sent on to other servers recently, against the hourly forwarding limit.
+    forwarded: i64,
+    forward_limit: i64,
 }
 
 impl From<AliasRow> for AliasView {
@@ -44,6 +47,8 @@ impl From<AliasRow> for AliasView {
             destinations: serde_json::from_str(&r.destinations).unwrap_or_default(),
             enabled: r.enabled,
             created_at: r.created_at,
+            forwarded: 0,
+            forward_limit: 0,
         }
     }
 }
@@ -80,7 +85,15 @@ pub async fn list(State(state): State<AppState>, session: Session, Query(query):
     .bind(like_pattern(query.q.as_deref().unwrap_or("").trim()))
     .fetch_all(&state.db)
     .await?;
-    Ok(Json(rows.into_iter().map(AliasView::from).collect()))
+    let limit = state.rt().forward_max_copies_per_hour;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let mut view = AliasView::from(row);
+        view.forwarded = crate::security::outbound::forwarded_recently(&state.db, &view.source).await?;
+        view.forward_limit = limit;
+        out.push(view);
+    }
+    Ok(Json(out))
 }
 
 #[derive(Deserialize)]

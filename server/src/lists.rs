@@ -302,8 +302,13 @@ async fn distribute(app: &App, list: &List, raw: &[u8]) -> anyhow::Result<usize>
     ));
     let secret = crate::db::get_or_create_secret(&app.db, "lists.secret").await?;
     let base = app.cfg.public_url();
+    let members = members(app, list.id).await?;
+    // Posts come from outside, so no account's sending limit covers what a list sends out.
+    if !crate::security::outbound::register_forward(app, &list.address, members.len()).await? {
+        anyhow::bail!("{} reached its sending limit", list.address);
+    }
     let mut sent = 0;
-    for member in members(app, list.id).await? {
+    for member in members {
         let token = unsubscribe_token(secret.as_bytes(), &member);
         // Each copy carries its own return address, so a report about it can only be about
         // this member: nobody can report someone else's address as failing.

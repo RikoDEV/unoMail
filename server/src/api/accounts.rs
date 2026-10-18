@@ -35,10 +35,22 @@ pub struct AccountRow {
     /// Kept by the server (postmaster@): cannot be deleted.
     system: bool,
     created_at: i64,
+    /// Messages and recipients submitted over the window the sending limits are checked against.
+    sent_messages: i64,
+    sent_recipients: i64,
+}
+
+/// The mailbox list, with the sending limits its usage figures are measured against.
+#[derive(Serialize)]
+pub struct AccountList {
+    #[serde(flatten)]
+    page: Page<AccountRow>,
+    max_messages_per_hour: i64,
+    max_recipients_per_hour: i64,
 }
 
 const SELECT: &str = "SELECT id, domain_id, email, display_name, role, quota_bytes, used_bytes, enabled, imap_enabled, \
-     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, system, created_at FROM accounts";
+     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, system, created_at,      (SELECT COALESCE(SUM(messages), 0) FROM outbound_stats WHERE account_id = accounts.id AND bucket >= unixepoch() / 3600 - 1) AS sent_messages,      (SELECT COALESCE(SUM(recipients), 0) FROM outbound_stats WHERE account_id = accounts.id AND bucket >= unixepoch() / 3600 - 1) AS sent_recipients      FROM accounts";
 
 async fn load(state: &AppState, id: i64) -> ApiResult<AccountRow> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?")))
@@ -70,7 +82,7 @@ pub struct ListQuery {
     offset: Option<i64>,
 }
 
-pub async fn list(State(state): State<AppState>, session: Session, Query(query): Query<ListQuery>) -> JsonResult<Page<AccountRow>> {
+pub async fn list(State(state): State<AppState>, session: Session, Query(query): Query<ListQuery>) -> JsonResult<AccountList> {
     let managed = session.managed_domains(&state.db).await?;
     if let Some(domain_id) = query.domain_id {
         session.require_domain(&state.db, domain_id).await?;
@@ -104,7 +116,8 @@ pub async fn list(State(state): State<AppState>, session: Session, Query(query):
         .bind(query.offset.unwrap_or(0).max(0))
         .fetch_all(&state.db)
         .await?;
-    Ok(Json(Page { items, total }))
+    let rt = state.rt();
+    Ok(Json(AccountList { page: Page { items, total }, max_messages_per_hour: rt.outbound_max_messages_per_hour, max_recipients_per_hour: rt.outbound_max_recipients_per_hour }))
 }
 
 #[derive(Deserialize)]

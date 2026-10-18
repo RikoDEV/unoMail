@@ -1850,5 +1850,15 @@
   "Objects": "Předměty",
   "Symbols": "Symboly",
   "Try again": "Zkusit znovu",
-  "This page could not be shown.": "Tuto stránku nelze zobrazit."
+  "This page could not be shown.": "Tuto stránku nelze zobrazit.",
+  "Forwarded copies per alias or list per hour": "Přeposlaných kopií na alias nebo konferenci za hodinu",
+  "Further mail an alias or list would send on to other servers is deferred": "Další pošta, kterou by alias nebo konference odeslaly na jiné servery, je odložena",
+  "Outbound queue limit": "Limit odchozí fronty",
+  "Above this many waiting messages, forwarded and list mail is deferred": "Nad tento počet čekajících zpráv je přeposílaná pošta a pošta konferencí odložena",
+  "{{label}}: {{used}} of {{limit}}": "{{label}}: {{used}} z {{limit}}",
+  "Mail sent over the last hour against the hourly sending limits; going over them blocks the mailbox from sending": "Pošta odeslaná za poslední hodinu vůči hodinovým limitům; jejich překročení zablokuje odesílání ze schránky",
+  "Forwarding": "Přeposílání",
+  "Copies": "Kopie",
+  "Copies sent on to other servers over the last hour; beyond the limit, further mail to the alias is deferred": "Kopie přeposlané na jiné servery za poslední hodinu; nad limitem je další pošta pro alias odložena",
+  "Copies sent to members over the last hour; beyond the limit, further posts are deferred": "Kopie odeslané členům za poslední hodinu; nad limitem jsou další příspěvky odloženy"
 }
