@@ -1507,7 +1507,6 @@
   "{{matching}} of {{count}} rules_other": "{{matching}} von {{count}} Regeln",
   "{{owner}} · read only": "{{owner}} · schreibgeschützt",
   "{{percent}} of {{disk_total}} on the data volume": "{{percent}} von {{disk_total}} auf dem Datenvolume",
-  "{{percent}} of {{mem_total}} · the mail server itself uses {{process}}": "{{percent}} von {{mem_total}} · der Mailserver selbst nutzt {{process}}",
   "{{receiptRequestedBy}} asked to be told when you have read this message.": "{{receiptRequestedBy}} möchte benachrichtigt werden, wenn Sie diese Nachricht gelesen haben.",
   "{{recovery_codes_left}} unused. Each signs you in once without the phone or passkey.": "{{recovery_codes_left}} unbenutzt. Jeder meldet Sie einmal ohne Telefon oder Passkey an.",
   "{{sender}} is blocked. New mail from this sender goes to Junk.": "{{sender}} ist gesperrt. Neue E-Mails von diesem Absender landen im Spam.",
@@ -1812,5 +1811,9 @@
   "Message size (MB)": "Nachrichtengröße (MB)",
   "Server default": "Serverstandard",
   "Server default ({{value}})": "Serverstandard ({{value}})",
-  "A whole number of at least 1": "Eine ganze Zahl ab 1"
+  "A whole number of at least 1": "Eine ganze Zahl ab 1",
+  "{{percent}} of {{mem_total}}": "{{percent}} von {{mem_total}}",
+  "Other": "Sonstiges",
+  "Legend": "Legende",
+  "Total": "Gesamt"
 }

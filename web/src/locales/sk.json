@@ -1589,7 +1589,6 @@
   "{{matching}} of {{count}} rules_other": "{{matching}} z {{count}} pravidiel",
   "{{owner}} · read only": "{{owner}} · len na čítanie",
   "{{percent}} of {{disk_total}} on the data volume": "{{percent}} z {{disk_total}} na dátovom zväzku",
-  "{{percent}} of {{mem_total}} · the mail server itself uses {{process}}": "{{percent}} z {{mem_total}} · samotný poštový server využíva {{process}}",
   "{{receiptRequestedBy}} asked to be told when you have read this message.": "{{receiptRequestedBy}} žiada o upozornenie, keď túto správu prečítate.",
   "{{recovery_codes_left}} unused. Each signs you in once without the phone or passkey.": "Nepoužité: {{recovery_codes_left}}. Každý vás raz prihlási bez telefónu alebo prístupového kľúča.",
   "{{sender}} is blocked. New mail from this sender goes to Junk.": "{{sender}} je blokovaný. Nová pošta od tohto odosielateľa ide do Spamu.",
@@ -1894,5 +1893,9 @@
   "Message size (MB)": "Veľkosť správy (MB)",
   "Server default": "Predvolené serverom",
   "Server default ({{value}})": "Predvolené serverom ({{value}})",
-  "A whole number of at least 1": "Celé číslo aspoň 1"
+  "A whole number of at least 1": "Celé číslo aspoň 1",
+  "{{percent}} of {{mem_total}}": "{{percent}} z {{mem_total}}",
+  "Other": "Ostatné",
+  "Legend": "Legenda",
+  "Total": "Spolu"
 }

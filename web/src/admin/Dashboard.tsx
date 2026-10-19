@@ -5,7 +5,7 @@ import { formatTime } from '../api';
 import { PageHeader, StatusChip, useLoad, ScrollTable } from './common';
 import { RemoteAddress } from './RemoteAddress';
 import { DailyStatsChart } from './DailyStatsChart';
-import { TimeChart } from './TimeChart';
+import { type ChartSeries, TimeChart } from './TimeChart';
 
 import { t, uiLocale } from '../i18n';
 interface DashboardData {
@@ -157,7 +157,18 @@ interface SystemSample {
   mem_used: number;
   mem_total: number;
   process: number;
+  /** Bytes per service; missing for samples taken before it was recorded. */
+  services: Record<string, number> | null;
 }
+
+/** Memory layers, bottom first, in the fixed categorical order; "other" stays neutral. */
+const MEMORY_SERIES: ChartSeries[] = [
+  { key: 'unomail', label: 'unoMail', light: '#2a78d6', dark: '#3987e5' },
+  { key: 'rspamd', label: 'Rspamd', light: '#eb6834', dark: '#d95926' },
+  { key: 'clamav', label: 'ClamAV', light: '#1baf7a', dark: '#199e70' },
+  { key: 'redis', label: 'Redis', light: '#eda100', dark: '#c98500' },
+  { key: 'other', label: t('Other'), light: '#a3a29b', dark: '#6f6e68' },
+];
 
 /** Free space on the data volume and memory in use, over the chosen period. */
 function Capacity() {
@@ -194,8 +205,9 @@ function Capacity() {
         <TimeChart
           title={t('Memory in use')}
           headline={t('{{size}} used', { size: formatBytes(latest.mem_used) })}
-          hint={t('{{percent}} of {{mem_total}} · the mail server itself uses {{process}}', { percent: percent(latest.mem_used, latest.mem_total), mem_total: formatBytes(latest.mem_total), process: formatBytes(latest.process) })}
-          points={samples.map((sample) => ({ t: sample.ts, v: sample.mem_used }))}
+          hint={t('{{percent}} of {{mem_total}}', { percent: percent(latest.mem_used, latest.mem_total), mem_total: formatBytes(latest.mem_total) })}
+          points={samples.map((sample) => ({ t: sample.ts, v: sample.mem_used, parts: sample.services ?? { other: sample.mem_used } }))}
+          series={MEMORY_SERIES}
           max={latest.mem_total}
           format={formatBytes}
         />

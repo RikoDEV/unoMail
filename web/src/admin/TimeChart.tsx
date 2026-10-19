@@ -1,8 +1,9 @@
-// A single-series area chart over time, for the capacity graphs on the dashboard.
+// An area chart over time, for the capacity graphs on the dashboard.
 //
 // One measure per chart and one y-axis starting at zero; the line carries the data and
 // everything else (grid, axis labels) stays in the background. Hovering shows the exact value,
-// and a table of the same data is one click away.
+// and a table of the same data is one click away. With `series`, the measure is split into
+// stacked layers (parts of one whole), named in a legend.
 
 import { Box, Card, CardContent, TableBody, TableCell, TableHead, TableRow, Typography, useTheme } from '@mui/material';
 import { ScrollTable } from './common';
@@ -13,6 +14,16 @@ export interface ChartPoint {
   /** Unix seconds. */
   t: number;
   v: number;
+  /** The value split by series key, for a stacked chart; the parts add up to `v`. */
+  parts?: Record<string, number>;
+}
+
+export interface ChartSeries {
+  key: string;
+  label: string;
+  /** Categorical slot colours for the light and dark surfaces. */
+  light: string;
+  dark: string;
 }
 
 interface Props {
@@ -24,6 +35,8 @@ interface Props {
   /** Top of the y-axis (for example the total capacity). */
   max: number;
   format: (value: number) => string;
+  /** Stacked layers, bottom first. */
+  series?: ChartSeries[];
 }
 
 const HEIGHT = 200;
@@ -36,7 +49,7 @@ function timeLabel(seconds: number, spanSeconds: number): string {
     : date.toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
-export function TimeChart({ title, headline, hint, points, max, format }: Props) {
+export function TimeChart({ title, headline, hint, points, max, format, series }: Props) {
   const theme = useTheme();
   const holder = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(480);
@@ -65,6 +78,19 @@ export function TimeChart({ title, headline, hint, points, max, format }: Props)
   const area = points.length > 1 ? `${line} L${x(end).toFixed(1)},${y(0)} L${x(start).toFixed(1)},${y(0)} Z` : '';
   const ticks = [0, 0.5, 1].map((fraction) => fraction * top);
   const hovered = hover !== null ? points[hover] : null;
+  const dark = theme.palette.mode === 'dark';
+  // Each layer runs from the sum of the layers below it to that sum plus its own part.
+  const layers = useMemo(() => {
+    if (!series || points.length < 2) return [];
+    const below = points.map(() => 0);
+    return series.map((s) => {
+      const lower = [...below];
+      points.forEach((p, i) => (below[i] += p.parts?.[s.key] ?? 0));
+      const upper = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(1)},${y(below[i]).toFixed(1)}`).join(' ');
+      const back = points.map((p, i) => `L${x(p.t).toFixed(1)},${y(lower[i]).toFixed(1)}`).reverse().join(' ');
+      return { ...s, color: dark ? s.dark : s.light, path: `${upper} ${back} Z` };
+    });
+  }, [series, points, width, top, dark]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onMove(event: React.MouseEvent<SVGSVGElement>) {
     if (points.length === 0) return;
@@ -90,6 +116,19 @@ export function TimeChart({ title, headline, hint, points, max, format }: Props)
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', minHeight: 20 }}>
           {hovered ? `${new Date(hovered.t * 1000).toLocaleString(uiLocale())}: ${format(hovered.v)}` : hint}
         </Typography>
+        {series && (
+          <Box component="ul" aria-label={t('Legend')} sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, listStyle: 'none', m: 0, mt: 1, p: 0 }}>
+            {series.map((s) => (
+              <Box component="li" key={s.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: dark ? s.dark : s.light }} />
+                <Typography variant="caption" color="text.secondary">
+                  {s.label}
+                  {hovered?.parts ? ` ${format(hovered.parts[s.key] ?? 0)}` : ''}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        )}
         <Box ref={holder} sx={{ mt: 1 }}>
           {points.length < 2 ? (
             <Typography color="text.secondary" sx={{ height: HEIGHT, display: 'grid', placeItems: 'center' }}>
@@ -110,8 +149,15 @@ export function TimeChart({ title, headline, hint, points, max, format }: Props)
                   {timeLabel(t, span)}
                 </text>
               ))}
-              <path d={area} fill={color} opacity={0.14} />
-              <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              {layers.length > 0 ? (
+                // A thin surface-coloured edge keeps neighbouring layers apart.
+                layers.map((layer) => <path key={layer.key} d={layer.path} fill={layer.color} opacity={0.85} stroke={theme.palette.background.paper} strokeWidth={1.5} strokeLinejoin="round" />)
+              ) : (
+                <>
+                  <path d={area} fill={color} opacity={0.14} />
+                  <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                </>
+              )}
               {hovered && (
                 <>
                   <line x1={x(hovered.t)} x2={x(hovered.t)} y1={MARGIN.top} y2={MARGIN.top + plot.height} stroke={theme.palette.text.secondary} strokeWidth={1} strokeDasharray="3 3" />
@@ -129,13 +175,23 @@ export function TimeChart({ title, headline, hint, points, max, format }: Props)
             <TableHead>
               <TableRow>
                 <TableCell>{t('Time')}</TableCell>
-                <TableCell align="right">{title}</TableCell>
+                {series?.map((s) => (
+                  <TableCell key={s.key} align="right">
+                    {s.label}
+                  </TableCell>
+                ))}
+                <TableCell align="right">{series ? t('Total') : title}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.t}>
                   <TableCell>{new Date(row.t * 1000).toLocaleString(uiLocale())}</TableCell>
+                  {series?.map((s) => (
+                    <TableCell key={s.key} align="right">
+                      {format(row.parts?.[s.key] ?? 0)}
+                    </TableCell>
+                  ))}
                   <TableCell align="right">{format(row.v)}</TableCell>
                 </TableRow>
               ))}
