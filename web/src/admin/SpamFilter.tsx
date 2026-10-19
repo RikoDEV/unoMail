@@ -1,7 +1,7 @@
 // Configuration of the Rspamd spam filter: thresholds, rule scores and recent verdicts.
 
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, TableBody, TableCell, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { formatTime, get, put } from '../api';
 import { PageHeader, routeBy, useAction, useFormAction, useLoad, ScrollTable } from './common';
@@ -13,6 +13,8 @@ interface RuleInfo {
   description?: string;
   frequency?: number;
 }
+
+type GroupedRule = RuleInfo & { group: string };
 
 interface Verdict {
   time: number | null;
@@ -36,8 +38,14 @@ interface Overview {
   history?: Verdict[];
 }
 
-const MAX_RULES_SHOWN = 100;
 const ACTION_COLORS: Record<string, 'error' | 'warning' | 'success' | 'default'> = { reject: 'error', 'add header': 'warning', 'rewrite subject': 'warning', greylist: 'warning', 'soft reject': 'warning', 'no action': 'success' };
+
+export function matchingRules(rules: GroupedRule[], query: string): GroupedRule[] {
+  const needle = query.trim().toLowerCase();
+  const exact = needle ? rules.filter((rule) => rule.symbol.toLowerCase() === needle) : [];
+  const found = exact.length > 0 ? exact : needle ? rules.filter((rule) => rule.symbol.toLowerCase().includes(needle) || (rule.description ?? '').toLowerCase().includes(needle) || rule.group.toLowerCase().includes(needle)) : rules;
+  return [...found].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
+}
 
 function Thresholds({ overview, onSaved }: { overview: Overview; onSaved: () => Promise<unknown> }) {
   const { run, feedback } = useAction();
@@ -75,14 +83,13 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
   const { feedback, notify } = useAction();
   const saving = useFormAction(routeBy<'score'>([[/score|between/i, 'score']]));
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [editing, setEditing] = useState<{ rule: RuleInfo; value: string } | null>(null);
   const rules = useMemo(() => (overview.groups ?? []).flatMap((group) => group.rules.map((rule) => ({ ...rule, group: group.group }))), [overview.groups]);
-  const matching = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const found = needle ? rules.filter((rule) => rule.symbol.toLowerCase().includes(needle) || (rule.description ?? '').toLowerCase().includes(needle) || rule.group.toLowerCase().includes(needle)) : rules;
-    // Without a search, the rules that matter most (largest scores) come first.
-    return [...found].sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight));
-  }, [rules, query]);
+  const matching = useMemo(() => matchingRules(rules, query), [rules, query]);
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(matching.length / rowsPerPage) - 1));
+  const visibleRules = matching.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
   const score = editing ? Number(editing.value) : 0;
   const scoreValid = editing !== null && editing.value.trim() !== '' && Number.isFinite(score) && Math.abs(score) <= 1000;
   return (
@@ -92,11 +99,11 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
           <Typography variant="h6" sx={{ flex: 1 }}>
             {t('Rule scores')}
           </Typography>
-          <TextField label={t('Search rules')} value={query} onChange={(e) => setQuery(e.target.value)} sx={{ minWidth: 260 }} />
+          <TextField label={t('Search rules')} value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} sx={{ minWidth: 260 }} />
         </Stack>
         {feedback}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          {t('{{matching}} of {{count}} rules', { matching: matching.length, count: rules.length })}{matching.length > MAX_RULES_SHOWN ? t(', showing the {{MAX_RULES_SHOWN}} with the largest scores', { MAX_RULES_SHOWN }) : ''}{t('. Positive scores count towards spam, negative ones against it.')}
+          {t('{{matching}} of {{count}} rules', { matching: matching.length, count: rules.length })}{t('. Positive scores count towards spam, negative ones against it.')}
         </Typography>
         <ScrollTable size="small" aria-label={t('Spam filter rules')}>
           <TableHead>
@@ -108,7 +115,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
             </TableRow>
           </TableHead>
           <TableBody>
-            {matching.slice(0, MAX_RULES_SHOWN).map((rule) => (
+            {visibleRules.map((rule) => (
               <TableRow key={rule.symbol} hover>
                 <TableCell>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
@@ -131,6 +138,16 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
             ))}
           </TableBody>
         </ScrollTable>
+        <TablePagination
+          component="div"
+          count={matching.length}
+          page={currentPage}
+          onPageChange={(_event, nextPage) => setPage(nextPage)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }}
+          rowsPerPageOptions={[25, 50, 100]}
+          labelRowsPerPage={t('Rules per page:')}
+        />
         {editing && (
           <Dialog open onClose={() => setEditing(null)} fullWidth maxWidth="xs">
             <DialogTitle sx={{ wordBreak: 'break-all' }}>{editing.rule.symbol}</DialogTitle>
