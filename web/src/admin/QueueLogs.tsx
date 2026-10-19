@@ -17,6 +17,7 @@ interface QueueEntry {
   created_at: number;
   last_error: string | null;
   status: string;
+  max_attempts: number;
 }
 
 export function Queue() {
@@ -57,7 +58,7 @@ export function Queue() {
                   <TableCell>{entry.sender || '<>'}</TableCell>
                   <TableCell>{entry.recipient}</TableCell>
                   <TableCell align="right">{formatBytes(entry.size)}</TableCell>
-                  <TableCell align="right">{entry.attempts}</TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>{entry.attempts}/{entry.max_attempts}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{entry.status === 'sending' ? t('in progress') : formatTime(entry.next_attempt_at)}</TableCell>
                   {!compact && <TableCell sx={{ minWidth: 220, maxWidth: 320, overflowWrap: 'anywhere' }}>{entry.last_error}</TableCell>}
                   <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>

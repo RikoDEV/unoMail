@@ -21,6 +21,17 @@ pub fn backoff(attempts: i64) -> i64 {
     BACKOFF_SECS[(attempts.max(1) - 1).min(BACKOFF_SECS.len() as i64 - 1) as usize]
 }
 
+/// How many attempts the backoff schedule fits between queuing and expiry (ignoring the time
+/// each attempt takes): retries stop once a failure happens after `expires_at`.
+pub fn max_attempts(created_at: i64, expires_at: i64) -> i64 {
+    let (mut attempts, mut at) = (1, created_at);
+    while at < expires_at {
+        at += backoff(attempts);
+        attempts += 1;
+    }
+    attempts
+}
+
 #[derive(Debug, sqlx::FromRow)]
 struct Entry {
     id: i64,

@@ -93,16 +93,21 @@ pub struct QueueEntry {
     expires_at: i64,
     last_error: Option<String>,
     status: String,
+    #[sqlx(skip)]
+    max_attempts: i64,
 }
 
 pub async fn queue_list(State(state): State<AppState>, session: Session) -> JsonResult<Vec<QueueEntry>> {
     session.require_super()?;
-    let rows = sqlx::query_as(
+    let mut rows: Vec<QueueEntry> = sqlx::query_as(
         "SELECT id, sender, recipient, size, attempts, next_attempt_at, created_at, expires_at, last_error, status
          FROM queue ORDER BY created_at DESC LIMIT 500",
     )
     .fetch_all(&state.db)
     .await?;
+    for row in &mut rows {
+        row.max_attempts = crate::smtp::queue::max_attempts(row.created_at, row.expires_at).max(row.attempts);
+    }
     Ok(Json(rows))
 }
 
