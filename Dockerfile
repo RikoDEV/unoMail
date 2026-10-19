@@ -2,7 +2,7 @@
 # unoMail: mail server, web client, admin panel, Rspamd and ClamAV in one container.
 
 # --- Web UI -------------------------------------------------------------------------------
-FROM node:24-alpine AS web
+FROM node:25-alpine AS web
 WORKDIR /build
 RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
 COPY web/package.json web/pnpm-lock.yaml* ./
