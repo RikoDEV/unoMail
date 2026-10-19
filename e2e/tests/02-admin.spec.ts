@@ -34,7 +34,7 @@ test.describe('administration', () => {
     // SPF, DKIM and DMARC records are generated for the administrator to publish.
     const dns = page.getByRole('table', { name: 'DNS records' });
     await expect(dns.getByRole('row', { name: /MX record/ })).toContainText('10 mail.e2e.test.');
-    await expect(dns.getByRole('row', { name: /SPF record/ })).toContainText('v=spf1 mx -all');
+    await expect(dns.getByRole('row', { name: /SPF record/ })).toContainText('v=spf1 a:mail.e2e.test -all');
     await expect(dns.getByRole('row', { name: /DMARC policy/ })).toContainText(`_dmarc.${DOMAIN}`);
     await expect(dns.getByRole('row', { name: /DMARC policy/ })).toContainText('v=DMARC1; p=quarantine');
     await expect(dns.getByRole('row', { name: /DKIM key/ })).toContainText('v=DKIM1; k=rsa; p=');

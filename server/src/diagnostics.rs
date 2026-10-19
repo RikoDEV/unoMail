@@ -1,7 +1,8 @@
 //! DNS and server health diagnostics: which records a domain needs and whether they are live.
 
-use std::{net::SocketAddr, time::Duration};
+use std::{net::{IpAddr, SocketAddr}, time::Duration};
 
+use ipnet::IpNet;
 use serde::Serialize;
 
 use crate::{
@@ -46,7 +47,13 @@ pub fn eval_mx(hosts: &[(u16, String)], hostname: &str) -> Eval {
     }
 }
 
-pub fn eval_spf(records: &[String], hostname: &str) -> Eval {
+fn spf_network(term: &str) -> Option<IpNet> {
+    let term = term.strip_prefix('+').unwrap_or(term);
+    let value = term.strip_prefix("ip4:").or_else(|| term.strip_prefix("ip6:"))?;
+    value.parse().ok().or_else(|| value.parse::<IpAddr>().ok().map(Into::into))
+}
+
+pub fn eval_spf(records: &[String], server_ips: &[IpAddr]) -> Eval {
     let spf: Vec<&String> = records.iter().filter(|r| r.to_ascii_lowercase().starts_with("v=spf1")).collect();
     match spf.as_slice() {
         [] => (Status::Error, "No SPF record found.".into()),
@@ -55,16 +62,32 @@ pub fn eval_spf(records: &[String], hostname: &str) -> Eval {
             let terms: Vec<&str> = lower.split_whitespace().collect();
             if terms.iter().any(|t| matches!(*t, "+all" | "all")) {
                 (Status::Error, "SPF record ends in +all, which authorizes every server on the internet.".into())
-            } else if !terms.iter().any(|t| *t == "mx" || t.contains(&hostname.to_ascii_lowercase()) || t.starts_with("include:") || t.starts_with("ip4:") || t.starts_with("ip6:")) {
-                (Status::Warning, "SPF record does not appear to authorize this server.".into())
+            } else if server_ips.is_empty() {
+                (Status::Warning, "The server's public IP address could not be determined, so this SPF record cannot be verified.".into())
+            } else if let Some(ip) = server_ips.iter().find(|ip| !terms.iter().filter_map(|term| spf_network(term)).any(|network| network.contains(*ip))) {
+                (Status::Error, format!("SPF record does not authorize this server's IP address {ip}."))
             } else if terms.contains(&"?all") {
                 (Status::Warning, "SPF record uses ?all (neutral); use ~all or -all.".into())
+            } else if !terms.contains(&"-all") {
+                (Status::Warning, "SPF record does not end in -all, so other servers are not explicitly forbidden.".into())
             } else {
-                (Status::Ok, "SPF record is published.".into())
+                (Status::Ok, "SPF record authorizes this server's IP addresses and rejects all others.".into())
             }
         }
         _ => (Status::Error, "Multiple SPF records found; receivers treat this as a permanent error.".into()),
     }
+}
+
+fn tag_value<'a>(record: &'a str, name: &str) -> Option<&'a str> {
+    record
+        .split(';')
+        .filter_map(|tag| tag.trim().split_once('='))
+        .find(|(key, _)| key.trim().eq_ignore_ascii_case(name))
+        .map(|(_, value)| value.trim())
+}
+
+fn has_report_address(value: &str, address: &str) -> bool {
+    value.split(',').any(|uri| uri.trim().eq_ignore_ascii_case(address))
 }
 
 pub fn eval_dkim(records: &[String], expected_public_key: &str) -> Eval {
@@ -83,24 +106,50 @@ pub fn eval_dkim(records: &[String], expected_public_key: &str) -> Eval {
     }
 }
 
-pub fn eval_dmarc(records: &[String]) -> Eval {
+pub fn eval_dmarc(records: &[String], domain: &str) -> Eval {
     let dmarc: Vec<&String> = records.iter().filter(|r| r.to_ascii_lowercase().starts_with("v=dmarc1")).collect();
     match dmarc.as_slice() {
         [] => (Status::Error, "No DMARC record found.".into()),
         [record] => {
-            let policy = record
-                .split(';')
-                .filter_map(|tag| tag.trim().split_once('='))
-                .find(|(k, _)| k.trim().eq_ignore_ascii_case("p"))
-                .map(|(_, v)| v.trim().to_ascii_lowercase());
+            let policy = tag_value(record, "p").map(str::to_ascii_lowercase);
             match policy.as_deref() {
-                Some("reject" | "quarantine") => (Status::Ok, "DMARC policy is enforced.".into()),
+                Some("reject" | "quarantine") if tag_value(record, "rua").is_some_and(|value| has_report_address(value, &format!("mailto:postmaster@{domain}"))) => {
+                    (Status::Ok, "DMARC policy is enforced and aggregate reports are sent here.".into())
+                }
+                Some("reject" | "quarantine") => (Status::Warning, format!("DMARC is enforced, but aggregate reports are not sent to postmaster@{domain}.")),
                 Some("none") => (Status::Warning, "DMARC policy is p=none: failures are reported but not acted on.".into()),
                 _ => (Status::Error, "DMARC record has no valid policy (p=) tag.".into()),
             }
         }
         _ => (Status::Error, "Multiple DMARC records found.".into()),
     }
+}
+
+pub fn eval_tlsrpt(records: &[String], domain: &str) -> Eval {
+    let tlsrpt: Vec<&String> = records.iter().filter(|record| record.to_ascii_lowercase().replace(' ', "").starts_with("v=tlsrptv1")).collect();
+    match tlsrpt.as_slice() {
+        [] => (Status::Warning, "No TLS reporting record: you will not hear when other servers fail to reach yours securely.".into()),
+        [record] if tag_value(record, "rua").is_some_and(|value| has_report_address(value, &format!("mailto:postmaster@{domain}"))) => {
+            (Status::Ok, "Other servers report TLS problems to this domain's postmaster.".into())
+        }
+        [_] => (Status::Warning, format!("The TLS reporting record does not send reports to postmaster@{domain}.")),
+        _ => (Status::Error, "Multiple TLS reporting records found.".into()),
+    }
+}
+
+fn recommended_spf(hostname: &str, ips: &[IpAddr]) -> String {
+    if ips.is_empty() {
+        return format!("v=spf1 a:{hostname} -all");
+    }
+    let mechanisms = ips
+        .iter()
+        .map(|ip| match ip {
+            IpAddr::V4(ip) => format!("ip4:{ip}"),
+            IpAddr::V6(ip) => format!("ip6:{ip}"),
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("v=spf1 {mechanisms} -all")
 }
 
 pub fn eval_ptr(names: &[String], hostname: &str) -> Eval {
@@ -183,11 +232,18 @@ pub async fn domain_report(app: &App, domain: &str, keys: &[DkimKey], mta_sts_mo
         }
     };
 
+    let mut server_ips = match resolver {
+        Some(r) => dns::ips(r, hostname).await.unwrap_or_default().into_iter().filter(|ip| !reputation::is_private(*ip)).collect::<Vec<_>>(),
+        None => Vec::new(),
+    };
+    server_ips.sort_by_key(ToString::to_string);
+    server_ips.dedup();
+
     let (eval, found) = match txt(domain.to_owned()).await {
-        Ok(records) => (eval_spf(&records, hostname), records.into_iter().filter(|r| r.to_ascii_lowercase().starts_with("v=spf1")).collect()),
+        Ok(records) => (eval_spf(&records, &server_ips), records.into_iter().filter(|r| r.to_ascii_lowercase().starts_with("v=spf1")).collect()),
         Err(eval) => (eval, Vec::new()),
     };
-    checks.push(check("spf", "SPF record", "TXT", domain.to_owned(), "v=spf1 mx -all".into(), eval, found));
+    checks.push(check("spf", "SPF record", "TXT", domain.to_owned(), recommended_spf(hostname, &server_ips), eval, found));
 
     for key in keys.iter().filter(|k| k.active) {
         let name = key.dns_name(domain);
@@ -211,7 +267,7 @@ pub async fn domain_report(app: &App, domain: &str, keys: &[DkimKey], mta_sts_mo
 
     let dmarc_name = format!("_dmarc.{domain}");
     let (eval, found) = match txt(dmarc_name.clone()).await {
-        Ok(records) => (eval_dmarc(&records), records),
+        Ok(records) => (eval_dmarc(&records, domain), records),
         Err(eval) => (eval, Vec::new()),
     };
     checks.push(check(
@@ -265,7 +321,7 @@ pub async fn domain_report(app: &App, domain: &str, keys: &[DkimKey], mta_sts_mo
     let (eval, found) = match txt(tlsrpt_name.clone()).await {
         Ok(records) => {
             let ours: Vec<String> = records.into_iter().filter(|r| r.to_ascii_lowercase().replace(' ', "").starts_with("v=tlsrptv1")).collect();
-            let eval = if ours.is_empty() { (Status::Warning, "No TLS reporting record: you will not hear when other servers fail to reach yours securely.".into()) } else { (Status::Ok, "Other servers report TLS problems.".into()) };
+            let eval = eval_tlsrpt(&ours, domain);
             (eval, ours)
         }
         Err(eval) => (eval, Vec::new()),
@@ -484,14 +540,18 @@ mod tests {
 
     #[test]
     fn spf() {
-        let host = "mail.example.com";
-        assert_eq!(eval_spf(&s(&["v=spf1 mx -all"]), host).0, Status::Ok);
-        assert_eq!(eval_spf(&s(&["unrelated", "v=spf1 a:mail.example.com ~all"]), host).0, Status::Ok);
-        assert_eq!(eval_spf(&s(&["v=spf1 +all"]), host).0, Status::Error);
-        assert_eq!(eval_spf(&s(&["v=spf1 mx ?all"]), host).0, Status::Warning);
-        assert_eq!(eval_spf(&s(&["v=spf1 -all"]), host).0, Status::Warning);
-        assert_eq!(eval_spf(&s(&["v=spf1 mx -all", "v=spf1 -all"]), host).0, Status::Error);
-        assert_eq!(eval_spf(&s(&["google-site-verification=x"]), host).0, Status::Error);
+        let ips = ["203.0.113.10".parse().unwrap(), "2001:db8::10".parse().unwrap()];
+        assert_eq!(eval_spf(&s(&["v=spf1 ip4:203.0.113.10 ip6:2001:db8::10 -all"]), &ips).0, Status::Ok);
+        assert_eq!(eval_spf(&s(&["v=spf1 ip4:203.0.113.0/24 ip6:2001:db8::/64 -all"]), &ips).0, Status::Ok);
+        assert_eq!(eval_spf(&s(&["v=spf1 mx -all"]), &ips).0, Status::Error);
+        assert_eq!(eval_spf(&s(&["v=spf1 include:sender.example -all"]), &ips).0, Status::Error);
+        assert_eq!(eval_spf(&s(&["v=spf1 ip4:203.0.113.10 +all"]), &ips).0, Status::Error);
+        assert_eq!(eval_spf(&s(&["v=spf1 ip4:203.0.113.10 ip6:2001:db8::10 ?all"]), &ips).0, Status::Warning);
+        assert_eq!(eval_spf(&s(&["v=spf1 ip4:203.0.113.10 ip6:2001:db8::10"]), &ips).0, Status::Warning);
+        assert_eq!(eval_spf(&s(&["v=spf1 ip4:203.0.113.10 -all", "v=spf1 -all"]), &ips).0, Status::Error);
+        assert_eq!(eval_spf(&s(&["google-site-verification=x"]), &ips).0, Status::Error);
+        assert_eq!(recommended_spf("mail.example.com", &ips), "v=spf1 ip4:203.0.113.10 ip6:2001:db8::10 -all");
+        assert_eq!(recommended_spf("mail.example.com", &[]), "v=spf1 a:mail.example.com -all");
     }
 
     #[test]
@@ -504,13 +564,23 @@ mod tests {
 
     #[test]
     fn dmarc() {
-        assert_eq!(eval_dmarc(&s(&["v=DMARC1; p=reject; rua=mailto:a@b.example"])).0, Status::Ok);
-        assert_eq!(eval_dmarc(&s(&["v=DMARC1;p=quarantine"])).0, Status::Ok);
-        assert_eq!(eval_dmarc(&s(&["v=DMARC1; p=none"])).0, Status::Warning);
+        let domain = "example.com";
+        assert_eq!(eval_dmarc(&s(&["v=DMARC1; p=reject; rua=mailto:postmaster@example.com"]), domain).0, Status::Ok);
+        assert_eq!(eval_dmarc(&s(&["v=DMARC1;p=quarantine"]), domain).0, Status::Warning);
+        assert_eq!(eval_dmarc(&s(&["v=DMARC1; p=none"]), domain).0, Status::Warning);
         // sp= must not be mistaken for p=.
-        assert_eq!(eval_dmarc(&s(&["v=DMARC1; sp=reject"])).0, Status::Error);
-        assert_eq!(eval_dmarc(&[]).0, Status::Error);
-        assert_eq!(eval_dmarc(&s(&["v=DMARC1; p=none", "v=DMARC1; p=reject"])).0, Status::Error);
+        assert_eq!(eval_dmarc(&s(&["v=DMARC1; sp=reject"]), domain).0, Status::Error);
+        assert_eq!(eval_dmarc(&[], domain).0, Status::Error);
+        assert_eq!(eval_dmarc(&s(&["v=DMARC1; p=none", "v=DMARC1; p=reject"]), domain).0, Status::Error);
+    }
+
+    #[test]
+    fn tls_reporting() {
+        let domain = "example.com";
+        assert_eq!(eval_tlsrpt(&s(&["v=TLSRPTv1; rua=mailto:postmaster@example.com"]), domain).0, Status::Ok);
+        assert_eq!(eval_tlsrpt(&s(&["v=TLSRPTv1; rua=mailto:elsewhere@example.net"]), domain).0, Status::Warning);
+        assert_eq!(eval_tlsrpt(&s(&["v=TLSRPTv1"]), domain).0, Status::Warning);
+        assert_eq!(eval_tlsrpt(&s(&["v=TLSRPTv1", "v=TLSRPTv1; rua=mailto:postmaster@example.com"]), domain).0, Status::Error);
     }
 
     #[test]
