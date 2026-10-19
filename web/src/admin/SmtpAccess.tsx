@@ -8,7 +8,7 @@ import Edit from '@mui/icons-material/Edit';
 import LockOpen from '@mui/icons-material/LockOpen';
 import VerifiedUser from '@mui/icons-material/VerifiedUser';
 import {
-  Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
+  Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TablePagination, TableRow, Tabs, TextField,
   Tooltip, Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -133,7 +133,11 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
   const { data, error, reload } = useLoad(() => get<Rule[]>(`/api/smtp-access/rules?source=${source}`), [source]);
   const { run, feedback } = useAction();
   const [editing, setEditing] = useState<RuleForm | null>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const rules = data ?? [];
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(rules.length / rowsPerPage) - 1));
+  const visibleRules = rules.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
   return (
     <>
       {feedback}
@@ -155,54 +159,66 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
           {source === 'user' ? t('No rules yet.') : t('Nothing has been blocked automatically.')}
         </Typography>
       ) : (
-        <ScrollTable size="small" aria-label={source === 'user' ? t('User defined rules') : t('Automatic rules')}>
-          <TableHead>
-            <TableRow>
-              <TableCell>{t('Address or network')}</TableCell>
-              <TableCell>{t('List')}</TableCell>
-              <TableCell align="right">{t('Priority')}</TableCell>
-              <TableCell align="right">{t('Hits')}</TableCell>
-              <TableCell>{t('Last seen')}</TableCell>
-              <TableCell>{t('Description')}</TableCell>
-              <TableCell />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rules.map((rule) => (
-              <TableRow key={rule.id} hover>
-                <TableCell>
-                  <RemoteAddress address={rule.network} rdns={rule.rdns} country={rule.country} />
-                </TableCell>
-                <TableCell>
-                  <ListChip list={rule.list} />
-                </TableCell>
-                <TableCell align="right">{rule.priority}</TableCell>
-                <TableCell align="right">{rule.hits}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{lastSeen(rule.last_seen)}</TableCell>
-                <TableCell sx={{ overflowWrap: 'anywhere' }}>
-                  {rule.description}
-                  {rule.expires_at && (
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      {t('Until {{expires_at}}', { expires_at: formatTime(rule.expires_at) })}
-                    </Typography>
-                  )}
-                </TableCell>
-                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                  <Tooltip title={source === 'auto' ? t('Edit and keep permanently') : t('Edit')}>
-                    <IconButton size="small" aria-label={t('Edit rule {{network}}', { network: rule.network })} onClick={() => setEditing({ id: rule.id, list: rule.list, network: rule.network, priority: String(rule.priority), description: rule.description })}>
-                      <Edit fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('Delete')}>
-                    <IconButton size="small" aria-label={t('Delete rule {{network}}', { network: rule.network })} onClick={() => void run(async () => { await del(`/api/smtp-access/rules/${rule.id}`); await reload(); }, t('Rule deleted'))}>
-                      <Delete fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </TableCell>
+        <>
+          <ScrollTable size="small" aria-label={source === 'user' ? t('User defined rules') : t('Automatic rules')}>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('Address or network')}</TableCell>
+                <TableCell>{t('List')}</TableCell>
+                <TableCell align="right">{t('Priority')}</TableCell>
+                <TableCell align="right">{t('Hits')}</TableCell>
+                <TableCell>{t('Last seen')}</TableCell>
+                <TableCell>{t('Description')}</TableCell>
+                <TableCell />
               </TableRow>
-            ))}
-          </TableBody>
-        </ScrollTable>
+            </TableHead>
+            <TableBody>
+              {visibleRules.map((rule) => (
+                <TableRow key={rule.id} hover>
+                  <TableCell>
+                    <RemoteAddress address={rule.network} rdns={rule.rdns} country={rule.country} />
+                  </TableCell>
+                  <TableCell>
+                    <ListChip list={rule.list} />
+                  </TableCell>
+                  <TableCell align="right">{rule.priority}</TableCell>
+                  <TableCell align="right">{rule.hits}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{lastSeen(rule.last_seen)}</TableCell>
+                  <TableCell sx={{ overflowWrap: 'anywhere' }}>
+                    {rule.description}
+                    {rule.expires_at && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {t('Until {{expires_at}}', { expires_at: formatTime(rule.expires_at) })}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                    <Tooltip title={source === 'auto' ? t('Edit and keep permanently') : t('Edit')}>
+                      <IconButton size="small" aria-label={t('Edit rule {{network}}', { network: rule.network })} onClick={() => setEditing({ id: rule.id, list: rule.list, network: rule.network, priority: String(rule.priority), description: rule.description })}>
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('Delete')}>
+                      <IconButton size="small" aria-label={t('Delete rule {{network}}', { network: rule.network })} onClick={() => void run(async () => { await del(`/api/smtp-access/rules/${rule.id}`); await reload(); }, t('Rule deleted'))}>
+                        <Delete fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ScrollTable>
+          <TablePagination
+            component="div"
+            count={rules.length}
+            page={currentPage}
+            onPageChange={(_event, nextPage) => setPage(nextPage)}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }}
+            rowsPerPageOptions={[25, 50, 100]}
+            labelRowsPerPage={t('Rules per page:')}
+          />
+        </>
       )}
       {editing && (
         <RuleDialog
