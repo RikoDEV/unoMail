@@ -209,6 +209,9 @@ struct Envelope<'a> {
     dsn: Option<&'a crate::smtp::dsn::Dsn>,
     /// Set once the receiving server took over the notifications.
     dsn_passed: std::sync::atomic::AtomicBool,
+    /// Set when a server deferred the recipient itself (4xx to RCPT, such as a full mailbox):
+    /// the other MX hosts would answer the same, so this attempt ends there.
+    recipient_deferred: std::sync::atomic::AtomicBool,
     /// REQUIRETLS (RFC 8689): only a verified, encrypted hop that promises the same may take it.
     require_tls: bool,
     /// The message says `TLS-Required: No`: policy failures do not hold it back.
@@ -220,7 +223,7 @@ impl Envelope<'_> {
         let require_tls = dsn.is_some_and(|dsn| dsn.require_tls);
         // RFC 8689 5: the header is ignored when REQUIRETLS was asked for.
         let tls_optional = !require_tls && tls_required_no(raw);
-        Envelope { helo, sender, recipient, raw, data, dsn, dsn_passed: Default::default(), require_tls, tls_optional }
+        Envelope { helo, sender, recipient, raw, data, dsn, dsn_passed: Default::default(), recipient_deferred: Default::default(), require_tls, tls_optional }
     }
 }
 
@@ -295,7 +298,12 @@ async fn transact<S: AsyncRead + AsyncWrite + Unpin>(t: &mut Transport<S>, env: 
         _ => (String::new(), String::new()),
     };
     t.command(&format!("MAIL FROM:<{}>{size}{body}{utf8}{mail_dsn}{require_tls}", env.sender), 2).await?;
-    t.command(&format!("RCPT TO:<{}>{rcpt_dsn}", env.recipient), 2).await?;
+    if let Err(err) = t.command(&format!("RCPT TO:<{}>{rcpt_dsn}", env.recipient), 2).await {
+        if matches!(err, SendError::Temporary(_)) {
+            env.recipient_deferred.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        return Err(err);
+    }
     env.dsn_passed.store(!rcpt_dsn.is_empty(), std::sync::atomic::Ordering::Relaxed);
     t.command_within("DATA", 3, DATA_INIT_TIMEOUT).await?;
     t.write(data, DATA_TIMEOUT).await?;
@@ -663,6 +671,7 @@ pub async fn deliver_with(app: &App, sender: &str, recipient: &Address, raw: &[u
             match result {
                 Ok(reply) => return Ok((format!("{host}: {reply}"), env.dsn_passed.load(std::sync::atomic::Ordering::Relaxed))),
                 Err(SendError::Permanent(msg)) => return Err(SendError::Permanent(format!("{host}: {msg}"))),
+                Err(SendError::Temporary(msg)) if env.recipient_deferred.load(std::sync::atomic::Ordering::Relaxed) => return Err(temp(format!("{host}: {msg}"))),
                 Err(SendError::Temporary(msg)) => last_error = temp(format!("{host}: {msg}")),
             }
         }
