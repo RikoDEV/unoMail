@@ -4,7 +4,8 @@
 # --- Web UI -------------------------------------------------------------------------------
 FROM node:24-alpine AS web
 WORKDIR /build
-RUN corepack enable && corepack prepare pnpm@11.1.2 --activate
+# Node 25+ no longer ships corepack; npm installs the pinned pnpm on any version.
+RUN npm install -g pnpm@11.1.2
 COPY web/package.json web/pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
 COPY web/ ./
