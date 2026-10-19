@@ -2,7 +2,7 @@
 # unoMail: mail server, web client, admin panel, Rspamd and ClamAV in one container.
 
 # --- Web UI -------------------------------------------------------------------------------
-FROM node:24-alpine AS web
+FROM node:25-alpine AS web
 WORKDIR /build
 # Node 25+ no longer ships corepack; npm installs the pinned pnpm on any version.
 RUN npm install -g pnpm@11.1.2
