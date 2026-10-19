@@ -228,6 +228,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("shutting down");
     // The last minute of connection counts.
     unomail::dailystats::flush(&app).await;
+    app.save_state().await;
     app.db.close().await;
     Ok(())
 }

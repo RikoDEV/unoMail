@@ -221,6 +221,8 @@ pub async fn login_unblock(State(state): State<AppState>, session: Session, Json
     if input.key.len() > 400 || !state.limiter.unblock(&input.key) {
         return Err(ApiError::NotFound);
     }
+    // Saved now, so that a restart before the next periodic save does not bring it back.
+    state.save_state().await;
     session.audit(&state, "login.unblocked", &sanitize_line(&input.key), "").await;
     Ok(Json(json!({ "ok": true })))
 }

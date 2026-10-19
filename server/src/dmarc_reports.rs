@@ -145,6 +145,21 @@ const REPORTS_PER_SENDER_PER_DAY: u32 = 100;
 
 static SENDERS: std::sync::LazyLock<parking_lot::Mutex<std::collections::HashMap<String, (i64, u32)>>> = std::sync::LazyLock::new(Default::default);
 
+/// Today's report counts by sending domain, for a snapshot.
+pub fn report_counts() -> std::collections::HashMap<String, (i64, u32)> {
+    SENDERS.lock().clone()
+}
+
+pub fn restore_report_counts(counts: std::collections::HashMap<String, (i64, u32)>) {
+    let today = crate::util::now() / 86400;
+    let mut senders = SENDERS.lock();
+    for (domain, (day, count)) in counts {
+        if day == today {
+            senders.entry(domain).or_insert((day, 0)).1 += count;
+        }
+    }
+}
+
 /// Whether a report message from `author_domain` (already authenticated) may be stored today.
 pub fn report_allowed(author_domain: &str) -> bool {
     let today = crate::util::now() / 86400;

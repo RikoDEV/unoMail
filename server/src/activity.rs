@@ -1,6 +1,6 @@
 //! Live view of who is talking to the server: the remote addresses that connected recently
-//! and the last SMTP replies they were given. Kept in memory only; it is an operator's
-//! at-a-glance view, not a log.
+//! and the last SMTP replies they were given. An operator's at-a-glance view, not a log; it
+//! is kept in memory and saved as a snapshot so that it survives a restart.
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -9,7 +9,7 @@ use std::{
 };
 
 use parking_lot::Mutex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app::App,
@@ -23,13 +23,13 @@ const LOOKUP_TTL_SECS: i64 = 6 * 3600;
 const FAILED_LOOKUP_TTL_SECS: i64 = 300;
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(3);
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Seen {
     pub connections: u64,
     pub last_seen: i64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Reply {
     pub ts: i64,
     pub ip: String,
@@ -90,6 +90,19 @@ impl Activity {
         list.sort_by(|a, b| b.1.last_seen.cmp(&a.1.last_seen).then(b.1.connections.cmp(&a.1.connections)));
         list.truncate(limit);
         list
+    }
+
+    /// What a restart should keep: the addresses and replies, not the lookup cache.
+    pub fn snapshot(&self) -> (Vec<(IpAddr, Seen)>, Vec<Reply>) {
+        let inner = self.0.lock();
+        (inner.ips.iter().map(|(ip, seen)| (*ip, *seen)).collect(), inner.replies.iter().cloned().collect())
+    }
+
+    pub fn restore(&self, (ips, replies): (Vec<(IpAddr, Seen)>, Vec<Reply>)) {
+        let mut inner = self.0.lock();
+        inner.ips = ips.into_iter().take(MAX_IPS).collect();
+        let skip = replies.len().saturating_sub(MAX_REPLIES);
+        inner.replies = replies.into_iter().skip(skip).collect();
     }
 
     /// The latest SMTP replies, newest first.

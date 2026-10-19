@@ -44,6 +44,7 @@ pub mod sharing;
 pub mod sieve;
 pub mod smtp;
 pub mod smime;
+pub mod snapshot;
 pub mod snooze;
 pub mod store;
 pub mod sysstat;

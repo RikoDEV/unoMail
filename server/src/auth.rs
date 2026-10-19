@@ -155,6 +155,10 @@ pub enum Protocol {
 }
 
 impl Protocol {
+    pub fn from_name(name: &str) -> Option<Protocol> {
+        [Protocol::Web, Protocol::Smtp, Protocol::Imap, Protocol::Pop3, Protocol::Dav, Protocol::Jmap, Protocol::Sieve].into_iter().find(|p| p.as_str() == name)
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Protocol::Web => "web",
@@ -516,6 +520,22 @@ impl LoginLimiter {
         }
     }
 
+    /// Offenders not yet reported, for a snapshot.
+    pub fn pending_offenders(&self) -> Vec<(IpAddr, String)> {
+        self.offenders.lock().iter().map(|(ip, protocol)| (*ip, protocol.to_string())).collect()
+    }
+
+    pub fn restore_offenders(&self, saved: Vec<(IpAddr, String)>) {
+        let mut offenders = self.offenders.lock();
+        for (ip, protocol) in saved {
+            if let Some(protocol) = Protocol::from_name(&protocol)
+                && offenders.len() < MAX_PENDING_REPORTS
+            {
+                offenders.push((ip, protocol.as_str()));
+            }
+        }
+    }
+
     /// The addresses caught guessing passwords since the last call.
     pub fn take_offenders(&self) -> Vec<(IpAddr, &'static str)> {
         std::mem::take(&mut *self.offenders.lock())
@@ -532,6 +552,38 @@ impl LoginLimiter {
         let failures = self.failures_from(ip);
         let after = self.limits().tarpit_after.max(1);
         std::time::Duration::from_millis(u64::from(failures.saturating_sub(after - 1)).min(5) * 400)
+    }
+
+    /// Restores the failures and lockouts saved by an earlier run.
+    pub async fn load(&self, db: &SqlitePool) -> sqlx::Result<()> {
+        let rows: Vec<(String, i64, i64, i64, i64)> = sqlx::query_as("SELECT key, failures, window_start, strikes, locked_until FROM login_limiter").fetch_all(db).await?;
+        let mut entries = self.entries.lock();
+        for (key, failures, window_start, strikes, locked_until) in rows.into_iter().take(MAX_LIMITER_ENTRIES) {
+            let (failures, strikes) = (u32::try_from(failures).unwrap_or(0), u32::try_from(strikes).unwrap_or(0));
+            entries.insert(key, Attempts { failures, window_start, strikes, locked_until });
+        }
+        drop(entries);
+        self.prune();
+        Ok(())
+    }
+
+    /// Replaces the saved state with the current one, so lifted blocks stay lifted.
+    pub async fn save(&self, db: &SqlitePool) -> sqlx::Result<()> {
+        self.prune();
+        let rows: Vec<(String, u32, i64, u32, i64)> = self.entries.lock().iter().map(|(k, a)| (k.clone(), a.failures, a.window_start, a.strikes, a.locked_until)).collect();
+        let mut tx = db.begin().await?;
+        sqlx::query("DELETE FROM login_limiter").execute(&mut *tx).await?;
+        for (key, failures, window_start, strikes, locked_until) in rows {
+            sqlx::query("INSERT INTO login_limiter (key, failures, window_start, strikes, locked_until) VALUES (?, ?, ?, ?, ?)")
+                .bind(key)
+                .bind(failures)
+                .bind(window_start)
+                .bind(strikes)
+                .bind(locked_until)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await
     }
 
     pub fn prune(&self) {
@@ -650,6 +702,34 @@ mod tests {
         let count = limiter.entries.lock().len();
         for i in 0..1000 { assert!(!limiter.attempt(&format!("fresh{i}@example.org"), ip)); }
         assert_eq!(limiter.entries.lock().len(), count);
+    }
+
+    #[tokio::test]
+    async fn limiter_state_survives_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::open(&dir.path().join("t.db")).await.unwrap();
+        let limits = LoginLimits { max_failures_per_account_and_ip: 2, ..LoginLimits::default() };
+        let ip: IpAddr = "192.0.2.7".parse().unwrap();
+        let limiter = LoginLimiter::with_limits(limits);
+        for _ in 0..3 {
+            limiter.attempt("a@example.com", ip);
+        }
+        assert!(limiter.is_blocked("a@example.com", ip));
+        limiter.save(&db).await.unwrap();
+
+        let restarted = LoginLimiter::with_limits(limits);
+        restarted.load(&db).await.unwrap();
+        assert!(restarted.is_blocked("a@example.com", ip));
+        assert_eq!(restarted.blocks().len(), limiter.blocks().len());
+
+        // A lifted block stays lifted.
+        for block in restarted.blocks() {
+            restarted.unblock(&block.key);
+        }
+        restarted.save(&db).await.unwrap();
+        let again = LoginLimiter::with_limits(limits);
+        again.load(&db).await.unwrap();
+        assert!(!again.is_blocked("a@example.com", ip));
     }
 
     #[test]

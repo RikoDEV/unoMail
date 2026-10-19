@@ -67,6 +67,32 @@ fn push(buffer: &Mutex<VecDeque<Value>>, capacity: usize, entry: Value) {
     buffer.push_back(entry);
 }
 
+/// The system and SMTP buffers, oldest first, for a snapshot.
+pub fn snapshot() -> (Vec<Value>, Vec<Value>) {
+    (SYSTEM.lock().iter().cloned().collect(), SMTP.lock().iter().cloned().collect())
+}
+
+/// Puts saved entries back in front of anything logged since startup; entries of this run
+/// are renumbered after them.
+pub fn restore((system, smtp): (Vec<Value>, Vec<Value>)) {
+    for (buffer, capacity, ids, saved) in [(&SYSTEM, SYSTEM_BUFFER, &SYSTEM_ID, system), (&SMTP, SMTP_BUFFER, &SMTP_ID, smtp)] {
+        let mut buffer = buffer.lock();
+        let offset = saved.iter().filter_map(|entry| entry["id"].as_i64()).max().unwrap_or(0);
+        for entry in buffer.iter_mut() {
+            if let Some(id) = entry["id"].as_i64() {
+                entry["id"] = json!(id + offset);
+            }
+        }
+        ids.fetch_add(offset, Ordering::Relaxed);
+        let current = std::mem::take(&mut *buffer);
+        let mut merged: VecDeque<Value> = saved.into_iter().chain(current).collect();
+        while merged.len() > capacity {
+            merged.pop_front();
+        }
+        *buffer = merged;
+    }
+}
+
 pub fn record_system(level: &str, target: &str, message: &str) {
     let entry = json!({
         "id": SYSTEM_ID.fetch_add(1, Ordering::Relaxed),

@@ -234,7 +234,7 @@ const MAX_PENDING_ABUSE: usize = 1000;
 
 /// Abuse seen over SMTP that is worth telling AbuseIPDB about. Only clear cases: a wrong
 /// report harms a legitimate server.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Abuse {
     /// Mail to one of the administrator's spam traps.
     SpamTrap,
@@ -275,7 +275,23 @@ impl AbuseQueue {
     fn take(&self) -> Vec<(IpAddr, Abuse)> {
         std::mem::take(&mut *self.0.lock())
     }
+
+    pub fn snapshot(&self) -> Vec<(IpAddr, Abuse)> {
+        self.0.lock().clone()
+    }
+
+    pub fn restore(&self, saved: Vec<(IpAddr, Abuse)>) {
+        let mut pending = self.0.lock();
+        for item in saved {
+            if pending.len() < MAX_PENDING_ABUSE && !pending.contains(&item) {
+                pending.push(item);
+            }
+        }
+    }
 }
+
+/// Snapshot name of when each address was last reported to AbuseIPDB.
+const REPORTED_SNAPSHOT: &str = "abuseipdb_reported";
 
 /// Notes abuse from `ip` for the next report to AbuseIPDB. Nothing happens unless reporting
 /// is on, and private or trusted addresses are never reported.
@@ -296,11 +312,14 @@ pub async fn report_offenders(app: crate::app::AppState) {
     if app.cfg.abuseipdb_key.is_none() || !app.cfg.abuseipdb_report {
         return;
     }
-    let mut reported = std::collections::HashMap::new();
+    let mut reported: std::collections::HashMap<IpAddr, i64> = crate::snapshot::load(&app.db, REPORTED_SNAPSHOT).await.ok().flatten().unwrap_or_default();
     let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
     loop {
         tick.tick().await;
         report_pending(&app, &mut reported).await;
+        if let Err(err) = crate::snapshot::save(&app.db, REPORTED_SNAPSHOT, &reported).await {
+            tracing::warn!(%err, "AbuseIPDB report times not saved");
+        }
     }
 }
 

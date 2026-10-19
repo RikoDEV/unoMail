@@ -76,7 +76,62 @@ impl Histogram {
     }
 }
 
+impl Histogram {
+    fn cells(&self) -> impl Iterator<Item = (String, &AtomicU64)> {
+        self.buckets.iter().enumerate().map(|(i, b)| (format!("bucket{i}"), b)).chain([("count".to_string(), &self.count), ("sum_micros".to_string(), &self.sum_micros)])
+    }
+}
+
 impl Metrics {
+    /// Every cumulative counter by its stored name (the connection gauge is not one).
+    fn cells(&self) -> Vec<(String, &AtomicU64)> {
+        let mut cells: Vec<(String, &AtomicU64)> = [
+            ("smtp_connections", &self.smtp_connections),
+            ("imap_connections", &self.imap_connections),
+            ("pop3_connections", &self.pop3_connections),
+            ("messages_received", &self.messages_received),
+            ("messages_delivered_local", &self.messages_delivered_local),
+            ("messages_sent", &self.messages_sent),
+            ("messages_bounced", &self.messages_bounced),
+            ("messages_rejected", &self.messages_rejected),
+            ("spam_blocked", &self.spam_blocked),
+            ("auth_failures", &self.auth_failures),
+            ("http_requests", &self.http_requests),
+            ("deliveries_deferred", &self.deliveries_deferred),
+            ("jmap_calls", &self.jmap_calls),
+            ("imap_commands", &self.imap_commands),
+        ]
+        .into_iter()
+        .map(|(name, cell)| (name.to_string(), cell))
+        .collect();
+        cells.extend(self.http_duration.cells().map(|(n, c)| (format!("http_duration.{n}"), c)));
+        cells.extend(self.delivery_duration.cells().map(|(n, c)| (format!("delivery_duration.{n}"), c)));
+        cells
+    }
+
+    /// Adds the counts saved by an earlier run.
+    pub async fn load(&self, db: &SqlitePool) -> sqlx::Result<()> {
+        let saved: HashMap<String, i64> = sqlx::query_as("SELECT name, value FROM metric_counters").fetch_all(db).await?.into_iter().collect();
+        for (name, cell) in self.cells() {
+            if let Some(value) = saved.get(&name) {
+                cell.fetch_add(u64::try_from(*value).unwrap_or(0), Ordering::Relaxed);
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn save(&self, db: &SqlitePool) -> sqlx::Result<()> {
+        let mut tx = db.begin().await?;
+        for (name, cell) in self.cells() {
+            sqlx::query("INSERT INTO metric_counters (name, value) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET value = excluded.value")
+                .bind(name)
+                .bind(i64::try_from(cell.load(Ordering::Relaxed)).unwrap_or(i64::MAX))
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await
+    }
+
     pub fn inc(counter: &AtomicU64) {
         counter.fetch_add(1, Ordering::Relaxed);
     }
@@ -199,6 +254,26 @@ impl App {
         let filter_controller_http = filter_client(&cfg.rspamd_controller_socket)?;
         let settings = ArcSwap::from_pointee(crate::settings::load(&db, &cfg).await?);
         let limiter = LoginLimiter::with_limits(settings.load().login_limits());
+        limiter.load(&db).await?;
+        let metrics = Metrics::default();
+        metrics.load(&db).await?;
+        let activity = crate::activity::Activity::default();
+        let abuse = crate::security::reputation::AbuseQueue::default();
+        if let Some(saved) = crate::snapshot::load(&db, "activity").await? {
+            activity.restore(saved);
+        }
+        if let Some(saved) = crate::snapshot::load(&db, "abuse_pending").await? {
+            abuse.restore(saved);
+        }
+        if let Some(saved) = crate::snapshot::load(&db, "login_offenders").await? {
+            limiter.restore_offenders(saved);
+        }
+        if let Some(saved) = crate::snapshot::load(&db, "report_counts").await? {
+            crate::dmarc_reports::restore_report_counts(saved);
+        }
+        if let Some(saved) = crate::snapshot::load(&db, "logs").await? {
+            crate::logstream::restore(saved);
+        }
         Ok(Arc::new(App {
             cfg,
             settings,
@@ -206,10 +281,10 @@ impl App {
             store,
             tls,
             limiter,
-            abuse: Default::default(),
+            abuse,
             challenges: Default::default(),
             oauth: Default::default(),
-            metrics: Metrics::default(),
+            metrics,
             daily: Default::default(),
             authenticator,
             queue_wake: Notify::new(),
@@ -217,12 +292,38 @@ impl App {
             filter_http,
             filter_controller_http,
             secrets,
-            activity: Default::default(),
+            activity,
             access: Default::default(),
             started_at: now(),
             connections: Mutex::new(HashMap::new()),
             webhooks: std::sync::OnceLock::new(),
         }))
+    }
+
+    /// Writes the counters and login limiter state that must survive a restart.
+    pub async fn save_state(&self) {
+        if let Err(err) = self.metrics.save(&self.db).await {
+            tracing::warn!(%err, "metric counters not saved");
+        }
+        if let Err(err) = self.limiter.save(&self.db).await {
+            tracing::warn!(%err, "login limiter state not saved");
+        }
+        let snapshots = [
+            ("activity", serde_json::to_value(self.activity.snapshot())),
+            ("abuse_pending", serde_json::to_value(self.abuse.snapshot())),
+            ("login_offenders", serde_json::to_value(self.limiter.pending_offenders())),
+            ("report_counts", serde_json::to_value(crate::dmarc_reports::report_counts())),
+            ("logs", serde_json::to_value(crate::logstream::snapshot())),
+        ];
+        for (name, value) in snapshots {
+            let result = match value {
+                Ok(value) => crate::snapshot::save(&self.db, name, &value).await,
+                Err(err) => Err(sqlx::Error::Encode(Box::new(err))),
+            };
+            if let Err(err) = result {
+                tracing::warn!(%err, name, "state snapshot not saved");
+            }
+        }
     }
 
     /// The current runtime settings.
@@ -269,4 +370,48 @@ fn restrict_permissions(path: &std::path::Path) {
     }
     #[cfg(not(unix))]
     let _ = path;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn metric_counters_survive_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::open(&dir.path().join("t.db")).await.unwrap();
+        let metrics = Metrics::default();
+        Metrics::inc(&metrics.messages_sent);
+        Metrics::inc(&metrics.messages_sent);
+        metrics.http_duration.observe(std::time::Duration::from_millis(30));
+        metrics.save(&db).await.unwrap();
+
+        let restarted = Metrics::default();
+        restarted.load(&db).await.unwrap();
+        assert_eq!(Metrics::get(&restarted.messages_sent), 2);
+        assert_eq!(restarted.http_duration.render("h", ""), metrics.http_duration.render("h", ""));
+    }
+
+    #[tokio::test]
+    async fn snapshots_survive_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::open(&dir.path().join("t.db")).await.unwrap();
+        let ip: IpAddr = "198.51.100.4".parse().unwrap();
+        let activity = crate::activity::Activity::default();
+        activity.connection(ip);
+        activity.reply(ip, "250 2.0.0 OK snapshot-marker");
+        let abuse = crate::security::reputation::AbuseQueue::default();
+        abuse.restore(vec![(ip, crate::security::reputation::Abuse::Spam)]);
+        crate::snapshot::save(&db, "activity", &activity.snapshot()).await.unwrap();
+        crate::snapshot::save(&db, "abuse_pending", &abuse.snapshot()).await.unwrap();
+
+        let restarted = crate::activity::Activity::default();
+        restarted.restore(crate::snapshot::load(&db, "activity").await.unwrap().unwrap());
+        assert_eq!(restarted.recent_ips(10)[0].0, ip);
+        assert_eq!(restarted.recent_replies(10)[0].text, "2.0.0 OK snapshot-marker");
+        let queue = crate::security::reputation::AbuseQueue::default();
+        queue.restore(crate::snapshot::load(&db, "abuse_pending").await.unwrap().unwrap());
+        assert_eq!(queue.snapshot(), abuse.snapshot());
+        assert_eq!(crate::snapshot::load::<Vec<i64>>(&db, "missing").await.unwrap(), None);
+    }
 }

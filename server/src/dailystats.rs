@@ -122,6 +122,7 @@ pub async fn run(app: AppState) {
     loop {
         tokio::time::sleep(FLUSH_INTERVAL).await;
         flush(&app).await;
+        app.save_state().await;
         rounds += 1;
         if rounds % 60 == 1
             && let Err(err) = sqlx::query("DELETE FROM daily_stats WHERE day < ?").bind(day_of(now()) - app.rt().stats_retention_days).execute(&app.db).await
