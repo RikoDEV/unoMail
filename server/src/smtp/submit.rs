@@ -588,8 +588,18 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
     if sub.recipients.is_empty() {
         return Outcome::Rejected("554 5.5.1 No valid recipients".into());
     }
-    if sub.raw.len() > app.rt().max_message_size {
+    // A mailbox's own size and recipient limits can only tighten the server's.
+    let limits: sqlx::Result<(Option<i64>, Option<i64>)> =
+        sqlx::query_as("SELECT max_message_size, max_recipients FROM accounts WHERE id = ?").bind(account.id).fetch_one(&app.db).await;
+    let (max_size, max_recipients) = match limits {
+        Ok(limits) => limits,
+        Err(err) => return internal("sending limit lookup failed", err),
+    };
+    if sub.raw.len() > app.rt().max_message_size || max_size.is_some_and(|max| sub.raw.len() as i64 > max) {
         return Outcome::Rejected("552 5.3.4 Message size exceeds fixed limit".into());
+    }
+    if max_recipients.is_some_and(|max| sub.recipients.len() as i64 > max) {
+        return Outcome::Rejected("452 4.5.3 Too many recipients for this mailbox".into());
     }
     match identity_allowed(app, account, sub.sender).await {
         Ok(true) => {}

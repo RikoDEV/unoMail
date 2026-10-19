@@ -421,6 +421,35 @@ async fn accounts_exceeding_the_sending_limit_are_blocked() {
 }
 
 #[tokio::test]
+async fn mailbox_sending_limits_override_the_server() {
+    let sink = Sink::start().await;
+    let relay = sink.relay();
+    let env = TestEnv::start_with(|cfg| {
+        cfg.outbound_relay = Some(relay);
+        cfg.outbound_max_messages_per_hour = 1;
+    })
+    .await;
+    env.domain("example.org").await;
+    let bob = env.account("bob@example.org").await;
+    sqlx::query("UPDATE accounts SET max_messages_per_hour = 3, max_recipients = 1, max_message_size = 2000 WHERE id = ?")
+        .bind(bob.id)
+        .execute(&env.app.db)
+        .await
+        .unwrap();
+
+    let mut c = submission_client(&env, "bob@example.org").await;
+    let msg = message("bob@example.org", "x@remote.example", "Newsletter", "hello");
+    assert!(c.send_mail("bob@example.org", &["x@remote.example", "y@remote.example"], &msg).await.starts_with("452"), "more recipients than the mailbox may address");
+    let large = message("bob@example.org", "x@remote.example", "Large", &"x".repeat(4000));
+    assert!(c.send_mail("bob@example.org", &["x@remote.example"], &large).await.starts_with("552"), "larger than the mailbox may send");
+    // The mailbox's hourly limit replaces the server's lower one.
+    for _ in 0..3 {
+        assert!(c.send_mail("bob@example.org", &["x@remote.example"], &msg).await.starts_with("250"));
+    }
+    assert!(c.send_mail("bob@example.org", &["x@remote.example"], &msg).await.starts_with("550 5.7.1"));
+}
+
+#[tokio::test]
 async fn greylisting_defers_first_contact_only() {
     let env = TestEnv::start_with(|cfg| cfg.greylist_delay_secs = 60).await;
     let ip = "203.0.113.10".parse().unwrap();

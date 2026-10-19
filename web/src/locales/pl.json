@@ -912,7 +912,7 @@
   "Recipient": "Odbiorca",
   "Recipient suggestions in the composer are also looked up in this directory.": "Podpowiedzi odbiorców w edytorze wiadomości są wyszukiwane także w tym katalogu.",
   "Recipients per account per hour": "Odbiorców na konto na godzinę",
-  "Recipients per message": "Odbiorców na wiadomość",
+  "Recipients per message": "Odbiorcy na wiadomość",
   "record (see each domain's DNS page) to receive them.": "(zobacz stronę DNS każdej domeny), aby je otrzymywać.",
   "Record forgotten": "Rekord zapomniany",
   "Record to publish": "Rekord do opublikowania",
@@ -1886,5 +1886,13 @@
   "Blocked": "Zablokowane",
   "Unblock": "Odblokuj",
   "Unblock {{target}}": "Odblokuj {{target}}",
-  "Unblocked": "Odblokowano"
+  "Unblocked": "Odblokowano",
+  "Sending limits": "Limity wysyłania",
+  "Leave a field empty to use the server setting. The message size and recipients per message can only be lower than the server allows.": "Pozostaw pole puste, aby użyć ustawienia serwera. Rozmiar wiadomości i liczba odbiorców na wiadomość mogą być tylko niższe niż pozwala serwer.",
+  "Messages per hour": "Wiadomości na godzinę",
+  "Recipients per hour": "Odbiorcy na godzinę",
+  "Message size (MB)": "Rozmiar wiadomości (MB)",
+  "Server default": "Domyślne serwera",
+  "Server default ({{value}})": "Domyślne serwera ({{value}})",
+  "A whole number of at least 1": "Liczba całkowita, co najmniej 1"
 }

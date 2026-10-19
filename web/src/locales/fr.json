@@ -1845,5 +1845,13 @@
   "Blocked": "Bloqué",
   "Unblock": "Débloquer",
   "Unblock {{target}}": "Débloquer {{target}}",
-  "Unblocked": "Débloqué"
+  "Unblocked": "Débloqué",
+  "Sending limits": "Limites d'envoi",
+  "Leave a field empty to use the server setting. The message size and recipients per message can only be lower than the server allows.": "Laissez un champ vide pour utiliser le réglage du serveur. La taille des messages et le nombre de destinataires par message ne peuvent être que inférieurs à ce que le serveur autorise.",
+  "Messages per hour": "Messages par heure",
+  "Recipients per hour": "Destinataires par heure",
+  "Message size (MB)": "Taille des messages (Mo)",
+  "Server default": "Valeur du serveur",
+  "Server default ({{value}})": "Valeur du serveur ({{value}})",
+  "A whole number of at least 1": "Un nombre entier d'au moins 1"
 }

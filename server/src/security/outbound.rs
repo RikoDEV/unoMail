@@ -41,10 +41,11 @@ async fn hour_totals(app: &App, account_id: i64) -> sqlx::Result<(i64, i64, i64)
 /// Accounts for one submission with `recipients` recipients, refusing it when the account is
 /// blocked or the submission exceeds its hourly allowance.
 pub async fn register_submission(app: &App, account: &Account, recipients: usize) -> anyhow::Result<Result<(), Refusal>> {
-    let blocked: bool = sqlx::query_scalar("SELECT outbound_blocked FROM accounts WHERE id = ?")
-        .bind(account.id)
-        .fetch_one(&app.db)
-        .await?;
+    let (blocked, max_messages, max_recipients): (bool, Option<i64>, Option<i64>) =
+        sqlx::query_as("SELECT outbound_blocked, max_messages_per_hour, max_recipients_per_hour FROM accounts WHERE id = ?")
+            .bind(account.id)
+            .fetch_one(&app.db)
+            .await?;
     if blocked {
         return Ok(Err(Refusal::Blocked));
     }
@@ -58,7 +59,10 @@ pub async fn register_submission(app: &App, account: &Account, recipients: usize
     .execute(&app.db)
     .await?;
     let (messages, rcpts, _) = hour_totals(app, account.id).await?;
-    if messages > app.rt().outbound_max_messages_per_hour || rcpts > app.rt().outbound_max_recipients_per_hour {
+    // A mailbox's own limits, when set, replace the server's.
+    let max_messages = max_messages.unwrap_or(app.rt().outbound_max_messages_per_hour);
+    let max_recipients = max_recipients.unwrap_or(app.rt().outbound_max_recipients_per_hour);
+    if messages > max_messages || rcpts > max_recipients {
         block(app, account, &format!("hourly sending limit exceeded ({messages} messages, {rcpts} recipients)")).await;
         return Ok(Err(Refusal::LimitExceeded));
     }

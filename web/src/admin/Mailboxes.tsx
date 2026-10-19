@@ -28,6 +28,11 @@ interface Mailbox {
   /** Submitted over the last hour or so, the window the sending limits are checked against. */
   sent_messages: number;
   sent_recipients: number;
+  /** Overrides of the server's sending limits; null uses the server setting. */
+  max_messages_per_hour: number | null;
+  max_recipients_per_hour: number | null;
+  max_message_size: number | null;
+  max_recipients: number | null;
 }
 
 interface MailboxList {
@@ -177,9 +182,19 @@ interface FormState {
   /** Why the server blocked sending by itself (shown while the block lasts). */
   outbound_blocked_reason?: string | null;
   send_only: boolean;
+  /** Sending limit overrides as typed; empty uses the server setting. */
+  limits: Record<LimitField, string>;
 }
 
-const EMPTY: FormState = { email: '', display_name: '', password: '', role: 'user', quota_mb: '1024', enabled: true, imap_enabled: true, pop3_enabled: true, smtp_enabled: true, outbound_blocked: false, send_only: false };
+type LimitField = 'max_messages_per_hour' | 'max_recipients_per_hour' | 'max_message_size' | 'max_recipients';
+const LIMIT_FIELDS: LimitField[] = ['max_messages_per_hour', 'max_recipients_per_hour', 'max_message_size', 'max_recipients'];
+const NO_LIMITS: Record<LimitField, string> = { max_messages_per_hour: '', max_recipients_per_hour: '', max_message_size: '', max_recipients: '' };
+
+/** The message size is shown in megabytes, the other limits as they are. */
+const limitText = (field: LimitField, value: number | null) => (value === null ? '' : String(field === 'max_message_size' ? Math.round(value / MB) : value));
+const limitValue = (field: LimitField, text: string) => (text.trim() === '' ? null : Number(text) * (field === 'max_message_size' ? MB : 1));
+
+const EMPTY: FormState = { email: '', display_name: '', password: '', role: 'user', quota_mb: '1024', enabled: true, imap_enabled: true, pop3_enabled: true, smtp_enabled: true, outbound_blocked: false, send_only: false, limits: NO_LIMITS };
 
 /** Whether a mailbox uses 2-step sign-in, with a reset for an owner who lost the phone. */
 function TwoStepStatus({ id }: { id: number }) {
@@ -228,9 +243,10 @@ export function Mailboxes() {
         email: editing ? '' : validators.email(form.email),
         password: form.password || !editing ? validators.password(form.password) : '',
         quota: /^\d+$/.test(form.quota_mb) ? '' : t('Enter a whole number of megabytes (0 = unlimited)'),
+        limits: LIMIT_FIELDS.some((field) => !/^\s*([1-9]\d*)?\s*$/.test(form.limits[field])),
       }
-    : { email: '', password: '', quota: '' };
-  const valid = !errors.email && !errors.password && !errors.quota;
+    : { email: '', password: '', quota: '', limits: false };
+  const valid = !errors.email && !errors.password && !errors.quota && !errors.limits;
 
   async function save() {
     if (!form || !valid) return;
@@ -238,7 +254,8 @@ export function Mailboxes() {
     const body: Record<string, unknown> = editing
       ? {
           display_name: form.display_name, quota_bytes, enabled: form.enabled, imap_enabled: form.imap_enabled, pop3_enabled: form.pop3_enabled,
-          smtp_enabled: form.smtp_enabled, outbound_blocked: form.outbound_blocked, send_only: form.send_only, ...(form.password ? { password: form.password } : {}), ...(isSuper ? { role: form.role } : {}),
+          smtp_enabled: form.smtp_enabled, outbound_blocked: form.outbound_blocked, send_only: form.send_only,
+          ...Object.fromEntries(LIMIT_FIELDS.map((field) => [field, limitValue(field, form.limits[field])])), ...(form.password ? { password: form.password } : {}), ...(isSuper ? { role: form.role } : {}),
         }
       : { email: form.email.trim(), password: form.password, display_name: form.display_name, quota_bytes, ...(isSuper ? { role: form.role } : {}) };
     const ok = await saving.run(() => (editing ? patch(`/api/accounts/${form.id}`, body) : post('/api/accounts', body)));
@@ -305,11 +322,11 @@ export function Mailboxes() {
                 </Typography>
                 {box.quota_bytes > 0 && <LinearProgress variant="determinate" value={Math.min(100, (box.used_bytes / box.quota_bytes) * 100)} color={box.used_bytes > box.quota_bytes * 0.9 ? 'error' : 'primary'} />}
               </TableCell>
-              <TableCell data-sort={data ? box.sent_recipients / data.max_recipients_per_hour : 0}>
+              <TableCell data-sort={data ? box.sent_recipients / (box.max_recipients_per_hour ?? data.max_recipients_per_hour) : 0}>
                 {data && (
                   <>
-                    <UsageBar label={t('Messages')} used={box.sent_messages} limit={data.max_messages_per_hour} />
-                    <UsageBar label={t('Recipients')} used={box.sent_recipients} limit={data.max_recipients_per_hour} />
+                    <UsageBar label={t('Messages')} used={box.sent_messages} limit={box.max_messages_per_hour ?? data.max_messages_per_hour} />
+                    <UsageBar label={t('Recipients')} used={box.sent_recipients} limit={box.max_recipients_per_hour ?? data.max_recipients_per_hour} />
                   </>
                 )}
               </TableCell>
@@ -320,7 +337,7 @@ export function Mailboxes() {
                 <Tooltip title={t('Edit')}>
                   <IconButton
                     aria-label={t('Edit {{email}}', { email: box.email })}
-                    onClick={() => open({ ...box, password: '', quota_mb: String(Math.round(box.quota_bytes / MB)) })}
+                    onClick={() => open({ ...box, password: '', quota_mb: String(Math.round(box.quota_bytes / MB)), limits: Object.fromEntries(LIMIT_FIELDS.map((field) => [field, limitText(field, box[field])])) as Record<LimitField, string> })}
                   >
                     <Edit />
                   </IconButton>
@@ -421,6 +438,34 @@ export function Mailboxes() {
                     </>
                   }
                 />
+              )}
+              {editing && (
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2">{t('Sending limits')}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('Leave a field empty to use the server setting. The message size and recipients per message can only be lower than the server allows.')}
+                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    {LIMIT_FIELDS.map((field) => {
+                      const invalid = !/^\s*([1-9]\d*)?\s*$/.test(form.limits[field]);
+                      const serverValue = field === 'max_messages_per_hour' ? data?.max_messages_per_hour : field === 'max_recipients_per_hour' ? data?.max_recipients_per_hour : undefined;
+                      return (
+                        <TextField
+                          key={field}
+                          size="small"
+                          inputMode="numeric"
+                          label={{ max_messages_per_hour: t('Messages per hour'), max_recipients_per_hour: t('Recipients per hour'), max_message_size: t('Message size (MB)'), max_recipients: t('Recipients per message') }[field]}
+                          value={form.limits[field]}
+                          placeholder={serverValue === undefined ? t('Server default') : t('Server default ({{value}})', { value: serverValue })}
+                          InputLabelProps={{ shrink: true }}
+                          onChange={(e) => set({ limits: { ...form.limits, [field]: e.target.value } })}
+                          error={invalid}
+                          helperText={invalid ? t('A whole number of at least 1') : undefined}
+                        />
+                      );
+                    })}
+                  </Stack>
+                </Stack>
               )}
               {editing && form.id !== undefined && <TwoStepStatus id={form.id} />}
             </Stack>

@@ -38,6 +38,11 @@ pub struct AccountRow {
     /// Messages and recipients submitted over the window the sending limits are checked against.
     sent_messages: i64,
     sent_recipients: i64,
+    /// Overrides of the server's sending limits; `None` uses the server setting.
+    max_messages_per_hour: Option<i64>,
+    max_recipients_per_hour: Option<i64>,
+    max_message_size: Option<i64>,
+    max_recipients: Option<i64>,
 }
 
 /// The mailbox list, with the sending limits its usage figures are measured against.
@@ -50,7 +55,7 @@ pub struct AccountList {
 }
 
 const SELECT: &str = "SELECT id, domain_id, email, display_name, role, quota_bytes, used_bytes, enabled, imap_enabled, \
-     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, system, created_at,      (SELECT COALESCE(SUM(messages), 0) FROM outbound_stats WHERE account_id = accounts.id AND bucket >= unixepoch() / 3600 - 1) AS sent_messages,      (SELECT COALESCE(SUM(recipients), 0) FROM outbound_stats WHERE account_id = accounts.id AND bucket >= unixepoch() / 3600 - 1) AS sent_recipients      FROM accounts";
+     pop3_enabled, smtp_enabled, outbound_blocked, outbound_blocked_reason, send_only, system, created_at,      max_messages_per_hour, max_recipients_per_hour, max_message_size, max_recipients,      (SELECT COALESCE(SUM(messages), 0) FROM outbound_stats WHERE account_id = accounts.id AND bucket >= unixepoch() / 3600 - 1) AS sent_messages,      (SELECT COALESCE(SUM(recipients), 0) FROM outbound_stats WHERE account_id = accounts.id AND bucket >= unixepoch() / 3600 - 1) AS sent_recipients      FROM accounts";
 
 async fn load(state: &AppState, id: i64) -> ApiResult<AccountRow> {
     sqlx::query_as(sqlx::AssertSqlSafe(format!("{SELECT} WHERE id = ?")))
@@ -175,6 +180,15 @@ pub struct UpdateAccount {
     smtp_enabled: Option<bool>,
     outbound_blocked: Option<bool>,
     send_only: Option<bool>,
+    /// Sending limit overrides: `null` returns to the server setting.
+    #[serde(default, with = "super::domains::double_option")]
+    max_messages_per_hour: Option<Option<i64>>,
+    #[serde(default, with = "super::domains::double_option")]
+    max_recipients_per_hour: Option<Option<i64>>,
+    #[serde(default, with = "super::domains::double_option")]
+    max_message_size: Option<Option<i64>>,
+    #[serde(default, with = "super::domains::double_option")]
+    max_recipients: Option<Option<i64>>,
 }
 
 pub async fn update(
@@ -201,8 +215,12 @@ pub async fn update(
     if is_self && req.enabled == Some(false) {
         return Err(ApiError::bad("you cannot disable your own account"));
     }
-    if is_self && !session.is_super() && (req.quota_bytes.is_some() || req.outbound_blocked.is_some()) {
+    let limits = [req.max_messages_per_hour, req.max_recipients_per_hour, req.max_message_size, req.max_recipients];
+    if is_self && !session.is_super() && (req.quota_bytes.is_some() || req.outbound_blocked.is_some() || limits.iter().any(Option::is_some)) {
         return Err(ApiError::Forbidden);
+    }
+    if limits.iter().any(|limit| limit.flatten().is_some_and(|v| v < 1)) {
+        return Err(ApiError::bad("sending limits must be at least 1"));
     }
     if req.quota_bytes.is_some_and(|q| q < 0) {
         return Err(ApiError::bad("quota must not be negative"));
@@ -228,7 +246,8 @@ pub async fn update(
     sqlx::query(
         "UPDATE accounts SET display_name = ?, role = ?, quota_bytes = ?, enabled = ?, imap_enabled = ?, pop3_enabled = ?,
             smtp_enabled = ?, outbound_blocked = ?, outbound_blocked_reason = CASE WHEN ? THEN outbound_blocked_reason ELSE NULL END,
-            send_only = ?, password_hash = COALESCE(?, password_hash)
+            send_only = ?, password_hash = COALESCE(?, password_hash), max_messages_per_hour = ?, max_recipients_per_hour = ?,
+            max_message_size = ?, max_recipients = ?
          WHERE id = ?",
     )
     .bind(&display_name)
@@ -242,6 +261,10 @@ pub async fn update(
     .bind(req.outbound_blocked.unwrap_or(current.outbound_blocked))
     .bind(req.send_only.unwrap_or(current.send_only))
     .bind(&password_hash)
+    .bind(req.max_messages_per_hour.unwrap_or(current.max_messages_per_hour))
+    .bind(req.max_recipients_per_hour.unwrap_or(current.max_recipients_per_hour))
+    .bind(req.max_message_size.unwrap_or(current.max_message_size))
+    .bind(req.max_recipients.unwrap_or(current.max_recipients))
     .bind(id)
     .execute(&mut *tx)
     .await?;
@@ -272,6 +295,9 @@ pub async fn update(
     }
     if req.enabled.is_some_and(|e| e != current.enabled) {
         changes.push(if current.enabled { "disabled" } else { "enabled" });
+    }
+    if limits.iter().any(Option::is_some) {
+        changes.push("sending_limits");
     }
     if unblocking {
         changes.push("outbound_unblocked");

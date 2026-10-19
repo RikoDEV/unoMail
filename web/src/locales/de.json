@@ -1804,5 +1804,13 @@
   "Blocked": "Gesperrt",
   "Unblock": "Entsperren",
   "Unblock {{target}}": "{{target}} entsperren",
-  "Unblocked": "Entsperrt"
+  "Unblocked": "Entsperrt",
+  "Sending limits": "Versandlimits",
+  "Leave a field empty to use the server setting. The message size and recipients per message can only be lower than the server allows.": "Lassen Sie ein Feld leer, um die Servereinstellung zu verwenden. Nachrichtengröße und Empfänger pro Nachricht können nur niedriger sein, als der Server erlaubt.",
+  "Messages per hour": "Nachrichten pro Stunde",
+  "Recipients per hour": "Empfänger pro Stunde",
+  "Message size (MB)": "Nachrichtengröße (MB)",
+  "Server default": "Serverstandard",
+  "Server default ({{value}})": "Serverstandard ({{value}})",
+  "A whole number of at least 1": "Eine ganze Zahl ab 1"
 }

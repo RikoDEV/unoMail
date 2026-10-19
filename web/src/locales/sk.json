@@ -1886,5 +1886,13 @@
   "Blocked": "Zablokované",
   "Unblock": "Odblokovať",
   "Unblock {{target}}": "Odblokovať {{target}}",
-  "Unblocked": "Odblokované"
+  "Unblocked": "Odblokované",
+  "Sending limits": "Limity odosielania",
+  "Leave a field empty to use the server setting. The message size and recipients per message can only be lower than the server allows.": "Ponechajte pole prázdne, ak chcete použiť nastavenie servera. Veľkosť správy a počet príjemcov na správu môžu byť len nižšie, než server povoľuje.",
+  "Messages per hour": "Správ za hodinu",
+  "Recipients per hour": "Príjemcov za hodinu",
+  "Message size (MB)": "Veľkosť správy (MB)",
+  "Server default": "Predvolené serverom",
+  "Server default ({{value}})": "Predvolené serverom ({{value}})",
+  "A whole number of at least 1": "Celé číslo aspoň 1"
 }
