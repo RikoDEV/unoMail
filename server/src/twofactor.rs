@@ -188,17 +188,26 @@ pub async fn check_totp(db: &SqlitePool, secrets: &crate::secretbox::SecretBox, 
 pub const SCOPES: [&str; 3] = ["mail", "dav", "jmap"];
 
 /// Four groups of four lowercase letters, as shown to the user.
+/// Letters in a new app password: 24 letters carry about 113 bits, and stay short enough for
+/// clients that limit password length.
+const APP_PASSWORD_LETTERS: usize = 24;
+/// Earlier versions issued 16 letters; those keep working.
+const LEGACY_APP_PASSWORD_LETTERS: usize = 16;
+
 pub fn new_app_password() -> String {
-    let bytes = random_bytes::<16>();
-    let letters: String = bytes.iter().map(|b| (b'a' + b % 26) as char).collect();
-    format!("{} {} {} {}", &letters[..4], &letters[4..8], &letters[8..12], &letters[12..])
+    let mut letters = Vec::with_capacity(APP_PASSWORD_LETTERS);
+    while letters.len() < APP_PASSWORD_LETTERS {
+        // Bytes from 234 up are dropped so that every letter is equally likely.
+        letters.extend(random_bytes::<32>().iter().filter(|b| **b < 234).map(|b| b'a' + b % 26).take(APP_PASSWORD_LETTERS - letters.len()));
+    }
+    letters.chunks(4).map(|group| std::str::from_utf8(group).expect("ASCII letters")).collect::<Vec<_>>().join(" ")
 }
 
 /// The form an app password is compared in: the letters only. `None` when the input cannot
 /// be one, so ordinary passwords are not looked up as app passwords.
 pub fn normalize_app_password(input: &str) -> Option<String> {
     let letters: String = input.chars().filter(|c| !c.is_whitespace() && *c != '-').collect::<String>().to_ascii_lowercase();
-    (letters.len() == 16 && letters.bytes().all(|b| b.is_ascii_lowercase())).then_some(letters)
+    (matches!(letters.len(), APP_PASSWORD_LETTERS | LEGACY_APP_PASSWORD_LETTERS) && letters.bytes().all(|b| b.is_ascii_lowercase())).then_some(letters)
 }
 
 pub fn app_password_hash(normalized: &str) -> String {
@@ -601,9 +610,10 @@ pub(crate) mod tests {
     #[test]
     fn app_passwords_look_like_app_passwords() {
         let password = new_app_password();
-        assert_eq!(password.len(), 19);
-        assert_eq!(normalize_app_password(&password).unwrap().len(), 16);
-        assert_eq!(normalize_app_password("ABCD-efgh ijkl mnop").as_deref(), Some("abcdefghijklmnop"));
+        assert_eq!(password.len(), 29);
+        assert_eq!(normalize_app_password(&password).unwrap().len(), 24);
+        assert_ne!(new_app_password(), password);
+        assert_eq!(normalize_app_password("ABCD-efgh ijkl mnop").as_deref(), Some("abcdefghijklmnop"), "older, shorter app passwords still work");
         for not in ["correct horse battery staple", "abcd", "abcdefghijklmnop1", "ąbcdefghijklmnop"] {
             assert_eq!(normalize_app_password(not), None, "{not}");
         }

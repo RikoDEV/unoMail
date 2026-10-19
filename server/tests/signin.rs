@@ -133,7 +133,7 @@ async fn programs_need_app_passwords_once_two_step_sign_in_is_on() {
     let made = bob.post("/api/me/app-passwords", json!({ "name": "Phone mail", "scopes": ["mail"], "password": PASSWORD })).await;
     assert_eq!(made.status, StatusCode::OK, "{}", made.text);
     let phone = made.body["password"].as_str().unwrap().to_owned();
-    assert_eq!(phone.len(), 19);
+    assert_eq!(phone.len(), 29);
     let calendar = bob.post("/api/me/app-passwords", json!({ "name": "Calendar", "scopes": ["dav", "nonsense"], "password": PASSWORD })).await.body;
     assert_eq!(calendar["scopes"], json!(["dav"]));
     let calendar_password = calendar["password"].as_str().unwrap().to_owned();

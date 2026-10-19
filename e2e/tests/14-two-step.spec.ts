@@ -74,7 +74,7 @@ test.describe('2-step verification and app passwords', () => {
     await create.getByLabel('Program').fill('Phone');
     await create.getByLabel('Your password').fill(USER_PASSWORD);
     await create.getByRole('button', { name: 'Create' }).click();
-    await expect(page.getByTestId('new-app-password')).toHaveText(/^[a-z]{4} [a-z]{4} [a-z]{4} [a-z]{4}$/);
+    await expect(page.getByTestId('new-app-password')).toHaveText(/^[a-z]{4}( [a-z]{4}){5}$/);
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByRole('table', { name: 'App passwords' })).toContainText('Phone');
 
