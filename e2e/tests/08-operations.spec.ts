@@ -211,10 +211,16 @@ test.describe('previews and capacity', () => {
     await expect(page.getByTestId('chart-headline-Free disk space')).toHaveText(/^[\d.]+ (B|KB|MB|GB|TB) free$/);
     await expect(page.getByTestId('chart-headline-Memory in use')).toHaveText(/^[\d.]+ (MB|GB|TB) used$/);
     await expect(page.getByText(/of [\d.]+ (GB|TB) on the data volume/)).toBeVisible();
-    await expect(page.getByText(/the mail server itself uses [\d.]+ (KB|MB|GB)/)).toBeVisible();
+    await expect(page.getByText(/^\d+% of [\d.]+ (MB|GB|TB)$/)).toBeVisible();
+
+    // Memory is split by service, each named in the legend.
+    const capacity = page.getByTestId('capacity');
+    const legend = capacity.getByRole('list', { name: 'Legend' });
+    for (const name of ['unoMail', 'Rspamd', 'ClamAV', 'Redis', 'Other']) {
+      await expect(legend.getByText(name, { exact: true })).toBeVisible();
+    }
 
     // The same numbers are available as a table, and the period can be changed.
-    const capacity = page.getByTestId('capacity');
     await capacity.getByRole('button', { name: 'Show as a table' }).first().click();
     const table = page.getByRole('table', { name: 'Free disk space, data' });
     await expect(table.getByRole('row').nth(1)).toContainText(/(B|KB|MB|GB|TB)$/);
