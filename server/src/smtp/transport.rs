@@ -219,7 +219,9 @@ async fn secure_lookup(name: &str, kind: RecordType) -> Result<Option<Vec<RData>
         }
         Err(err) => {
             let text = err.to_string();
-            if text.contains("no record") || text.contains("NXDomain") || text.contains("no records") || text.contains("NoRecordsFound") {
+            // An empty DS answer without NSEC/NSEC3 (common with forwarders that strip them)
+            // leaves an unsigned zone such as wp.pl unprovable: treat it as insecure.
+            if text.contains("no record") || text.contains("NXDomain") || text.contains("no records") || text.contains("NoRecordsFound") || text.contains("does not contain NSEC") {
                 Ok(None)
             } else {
                 Err(text)
