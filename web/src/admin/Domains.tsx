@@ -1,11 +1,15 @@
 import Add from '@mui/icons-material/Add';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import ArrowForward from '@mui/icons-material/ArrowForward';
+import CheckCircle from '@mui/icons-material/CheckCircle';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
+import ErrorOutline from '@mui/icons-material/ErrorOutline';
+import HelpOutline from '@mui/icons-material/HelpOutline';
 import Refresh from '@mui/icons-material/Refresh';
+import WarningAmber from '@mui/icons-material/WarningAmber';
 import {
-  Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody,
+  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody,
   TableCell, TableHead, TableRow, TextField, Tooltip, Typography, Link,
 } from '@mui/material';
 import { useState } from 'react';
@@ -176,6 +180,76 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
+const DNS_STATUS = {
+  ok: { color: 'success' as const, icon: CheckCircle },
+  warning: { color: 'warning' as const, icon: WarningAmber },
+  error: { color: 'error' as const, icon: ErrorOutline },
+  unknown: { color: 'info' as const, icon: HelpOutline },
+};
+
+function DnsCheckRow({ check }: { check: Check }) {
+  const status = DNS_STATUS[check.status as keyof typeof DNS_STATUS] ?? DNS_STATUS.unknown;
+  const StatusIcon = status.icon;
+  const optional = check.status === 'warning' && (check.message.startsWith('Optional:') || check.message.startsWith('No TLS reporting record:'));
+  return (
+    <Box component="article" role="listitem" sx={{ display: 'flex', gap: 1.5, px: { xs: 1.5, sm: 2 }, py: 1.5, '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
+      <Box sx={{ display: 'grid', placeItems: 'center', width: 30, height: 30, mt: 0.25, flexShrink: 0, borderRadius: 1, bgcolor: optional ? 'action.selected' : `${status.color}.main`, color: optional ? 'text.secondary' : `${status.color}.contrastText` }}>
+        <StatusIcon aria-hidden sx={{ fontSize: 18 }} />
+      </Box>
+      <Box sx={{ minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(210px, 0.7fr) minmax(0, 1.3fr)' }, gap: { xs: 1, md: 2.5 } }}>
+        <Box>
+          <Typography variant="subtitle2" component="h3">{check.title}</Typography>
+          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.25 }}>{check.message}</Typography>
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          {check.record_value && (
+            <>
+              <Typography variant="caption" color="text.secondary">{t('Record to publish')}</Typography>
+              <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap>
+                <Chip label={check.record_type} size="small" variant="outlined" sx={{ height: 22, flexShrink: 0, fontFamily: 'monospace' }} />
+                <Typography component="code" variant="caption" sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{check.record_name}</Typography>
+                <ArrowForward aria-hidden sx={{ fontSize: 16, flexShrink: 0, color: 'text.secondary', userSelect: 'none' }} />
+                <Typography component="code" variant="caption" sx={{ minWidth: 0, fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{check.record_value}</Typography>
+                <CopyButton value={check.record_value} />
+              </Stack>
+            </>
+          )}
+          {check.found.length > 0 && (
+            <Box sx={{ mt: check.record_value ? 0.5 : 0 }}>
+              <Typography variant="caption" color="text.secondary">{t('Found in DNS')}: </Typography>
+              {check.found.map((value, index) => (
+                <Typography key={`${value}-${index}`} component="code" variant="caption" sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere', '&:not(:last-child)::after': { content: '", "' } }}>
+                  {value}
+                </Typography>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+function DnsHealth({ checks, error, onReload }: { checks: Check[]; error: string; onReload: () => Promise<unknown> }) {
+  return (
+    <Box component="section" aria-labelledby="dns-health-title" sx={{ mb: 4 }}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} spacing={1.5} sx={{ mb: 2 }}>
+        <Box sx={{ flex: 1 }}>
+          <Typography id="dns-health-title" variant="h6">{t('DNS health')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('DNS records')}</Typography>
+        </Box>
+        <Button variant="outlined" startIcon={<Refresh />} onClick={() => void onReload()} sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}>
+          {t('Check again')}
+        </Button>
+      </Stack>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      <Box role="list" aria-label={t('DNS records')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+        {checks.map((check) => <DnsCheckRow key={check.id} check={check} />)}
+      </Box>
+    </Box>
+  );
+}
+
 export function DomainDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -208,7 +282,7 @@ export function DomainDetail() {
       {feedback}
       {/* Top-aligned: the MTA-STS description makes that field taller than the others. */}
       <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap alignItems="flex-start" sx={{ mb: 3 }}>
-        <FormControlLabel sx={{ height: 56 }} control={<Switch checked={d.enabled} disabled={!isSuper} onChange={(e) => void update({ enabled: e.target.checked }, t('Domain updated'))} />} label={t('Enabled')} />
+        <FormControlLabel sx={{ m: 0 }} control={<Switch checked={d.enabled} disabled={!isSuper} onChange={(e) => void update({ enabled: e.target.checked }, t('Domain updated'))} />} label={t('Enabled')} />
         <TextField
           label={t('Catch-all address')}
           value={catchAll ?? d.catch_all ?? ''}
@@ -239,46 +313,7 @@ export function DomainDetail() {
         </TextField>
       </Stack>
 
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Typography variant="h6" sx={{ flex: 1 }}>
-          {t('DNS health')}
-        </Typography>
-        <Button startIcon={<Refresh />} onClick={() => void dns.reload()}>
-          {t('Check again')}
-        </Button>
-      </Stack>
-      <ScrollTable size="small" sx={{ mb: 4 }} aria-label={t('DNS records')}>
-        <TableHead>
-          <TableRow>
-            <TableCell>{t('Check')}</TableCell>
-            <TableCell>{t('Status')}</TableCell>
-            <TableCell>{t('Record to publish')}</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {(dns.data?.checks ?? []).map((check) => (
-            <TableRow key={check.id}>
-              <TableCell sx={{ whiteSpace: 'nowrap' }}>{check.title}</TableCell>
-              <TableCell>
-                <StatusChip status={check.status} />
-                <Typography variant="caption" display="block" color="text.secondary">
-                  {check.message}
-                </Typography>
-              </TableCell>
-              <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}>
-                {check.record_value && (
-                  <>
-                    {check.record_type} {check.record_name}
-                    <ArrowForward aria-hidden sx={{ mx: 0.5, fontSize: 16, verticalAlign: 'middle', userSelect: 'none' }} />
-                    {check.record_value}
-                    <CopyButton value={check.record_value} />
-                  </>
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </ScrollTable>
+      <DnsHealth checks={dns.data?.checks ?? []} error={dns.error ?? ''} onReload={dns.reload} />
 
       <Typography variant="h6">{t('DKIM keys')}</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>

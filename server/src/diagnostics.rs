@@ -185,6 +185,28 @@ fn lookup_failed<T>(result: Result<Vec<T>, DnsError>) -> Result<Vec<T>, Eval> {
     }
 }
 
+fn only_public(mut ips: Vec<IpAddr>) -> Vec<IpAddr> {
+    ips.retain(|ip| !reputation::is_private(*ip));
+    ips.sort_by_key(ToString::to_string);
+    ips.dedup();
+    ips
+}
+
+/// Resolve through public DNS first. Docker can map the configured hostname to its bridge
+/// address inside the container instead of returning the address published by the VPS.
+async fn public_host_ips(resolver: Option<&mail_auth::MessageAuthenticator>, hostname: &str) -> Vec<IpAddr> {
+    let Some(resolver) = resolver else { return Vec::new() };
+    if let Ok(public_resolver) = mail_auth::MessageAuthenticator::new_cloudflare_tls()
+        && let Ok(ips) = dns::ips(&public_resolver, hostname).await
+    {
+        let ips = only_public(ips);
+        if !ips.is_empty() {
+            return ips;
+        }
+    }
+    only_public(dns::ips(resolver, hostname).await.unwrap_or_default())
+}
+
 fn check(id: &str, title: &str, rtype: &str, name: String, value: String, eval: Eval, found: Vec<String>) -> Check {
     Check {
         id: id.into(),
@@ -232,12 +254,7 @@ pub async fn domain_report(app: &App, domain: &str, keys: &[DkimKey], mta_sts_mo
         }
     };
 
-    let mut server_ips = match resolver {
-        Some(r) => dns::ips(r, hostname).await.unwrap_or_default().into_iter().filter(|ip| !reputation::is_private(*ip)).collect::<Vec<_>>(),
-        None => Vec::new(),
-    };
-    server_ips.sort_by_key(ToString::to_string);
-    server_ips.dedup();
+    let server_ips = public_host_ips(resolver, hostname).await;
 
     let (eval, found) = match txt(domain.to_owned()).await {
         Ok(records) => (eval_spf(&records, &server_ips), records.into_iter().filter(|r| r.to_ascii_lowercase().starts_with("v=spf1")).collect()),
@@ -441,11 +458,9 @@ pub async fn server_report(app: &App, bound: &[(&'static str, SocketAddr)]) -> S
     let mut blocklisted = Vec::new();
     let (mut outbound, mut outbound_message) = (Status::Unknown, NO_RESOLVER.to_owned());
     if let Some(resolver) = &app.authenticator {
-        if let Ok(ips) = dns::ips(resolver, &app.cfg.hostname).await {
-            for ip in ips {
-                public_addresses.push(ip.to_string());
-                blocklisted.extend(reputation::dnsbl_listings(app, ip).await);
-            }
+        for ip in public_host_ips(Some(resolver), &app.cfg.hostname).await {
+            public_addresses.push(ip.to_string());
+            blocklisted.extend(reputation::dnsbl_listings(app, ip).await);
         }
         // A well-known, highly available MX is used as the reachability probe.
         (outbound, outbound_message) = match dns::mx(resolver, "gmail.com").await {
@@ -588,5 +603,17 @@ mod tests {
         assert_eq!(eval_ptr(&s(&["mail.example.com"]), "mail.example.com").0, Status::Ok);
         assert_eq!(eval_ptr(&s(&["host-1-2-3-4.isp.example"]), "mail.example.com").0, Status::Warning);
         assert_eq!(eval_ptr(&[], "mail.example.com").0, Status::Error);
+    }
+
+    #[test]
+    fn public_addresses_exclude_container_networks() {
+        let ips = vec![
+            "172.18.0.2".parse().unwrap(),
+            "10.0.0.4".parse().unwrap(),
+            "203.0.113.20".parse().unwrap(),
+            "2001:db8::20".parse().unwrap(),
+            "203.0.113.20".parse().unwrap(),
+        ];
+        assert_eq!(only_public(ips), ["2001:db8::20".parse::<IpAddr>().unwrap(), "203.0.113.20".parse::<IpAddr>().unwrap()]);
     }
 }
