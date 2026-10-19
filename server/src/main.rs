@@ -146,7 +146,7 @@ async fn run_command(cfg: Config, command: &str, args: &[String]) -> anyhow::Res
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let filter = tracing_subscriber::EnvFilter::try_from_env("UNOMAIL_LOG").unwrap_or_else(|_| "info".into());
+    let filter = tracing_subscriber::EnvFilter::try_from_env("UNOMAIL_LOG").unwrap_or_else(|_| "info,rustls=error".into());
     {
         use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
         let output = if std::env::var("UNOMAIL_LOG_FORMAT").is_ok_and(|v| v == "json") {
