@@ -12,6 +12,28 @@ pub enum DnsError {
     Temporary(String),
 }
 
+/// A resolver using the system's name servers, each listed once. With more than one server,
+/// hickory gives up on the TCP retry of a truncated UDP answer, so large DNSKEY sets (such as
+/// protonmail.ch's) would fail DNSSEC validation: a validating resolver asks over TCP only.
+pub fn system_resolver(validate: bool) -> Result<hickory_resolver::TokioResolver, String> {
+    let (config, options) = hickory_resolver::system_conf::read_system_conf().map_err(|e| e.to_string())?;
+    let (domain, search, servers) = config.into_parts();
+    let mut unique: Vec<hickory_resolver::config::NameServerConfig> = Vec::new();
+    for mut server in servers {
+        if validate {
+            server.connections = vec![hickory_resolver::config::ConnectionConfig::tcp()];
+        }
+        if !unique.iter().any(|seen| seen.ip == server.ip) {
+            unique.push(server);
+        }
+    }
+    let config = hickory_resolver::config::ResolverConfig::from_parts(domain, search, unique);
+    let mut builder = hickory_resolver::TokioResolver::builder_with_config(config, Default::default());
+    *builder.options_mut() = options;
+    builder.options_mut().validate = validate;
+    builder.build().map_err(|e| e.to_string())
+}
+
 fn map_err(err: mail_auth::Error) -> DnsError {
     match err {
         mail_auth::Error::Dns(mail_auth::DnsError::RecordNotFound(_)) => DnsError::NotFound,
@@ -74,7 +96,7 @@ pub async fn ptr(resolver: &MessageAuthenticator, ip: IpAddr) -> Result<Vec<Stri
 /// TLSA records as `usage selector matching hex`, as they are usually written.
 pub async fn tlsa(resolver: &MessageAuthenticator, name: &str) -> Result<Vec<String>, DnsError> {
     let _ = resolver;
-    let system = hickory_resolver::TokioResolver::builder_tokio().map_err(|e| DnsError::Temporary(e.to_string()))?.build().map_err(|e| DnsError::Temporary(e.to_string()))?;
+    let system = system_resolver(false).map_err(DnsError::Temporary)?;
     match system.lookup(format!("{}.", name.trim_end_matches('.')), hickory_resolver::proto::rr::RecordType::TLSA).await {
         Ok(lookup) => Ok(lookup
             .answers()

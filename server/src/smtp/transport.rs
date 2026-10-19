@@ -195,11 +195,7 @@ impl Tlsa {
 }
 
 /// A validating resolver for DNSSEC: only its secure answers are trusted for DANE.
-static VALIDATING: LazyLock<Option<TokioResolver>> = LazyLock::new(|| {
-    let mut builder = TokioResolver::builder_tokio().ok()?;
-    builder.options_mut().validate = true;
-    builder.build().ok()
-});
+static VALIDATING: LazyLock<Option<TokioResolver>> = LazyLock::new(|| crate::dns::system_resolver(true).ok());
 
 /// What DNS says about DANE for one MX host.
 #[derive(Debug, Clone, PartialEq, Eq)]
