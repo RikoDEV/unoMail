@@ -1,5 +1,6 @@
 import Add from '@mui/icons-material/Add';
 import ArrowBack from '@mui/icons-material/ArrowBack';
+import ArrowForward from '@mui/icons-material/ArrowForward';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
 import Refresh from '@mui/icons-material/Refresh';
@@ -267,7 +268,9 @@ export function DomainDetail() {
               <TableCell sx={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all' }}>
                 {check.record_value && (
                   <>
-                    {check.record_type} {check.record_name} → {check.record_value}
+                    {check.record_type} {check.record_name}
+                    <ArrowForward aria-hidden sx={{ mx: 0.5, fontSize: 16, verticalAlign: 'middle', userSelect: 'none' }} />
+                    {check.record_value}
                     <CopyButton value={check.record_value} />
                   </>
                 )}
