@@ -1,5 +1,5 @@
-import { Alert, Button, Chip, LinearProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, type TableProps, TableRow, TableSortLabel, Typography } from '@mui/material';
-import { Children, cloneElement, isValidElement, type ReactElement, type ReactNode, useCallback, useState } from 'react';
+import { Alert, Box, Button, Chip, LinearProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, type TableProps, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Children, cloneElement, Fragment, isValidElement, type ReactElement, type ReactNode, useCallback, useState } from 'react';
 
 import { t, uiLocale } from '../i18n';
 import { useTitle } from '../shell';
@@ -132,9 +132,14 @@ function sortText(node: ReactNode): string {
   return '';
 }
 
+/** A row's cells, with those grouped in a fragment counted one by one. */
+const cells = (children: ReactNode) => Children.toArray(children).flatMap((cell) => (isValidElement<Props>(cell) && cell.type === Fragment ? Children.toArray(cell.props.children) : [cell]));
+
 function sortKey(row: ReactNode, column: number): string | number {
   if (!isValidElement<Props>(row)) return '';
-  const cell = Children.toArray(row.props.children)[column];
+  // A row with a detail line under it comes as a fragment: sort by its first row.
+  if (row.type === Fragment) return sortKey(Children.toArray(row.props.children)[0], column);
+  const cell = cells(row.props.children)[column];
   if (!isValidElement<Props>(cell)) return '';
   return cell.props['data-sort'] ?? sortText(cell.props.children);
 }
@@ -177,6 +182,35 @@ export function ScrollTable({ children, ...props }: TableProps) {
     <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
       <Table {...props}>{parts}</Table>
     </TableContainer>
+  );
+}
+
+/** Whether tables should move long text out of their columns, onto a line under each row. */
+export function useCompactTable() {
+  const theme = useTheme();
+  return useMediaQuery(theme.breakpoints.down('md'));
+}
+
+/**
+ * A table row whose long text (an error, a log message) is a column on wide screens and a
+ * full-width line under the row on narrow ones. `cells` leaves that column out when compact.
+ */
+export function rowWithDetail(key: string | number, compact: boolean, cells: ReactNode, label: string, detail: string | null | undefined, columns: number) {
+  return (
+    <Fragment key={key}>
+      <TableRow sx={compact && detail ? { '& td': { borderBottom: 0 } } : undefined}>{cells}</TableRow>
+      {compact && detail && (
+        <TableRow>
+          <TableCell colSpan={columns} sx={{ pt: 0 }}>
+            {/* Stays in view while the wide table scrolls sideways. */}
+            <Box sx={{ position: 'sticky', left: 16, maxWidth: 'calc(100vw - 64px)', overflowWrap: 'anywhere' }}>
+              <Typography variant="caption" color="text.secondary">{label}: </Typography>
+              <Typography variant="body2" component="span">{detail}</Typography>
+            </Box>
+          </TableCell>
+        </TableRow>
+      )}
+    </Fragment>
   );
 }
 

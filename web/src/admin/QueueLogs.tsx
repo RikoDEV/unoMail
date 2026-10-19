@@ -4,7 +4,7 @@ import { Alert, Button, FormControlLabel, IconButton, MenuItem, Stack, Switch, T
 import { useCallback, useEffect, useState } from 'react';
 import { del, formatBytes, formatTime, get, post, errorText } from '../api';
 import { useAuth } from '../app';
-import { PageHeader, StatusChip, useAction, useLoad, ScrollTable } from './common';
+import { PageHeader, rowWithDetail, StatusChip, useAction, useCompactTable, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';
 interface QueueEntry {
@@ -22,6 +22,7 @@ interface QueueEntry {
 export function Queue() {
   const { data, error, reload } = useLoad(() => get<QueueEntry[]>('/api/queue'), []);
   const { run, feedback } = useAction();
+  const compact = useCompactTable();
   useEffect(() => {
     const timer = setInterval(() => void reload(), 5000);
     return () => clearInterval(timer);
@@ -42,34 +43,41 @@ export function Queue() {
               <TableCell align="right">{t('Size')}</TableCell>
               <TableCell align="right">{t('Attempts')}</TableCell>
               <TableCell>{t('Next attempt')}</TableCell>
-              <TableCell>{t('Last error')}</TableCell>
+              {!compact && <TableCell>{t('Last error')}</TableCell>}
               <TableCell />
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.map((entry) => (
-              <TableRow key={entry.id}>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(entry.created_at)}</TableCell>
-                <TableCell>{entry.sender || '<>'}</TableCell>
-                <TableCell>{entry.recipient}</TableCell>
-                <TableCell align="right">{formatBytes(entry.size)}</TableCell>
-                <TableCell align="right">{entry.attempts}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{entry.status === 'sending' ? t('in progress') : formatTime(entry.next_attempt_at)}</TableCell>
-                <TableCell sx={{ maxWidth: 320, wordBreak: 'break-word' }}>{entry.last_error}</TableCell>
-                <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                  <Tooltip title={t('Retry now')}>
-                    <IconButton aria-label={t('Retry {{recipient}}', { recipient: entry.recipient })} onClick={async () => { if (await run(() => post(`/api/queue/${entry.id}/retry`), t('Retry scheduled'))) await reload(); }}>
-                      <Replay />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title={t('Remove from queue')}>
-                    <IconButton aria-label={t('Remove {{recipient}}', { recipient: entry.recipient })} onClick={async () => { if (await run(() => del(`/api/queue/${entry.id}`), t('Removed from queue'))) await reload(); }}>
-                      <Delete />
-                    </IconButton>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            ))}
+            {data.map((entry) =>
+              rowWithDetail(
+                entry.id,
+                compact,
+                <>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(entry.created_at)}</TableCell>
+                  <TableCell>{entry.sender || '<>'}</TableCell>
+                  <TableCell>{entry.recipient}</TableCell>
+                  <TableCell align="right">{formatBytes(entry.size)}</TableCell>
+                  <TableCell align="right">{entry.attempts}</TableCell>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{entry.status === 'sending' ? t('in progress') : formatTime(entry.next_attempt_at)}</TableCell>
+                  {!compact && <TableCell sx={{ minWidth: 220, maxWidth: 320, overflowWrap: 'anywhere' }}>{entry.last_error}</TableCell>}
+                  <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                    <Tooltip title={t('Retry now')}>
+                      <IconButton aria-label={t('Retry {{recipient}}', { recipient: entry.recipient })} onClick={async () => { if (await run(() => post(`/api/queue/${entry.id}/retry`), t('Retry scheduled'))) await reload(); }}>
+                        <Replay />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t('Remove from queue')}>
+                      <IconButton aria-label={t('Remove {{recipient}}', { recipient: entry.recipient })} onClick={async () => { if (await run(() => del(`/api/queue/${entry.id}`), t('Removed from queue'))) await reload(); }}>
+                        <Delete />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                </>,
+                t('Last error'),
+                entry.last_error,
+                7,
+              ),
+            )}
           </TableBody>
         </ScrollTable>
       )}
@@ -174,6 +182,7 @@ export function Logs() {
   const [debounced, setDebounced] = useState('');
   const [status, setStatus] = useState('');
   const [live, setLive] = useState(true);
+  const compact = useCompactTable();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(search.trim()), 300);
@@ -204,7 +213,7 @@ export function Logs() {
         )}
         <FormControlLabel control={<Switch checked={live} onChange={(e) => setLive(e.target.checked)} />} label={live && active.connected ? t('Live tail (connected)') : t('Live tail')} />
       </PageHeader>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 1 }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 1 }}>
         <Tab value="delivery" label={t('Mail delivery')} />
         {isSuper && <Tab value="audit" label={t('Security audit')} />}
         {isSuper && <Tab value="smtp" label={t('SMTP replies')} />}
@@ -217,22 +226,29 @@ export function Logs() {
             <TableRow>
               <TableCell>{t('Time')}</TableCell>
               <TableCell>{t('Status')}</TableCell>
-              <TableCell>{t('Message')}</TableCell>
+              {!compact && <TableCell>{t('Message')}</TableCell>}
               <TableCell>{t('Sent to')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {smtp.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
-                <TableCell>
-                  <StatusChip status={row.code >= 500 ? 'error' : row.code >= 400 ? 'warning' : 'ok'} />
-                  <Typography component="span" sx={{ ml: 1, fontFamily: 'monospace', fontSize: 13 }}>{row.code}</Typography>
-                </TableCell>
-                <TableCell sx={{ wordBreak: 'break-word' }}>{row.text}</TableCell>
-                <TableCell sx={{ fontFamily: 'monospace' }}>{row.ip}</TableCell>
-              </TableRow>
-            ))}
+            {smtp.rows.map((row) =>
+              rowWithDetail(
+                row.id,
+                compact,
+                <>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
+                  <TableCell>
+                    <StatusChip status={row.code >= 500 ? 'error' : row.code >= 400 ? 'warning' : 'ok'} />
+                    <Typography component="span" sx={{ ml: 1, fontFamily: 'monospace', fontSize: 13 }}>{row.code}</Typography>
+                  </TableCell>
+                  {!compact && <TableCell sx={{ wordBreak: 'break-word' }}>{row.text}</TableCell>}
+                  <TableCell sx={{ fontFamily: 'monospace' }}>{row.ip}</TableCell>
+                </>,
+                t('Message'),
+                row.text,
+                3,
+              ),
+            )}
           </TableBody>
         </ScrollTable>
       ) : tab === 'system' ? (
@@ -242,20 +258,27 @@ export function Logs() {
               <TableCell>{t('Time')}</TableCell>
               <TableCell>{t('Level')}</TableCell>
               <TableCell>{t('Component')}</TableCell>
-              <TableCell>{t('Message')}</TableCell>
+              {!compact && <TableCell>{t('Message')}</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
-            {system.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
-                <TableCell>
-                  <StatusChip status={row.level === 'ERROR' ? 'error' : row.level === 'WARN' ? 'warning' : 'ok'} />
-                </TableCell>
-                <TableCell sx={{ fontFamily: 'monospace' }}>{row.target}</TableCell>
-                <TableCell sx={{ wordBreak: 'break-word' }}>{row.message}</TableCell>
-              </TableRow>
-            ))}
+            {system.rows.map((row) =>
+              rowWithDetail(
+                row.id,
+                compact,
+                <>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
+                  <TableCell>
+                    <StatusChip status={row.level === 'ERROR' ? 'error' : row.level === 'WARN' ? 'warning' : 'ok'} />
+                  </TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace' }}>{row.target}</TableCell>
+                  {!compact && <TableCell sx={{ wordBreak: 'break-word' }}>{row.message}</TableCell>}
+                </>,
+                t('Message'),
+                row.message,
+                3,
+              ),
+            )}
           </TableBody>
         </ScrollTable>
       ) : tab === 'delivery' ? (
@@ -267,22 +290,30 @@ export function Logs() {
               <TableCell>{t('Sender')}</TableCell>
               <TableCell>{t('Recipient')}</TableCell>
               <TableCell>{t('Status')}</TableCell>
-              <TableCell>{t('Detail')}</TableCell>
+              {!compact && <TableCell>{t('Detail')}</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
-            {delivery.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
-                <TableCell>{row.direction}</TableCell>
-                <TableCell>{row.sender || '<>'}</TableCell>
-                <TableCell>{row.recipient}</TableCell>
-                <TableCell>
-                  <StatusChip status={row.status} />
-                </TableCell>
-                <TableCell sx={{ maxWidth: 380, wordBreak: 'break-word' }}>{[row.remote, row.detail].filter(Boolean).join(' · ')}</TableCell>
-              </TableRow>
-            ))}
+            {delivery.rows.map((row) => {
+              const detail = [row.remote, row.detail].filter(Boolean).join(' · ');
+              return rowWithDetail(
+                row.id,
+                compact,
+                <>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
+                  <TableCell>{row.direction}</TableCell>
+                  <TableCell>{row.sender || '<>'}</TableCell>
+                  <TableCell>{row.recipient}</TableCell>
+                  <TableCell>
+                    <StatusChip status={row.status} />
+                  </TableCell>
+                  {!compact && <TableCell sx={{ maxWidth: 380, wordBreak: 'break-word' }}>{detail}</TableCell>}
+                </>,
+                t('Detail'),
+                detail,
+                5,
+              );
+            })}
           </TableBody>
         </ScrollTable>
       ) : (
@@ -294,20 +325,27 @@ export function Logs() {
               <TableCell>{t('Action')}</TableCell>
               <TableCell>{t('Target')}</TableCell>
               <TableCell>{t('Address')}</TableCell>
-              <TableCell>{t('Detail')}</TableCell>
+              {!compact && <TableCell>{t('Detail')}</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
-            {audit.rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
-                <TableCell>{row.actor}</TableCell>
-                <TableCell sx={{ fontFamily: 'monospace' }}>{row.action}</TableCell>
-                <TableCell>{row.target}</TableCell>
-                <TableCell>{row.ip}</TableCell>
-                <TableCell sx={{ maxWidth: 380, wordBreak: 'break-word' }}>{row.detail}</TableCell>
-              </TableRow>
-            ))}
+            {audit.rows.map((row) =>
+              rowWithDetail(
+                row.id,
+                compact,
+                <>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(row.ts)}</TableCell>
+                  <TableCell>{row.actor}</TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace' }}>{row.action}</TableCell>
+                  <TableCell>{row.target}</TableCell>
+                  <TableCell>{row.ip}</TableCell>
+                  {!compact && <TableCell sx={{ maxWidth: 380, wordBreak: 'break-word' }}>{row.detail}</TableCell>}
+                </>,
+                t('Detail'),
+                row.detail,
+                5,
+              ),
+            )}
           </TableBody>
         </ScrollTable>
       )}
