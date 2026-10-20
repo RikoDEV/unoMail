@@ -38,6 +38,7 @@ pub mod snooze;
 pub mod storage;
 pub mod lists;
 pub mod mailtools;
+pub mod models;
 pub mod me;
 pub mod oauth;
 pub mod openapi;
@@ -507,6 +508,11 @@ pub fn router(state: AppState) -> Router {
         .route("/me/newest-unread", get(mailtools::newest_unread))
         .route("/me/categories/learning", get(mailtools::category_learning).delete(mailtools::category_learning_reset))
         .route("/me/unsubscribe", post(mailtools::unsubscribe))
+        .route("/me/ai/models", get(models::available))
+        .route("/me/ai/assist", post(models::assist))
+        .route("/models", get(models::list).post(models::create))
+        .route("/models/{id}", put(models::update).delete(models::remove))
+        .route("/models/{id}/test", post(models::test))
         .route("/me/calendars", get(calendar::list).post(calendar::create))
         .route("/me/calendars/events", get(calendar::events))
         .route("/me/calendars/tasks", get(calendar::tasks))

@@ -2,6 +2,15 @@
 
 Besides reading and writing mail, the web client offers:
 
+- **AI summaries and translations.** When an administrator enables a model in
+  Administration → Models, open a message and choose a model and target language above
+  its body. Translation is suggested only when the message's detected language differs
+  from the interface language; detection runs locally and uncertain results show no
+  suggestion. The target defaults to the interface language. **Summarize** shows key points
+  and requested actions; **Translate to …** shows a translation of the subject and body.
+  Results appear alongside the original message and can be hidden separately. Content is
+  sent to the selected provider only when an action is requested. Encrypted messages and
+  other accounts' shared messages cannot be processed.
 - **A one-line-per-conversation list** with checkboxes: select some or all conversations (or
   everything in the folder) and archive, delete, report, mark read/unread, move or label them
   in one go. `x` selects the highlighted conversation.

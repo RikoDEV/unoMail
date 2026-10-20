@@ -5,6 +5,13 @@ use serde_json::{Map, Value, json};
 
 /// (method, path, tag, summary, required role)
 const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
+    ("get", "/api/models", "models", "Configured AI models (API keys are never returned)", "super_admin"),
+    ("post", "/api/models", "models", "Add an AI model with an encrypted API key", "super_admin"),
+    ("put", "/api/models/{id}", "models", "Edit an AI model (omit api_key to retain it for the same provider URL)", "super_admin"),
+    ("delete", "/api/models/{id}", "models", "Delete an AI model", "super_admin"),
+    ("post", "/api/models/{id}/test", "models", "Test a saved model connection", "super_admin"),
+    ("get", "/api/me/ai/models", "mail", "Enabled AI models available in webmail", "user"),
+    ("post", "/api/me/ai/assist", "mail", "Summarize or translate an owned email using model_id, email_id, task and language", "user"),
     ("post", "/api/auth/login", "auth", "Sign in and start a session", "public"),
     ("post", "/api/auth/logout", "auth", "End the current session", "user"),
     ("get", "/api/auth/me", "auth", "Current account and CSRF token", "user"),

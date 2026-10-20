@@ -12,6 +12,7 @@ import Dashboard from '@mui/icons-material/Dashboard';
 import MenuIcon from '@mui/icons-material/Menu';
 import Dns from '@mui/icons-material/Dns';
 import Hub from '@mui/icons-material/Hub';
+import AutoAwesome from '@mui/icons-material/AutoAwesome';
 import ListAlt from '@mui/icons-material/ListAlt';
 import People from '@mui/icons-material/People';
 import Schedule from '@mui/icons-material/Schedule';
@@ -27,6 +28,7 @@ import { DashboardPage } from './Dashboard';
 import { DomainDetail, Domains } from './Domains';
 import { ApiDocs, Diagnostics, Dmarc } from './Insights';
 import { Integrations } from './Integrations';
+import { Models } from './Models';
 import { Logs, Queue } from './QueueLogs';
 import { ServerSettings } from './ServerSettings';
 import { SmtpAccess } from './SmtpAccess';
@@ -61,6 +63,7 @@ const NAV: NavItem[] = [
   { path: 'logs', label: t('Logs'), icon: <ListAlt /> },
   { path: 'settings', label: t('Server settings'), icon: <Tune />, superOnly: true },
   { path: 'integrations', label: t('Integrations'), icon: <Hub />, superOnly: true },
+  { path: 'models', label: t('Models'), icon: <AutoAwesome />, superOnly: true },
   { path: 'api', label: t('API reference'), icon: <Api /> },
 ];
 
@@ -121,6 +124,7 @@ export default function AdminApp() {
             {isSuper && <Route path="smtp-access" element={<SmtpAccess />} />}
             {isSuper && <Route path="spam-filter" element={<SpamFilter />} />}
             {isSuper && <Route path="integrations" element={<Integrations />} />}
+            {isSuper && <Route path="models" element={<Models />} />}
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
         </Paper>

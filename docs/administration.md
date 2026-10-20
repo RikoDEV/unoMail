@@ -1,5 +1,30 @@
 # Administration
 
+## AI models (Administration → Models)
+
+Super administrators can add, edit, disable, test and delete models at `/admin/models`.
+Choose OpenAI, Anthropic, Google Gemini, OpenRouter, Groq, DeepSeek, Ollama or an
+OpenAI-compatible provider. Enter a display name, the provider's exact model ID, its API
+base URL and API key. Several models from the same provider can be configured.
+
+The provider presets fill in the base URL. OpenAI-compatible URLs include the API version
+(for example, `https://api.openai.com/v1`); Ollama uses its server root
+(for example, `http://ollama:11434`). Local addresses must be reachable from the mail
+server container, where `localhost` refers to the container itself. Ollama and custom
+OpenAI-compatible servers may be used without an API key.
+
+API keys are encrypted with the server's existing credential key and never returned to
+the browser. Leave the key blank when editing to preserve it. Changing the provider or
+base URL requires entering the key again. **Test connection** sends a small test prompt
+without email content. **Available in webmail** controls whether users can select a model.
+
+Enabled models are available to every signed-in user for their own messages. Each
+summary or translation is requested explicitly and sends only the subject and text body
+to the selected provider. Encrypted messages and shared messages owned by another account
+are excluded. Requests allow up to 60,000 body characters, take at most 90 seconds and
+are limited to ten per minute per account, with eight simultaneous provider requests
+server-wide. Results are displayed in the reader without being stored in the mailbox.
+
 ## Integrations (Administration → Integrations)
 
 - **Single sign-on** through an OpenID Connect provider (authorization code flow with PKCE).

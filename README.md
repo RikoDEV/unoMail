@@ -38,6 +38,7 @@ and built-in spam and virus filtering. Written in Rust and React.
 - Condensed or expanded message list with quick actions, drag and drop and bulk selection
 - Gmail-style search operators, filters (Sieve), templates, signatures and identities
 - Out-of-office replies, read receipts and one-click unsubscribe
+- On-demand AI summaries and translations with administrator-configured models
 - Calendar with invitations, sharing, reminders and tasks; address book with groups and vCard import/export
 - Shared and global folders with per-right access control
 - Sender details and BIMI logos, warnings for deceptive links, blocked remote images,
@@ -53,6 +54,7 @@ and built-in spam and virus filtering. Written in Rust and React.
 - Dashboard with daily and live traffic charts, queue, delivery, system and audit logs
 - TLS (RFC 8460) and DMARC aggregate reports, received and sent
 - Mailing lists with moderation, webhooks, LDAP lookups, milters, skins and plug-ins
+- AI model management for OpenAI-compatible providers, Anthropic, Gemini and local Ollama
 
 **Protection and operations**
 - Rspamd, ClamAV, greylisting, DNS blocklists, karma-based auto-blocking, and a personal Bayes filter for each user
