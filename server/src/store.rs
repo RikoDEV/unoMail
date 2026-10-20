@@ -555,6 +555,10 @@ impl Store {
         Self::record(&mut *tx, account_id, "mailbox", mailbox_id, None, "updated").await?;
         // Searchable at once, in the same transaction.
         crate::search::store_in(&mut tx, &hash, &indexed).await?;
+        // Durable, local-first card extraction happens off the delivery path. Bound the queue
+        // during large imports; older messages can still be processed explicitly in the reader.
+        sqlx::query("INSERT OR IGNORE INTO summary_card_jobs (message_id, account_id) SELECT ?1, ?2 WHERE ?3 = 0 AND ?4 = 0 AND COALESCE((SELECT role FROM mailboxes WHERE id = ?5), '') NOT IN ('junk', 'trash', 'drafts', 'sent') AND (SELECT COUNT(*) FROM summary_card_jobs WHERE state IN ('pending', 'running')) < 5000")
+            .bind(id).bind(account_id).bind(flags.draft).bind(flags.deleted).bind(mailbox_id).execute(&mut *tx).await?;
         tx.commit().await?;
         self.notify(account_id, mailbox_id);
         Ok(Appended { id, uid, thread_id })

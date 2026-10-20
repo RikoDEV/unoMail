@@ -44,6 +44,7 @@ async fn maintenance(app: AppState) {
         unomail::security::access::prune(&app).await;
         outbound::prune(&app).await;
         unomail::api::avatar::prune(&app).await;
+        let _ = sqlx::query("DELETE FROM purchase_cards WHERE NOT EXISTS (SELECT 1 FROM purchase_card_sources WHERE card_id = purchase_cards.id)").execute(&app.db).await;
         unomail::dmarc_reports::prune(&app).await;
         // Delivery and audit logs are kept as long as the administrator set.
         let cutoff = now() - app.rt().log_retention_days * 86400;
@@ -206,6 +207,7 @@ async fn main() -> anyhow::Result<()> {
     }
     tokio::spawn(smtp::queue::run(app.clone()));
     tokio::spawn(unomail::search::backfill(app.clone()));
+    tokio::spawn(unomail::summary_cards::jobs::run(app.clone()));
     tokio::spawn(unomail::jmap::push::run(app.clone()));
     tokio::spawn(unomail::jmap::submission::run(app.clone()));
     tokio::spawn(unomail::snooze::run(app.clone()));

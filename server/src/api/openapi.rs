@@ -5,6 +5,12 @@ use serde_json::{Map, Value, json};
 
 /// (method, path, tag, summary, required role)
 const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
+    ("get", "/api/models/summary-cards", "models", "Purchase-card extraction model and automatic-processing policy", "super_admin"),
+    ("put", "/api/models/summary-cards", "models", "Configure the extraction model and automatic-processing policy", "super_admin"),
+    ("get", "/api/me/summary-cards", "mail", "Purchase cards and extraction state for an owned email (email_id)", "user"),
+    ("post", "/api/me/summary-cards/extract", "mail", "Queue purchase-card extraction (email_id, optional explicit use_ai)", "user"),
+    ("post", "/api/me/summary-cards/backfill", "mail", "Queue up to 200 recent messages using current extraction settings", "user"),
+    ("patch", "/api/me/summary-cards/{id}", "mail", "Dismiss or restore a purchase card", "user"),
     ("get", "/api/models", "models", "Configured AI models (API keys are never returned)", "super_admin"),
     ("post", "/api/models", "models", "Add an AI model with an encrypted API key", "super_admin"),
     ("put", "/api/models/{id}", "models", "Edit an AI model (omit api_key to retain it for the same provider URL)", "super_admin"),

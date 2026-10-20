@@ -47,6 +47,7 @@ pub mod smime;
 pub mod snapshot;
 pub mod snooze;
 pub mod store;
+pub mod summary_cards;
 pub mod sysstat;
 pub mod telemetry;
 pub mod tls;

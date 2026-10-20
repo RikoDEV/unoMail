@@ -39,6 +39,7 @@ and built-in spam and virus filtering. Written in Rust and React.
 - Gmail-style search operators, filters (Sieve), templates, signatures and identities
 - Out-of-office replies, read receipts and one-click unsubscribe
 - On-demand AI summaries and translations with administrator-configured models
+- Purchase cards with order totals, shipment tracking and updates from related emails
 - Calendar with invitations, sharing, reminders and tasks; address book with groups and vCard import/export
 - Shared and global folders with per-right access control
 - Sender details and BIMI logos, warnings for deceptive links, blocked remote images,

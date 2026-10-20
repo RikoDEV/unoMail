@@ -39,6 +39,7 @@ pub mod storage;
 pub mod lists;
 pub mod mailtools;
 pub mod models;
+pub mod summary_cards;
 pub mod me;
 pub mod oauth;
 pub mod openapi;
@@ -513,6 +514,11 @@ pub fn router(state: AppState) -> Router {
         .route("/models", get(models::list).post(models::create))
         .route("/models/{id}", put(models::update).delete(models::remove))
         .route("/models/{id}/test", post(models::test))
+        .route("/models/summary-cards", get(summary_cards::config_get).put(summary_cards::config_put))
+        .route("/me/summary-cards", get(summary_cards::list))
+        .route("/me/summary-cards/extract", post(summary_cards::extract))
+        .route("/me/summary-cards/backfill", post(summary_cards::backfill))
+        .route("/me/summary-cards/{id}", patch(summary_cards::update))
         .route("/me/calendars", get(calendar::list).post(calendar::create))
         .route("/me/calendars/events", get(calendar::events))
         .route("/me/calendars/tasks", get(calendar::tasks))

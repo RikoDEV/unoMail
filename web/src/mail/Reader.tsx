@@ -27,6 +27,7 @@ import { imageProxyUrl } from './extra';
 import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel } from './jmapClient';
 import { SmimeBadges } from './Smime';
 import { AiAssist, AiModelsProvider } from './AiAssist';
+import { SummaryCards } from './SummaryCards';
 import { snoozePresets } from './timePresets';
 import { adaptForDark, type Rgb } from './darkColors';
 
@@ -434,6 +435,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
           )}
           <SecurityWarnings email={email} />
           <SmimeBadges status={email.smime} />
+          {!encrypted && !email.smime?.encrypted && <SummaryCards key={`cards-${email.id}`} emailId={email.id} />}
           {!encrypted && !email.smime?.encrypted && <AiAssist key={email.id} email={email} />}
           <MessageBody email={email} accountId={accountId} ownEmail={ownEmail} />
           {invite && <Invitation key={invite.blobId} name={invite.name ?? 'invite.ics'} url={downloadUrl(accountId, invite.blobId, invite.name ?? 'invite.ics')} />}

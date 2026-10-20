@@ -30,6 +30,31 @@ interface Model {
 
 const emptyModel: Model = { id: '', name: '', provider: 'openai', model: '', base_url: PROVIDERS[0].url, enabled: true, has_api_key: false };
 
+function ExtractionSettings({ models }: { models: Model[] }) {
+  const settings = useLoad(() => get<{ model_id: string; automatic_ai: boolean }>('/api/models/summary-cards'), []);
+  const [draft, setDraft] = useState<{ model_id: string; automatic_ai: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const { run, feedback } = useAction();
+  const value = draft ?? settings.data;
+  if (!value) return settings.error ? <Alert severity="error">{settings.error}</Alert> : null;
+  return <Box component="section" aria-label={t('Purchase card extraction')} sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+    <Typography variant="h6" sx={{ mb: 1 }}>{t('Purchase card extraction')}</Typography>
+    {feedback}
+    <Stack spacing={1.5} alignItems="flex-start">
+      <TextField select label={t('Extraction model')} value={models.some((m) => m.id === value.model_id && m.enabled) ? value.model_id : ''} onChange={(e) => setDraft({ ...value, model_id: e.target.value, automatic_ai: e.target.value ? value.automatic_ai : false })} sx={{ minWidth: 260 }}>
+        <MenuItem value="">{t('Local structured data only')}</MenuItem>
+        {models.filter((m) => m.enabled).map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+      </TextField>
+      <FormControlLabel control={<Switch checked={value.automatic_ai} disabled={!value.model_id} onChange={(e) => setDraft({ ...value, automatic_ai: e.target.checked })} />} label={t('Allow automatic AI extraction')} />
+      <Typography variant="body2" color="text.secondary">{t('Automatic AI extraction also requires each user to opt in. Structured data is always processed locally.')}</Typography>
+      <Button variant="contained" disabled={busy || !draft} onClick={() => {
+        setBusy(true);
+        void run(() => put('/api/models/summary-cards', value), t('Extraction settings saved')).then((ok) => { if (ok) { setDraft(null); void settings.reload(); } }).finally(() => setBusy(false));
+      }}>{t('Save extraction settings')}</Button>
+    </Stack>
+  </Box>;
+}
+
 function ModelDialog({ model, onClose, onSaved }: { model: Model; onClose: () => void; onSaved: () => void }) {
   const [draft, setDraft] = useState(model);
   const [key, setKey] = useState('');
@@ -104,6 +129,7 @@ export function Models() {
           </Stack>
         ))}
       </Stack>
+      {models.data && <ExtractionSettings models={models.data} />}
       {editing && <ModelDialog model={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void models.reload(); }} />}
       <ConfirmDialog open={Boolean(removing)} title={t('Delete model')} text={t('Delete {{name}}?', { name: removing?.name ?? '' })} onClose={() => setRemoving(null)} onConfirm={() => {
         if (removing) void run(() => del(`/api/models/${removing.id}`), t('Model deleted')).then((ok) => { if (ok) { setRemoving(null); void models.reload(); } });

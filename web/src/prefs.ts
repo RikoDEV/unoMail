@@ -5,6 +5,10 @@ import { useSyncExternalStore } from 'react';
 import { get, put } from './api';
 
 export interface Prefs {
+  /** Show structured purchase cards; local extraction is enabled by default. */
+  summary_cards?: boolean;
+  /** Allow automatic provider processing when also enabled by the administrator. */
+  summary_cards_ai?: boolean;
   /** Id of the selected skin. */
   skin?: string;
   /** Spell checking in the composer (on unless set to false). */
