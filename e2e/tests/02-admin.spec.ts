@@ -32,12 +32,13 @@ test.describe('administration', () => {
     await expect(page.getByRole('heading', { name: DOMAIN })).toBeVisible();
 
     // SPF, DKIM and DMARC records are generated for the administrator to publish.
-    const dns = page.getByRole('table', { name: 'DNS records' });
-    await expect(dns.getByRole('row', { name: /MX record/ })).toContainText('10 mail.e2e.test.');
-    await expect(dns.getByRole('row', { name: /SPF record/ })).toContainText('v=spf1 a:mail.e2e.test -all');
-    await expect(dns.getByRole('row', { name: /DMARC policy/ })).toContainText(`_dmarc.${DOMAIN}`);
-    await expect(dns.getByRole('row', { name: /DMARC policy/ })).toContainText('v=DMARC1; p=quarantine');
-    await expect(dns.getByRole('row', { name: /DKIM key/ })).toContainText('v=DKIM1; k=rsa; p=');
+    const dns = page.getByRole('list', { name: 'DNS records' });
+    const dnsCheck = (name: string | RegExp) => dns.getByRole('listitem').filter({ has: page.getByRole('heading', { name }) });
+    await expect(dnsCheck(/MX record/)).toContainText('10 mail.e2e.test.');
+    await expect(dnsCheck(/SPF record/)).toContainText('v=spf1 a:mail.e2e.test -all');
+    await expect(dnsCheck(/DMARC policy/)).toContainText(`_dmarc.${DOMAIN}`);
+    await expect(dnsCheck(/DMARC policy/)).toContainText('v=DMARC1; p=quarantine');
+    await expect(dnsCheck(/DKIM key/)).toContainText('v=DKIM1; k=rsa; p=');
 
     // Key rotation: add a second selector, retire the first.
     const keys = page.getByRole('table', { name: 'DKIM keys' });
@@ -45,7 +46,7 @@ test.describe('administration', () => {
     await page.getByLabel('New selector').fill('rotated');
     await page.getByRole('button', { name: 'Generate key' }).click();
     await expect(keys.getByRole('row', { name: /rotated/ })).toBeVisible();
-    await expect(dns.getByRole('row', { name: /DKIM key \(rotated\)/ })).toBeVisible();
+    await expect(dnsCheck(/DKIM key \(rotated\)/)).toBeVisible();
     await keys.getByRole('row', { name: /rotated/ }).getByRole('button', { name: /Delete key/ }).click();
     await expect(keys.getByRole('row', { name: /rotated/ })).toHaveCount(0);
 
