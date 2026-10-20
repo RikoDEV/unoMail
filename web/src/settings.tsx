@@ -18,7 +18,7 @@ import { useAuth } from './app';
 import { AppearanceCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListCard, NotificationsCard, SendingCard, SmimeCard, TemplatesCard } from './settingsWebmail';
 import { Copyright, TopBar, useTitle } from './shell';
 import { AppPasswordsCard, TwoStepCard } from './settingsSecurity';
-import { SummaryCardsSettings } from './settingsSummaryCards';
+import { SmartReplySettings, SummaryCardsSettings } from './settingsSummaryCards';
 
 import { t } from './i18n';
 interface SessionRow {
@@ -211,7 +211,7 @@ export default function SettingsPage() {
   // The settings, grouped. Each group has its own address (?tab=...), so it can be linked to.
   const sections: { id: string; label: string; icon: ReactElement; content: ReactNode }[] = [
     { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><AppearanceCard /></> },
-    { id: 'inbox', label: t('Inbox'), icon: <Inbox />, content: <><InboxCard /><SummaryCardsSettings /></> },
+    { id: 'inbox', label: t('Inbox'), icon: <Inbox />, content: <><InboxCard /><SummaryCardsSettings /><SmartReplySettings /></> },
     { id: 'identities', label: t('Identities'), icon: <Badge />, content: <IdentitiesCard /> },
     { id: 'signatures', label: t('Signatures'), icon: <Draw />, content: <SignaturesCard /> },
     { id: 'templates', label: t('Templates'), icon: <Article />, content: <TemplatesCard /> },

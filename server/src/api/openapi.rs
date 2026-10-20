@@ -5,6 +5,7 @@ use serde_json::{Map, Value, json};
 
 /// (method, path, tag, summary, required role)
 const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
+    ("post", "/api/me/ai/replies", "mail", "Suggest up to three plain-text replies to an owned email using model_id, email_id and language (auto follows the email)", "user"),
     ("get", "/api/models/summary-cards", "models", "Purchase-card extraction model and automatic-processing policy", "super_admin"),
     ("put", "/api/models/summary-cards", "models", "Configure the extraction model and automatic-processing policy", "super_admin"),
     ("get", "/api/me/summary-cards", "mail", "Purchase cards and extraction state for an owned email (email_id)", "user"),

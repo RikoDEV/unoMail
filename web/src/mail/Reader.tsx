@@ -28,6 +28,7 @@ import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel 
 import { SmimeBadges } from './Smime';
 import { AiAssist, AiModelsProvider } from './AiAssist';
 import { SummaryCards } from './SummaryCards';
+import { SmartReplies } from './SmartReplies';
 import { snoozePresets } from './timePresets';
 import { adaptForDark, type Rgb } from './darkColors';
 
@@ -365,7 +366,7 @@ function pluginMessage(email: EmailFull, html: string): PluginMessage {
   return { id: email.id, subject: email.subject, from: email.from ?? [], to: email.to ?? [], receivedAt: email.receivedAt, html };
 }
 
-function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, onToggle, onAction }: { email: EmailFull; accountId: string; ownEmail: string; inboxId: string; expanded: boolean; collapsible: boolean; onToggle: () => void; onAction: (action: ReaderAction, email: EmailFull) => void }) {
+function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, onToggle, onAction }: { email: EmailFull; accountId: string; ownEmail: string; inboxId: string; expanded: boolean; collapsible: boolean; onToggle: () => void; onAction: (action: ReaderAction, email: EmailFull, suggestedText?: string) => void }) {
   const sender = email.from?.[0];
   const plugins = usePlugins();
   const encrypted = encryptedSource(email) !== null;
@@ -451,6 +452,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
               ))}
             </Stack>
           )}
+          {!encrypted && !email.smime?.encrypted && !email.keywords.$draft && email.from?.some((sender) => sender.email.toLowerCase() !== ownEmail.toLowerCase()) && <SmartReplies key={`replies-${email.id}`} emailId={email.id} onChoose={(text, replyAll) => onAction(replyAll ? 'replyAll' : 'reply', email, text)} />}
           <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
             <Button variant="outlined" startIcon={<Reply />} onClick={() => onAction('reply', email)}>
               {t('Reply')}
@@ -495,7 +497,7 @@ export interface ReaderProps {
   /** Every label in use in the account. */
   labels: string[];
   onToggleLabel: (label: string, on: boolean) => void;
-  onAction: (action: ReaderAction, email: EmailFull) => void;
+  onAction: (action: ReaderAction, email: EmailFull, suggestedText?: string) => void;
 }
 
 /** A sender's request for a read receipt: answered as the user prefers (asked by default). */

@@ -5,6 +5,8 @@ import { useSyncExternalStore } from 'react';
 import { get, put } from './api';
 
 export interface Prefs {
+  /** Offer user-requested AI reply suggestions (on unless explicitly disabled). */
+  smart_reply?: boolean;
   /** Show structured purchase cards; local extraction is enabled by default. */
   summary_cards?: boolean;
   /** Allow automatic provider processing when also enabled by the administrator. */

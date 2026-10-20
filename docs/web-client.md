@@ -2,6 +2,15 @@
 
 Besides reading and writing mail, the web client offers:
 
+- **Smart replies.** With an AI model configured, **Suggest replies** below a received
+  message generates up to three response options. It uses the model selected in the
+  message's AI tools and the email's language by default; **Reply language** selects another.
+  Earlier messages from the same account and conversation provide bounded context, with
+  encrypted messages excluded. Select a suggestion to open an editable reply draft, or
+  check **Reply all** first to include the other recipients. Normal Reply-To addressing,
+  threading, quoted text, signatures and draft autosave are preserved. The ordinary Send
+  button sends the reply after review. Opening an email makes no suggestion request.
+  Settings → Inbox → **Offer AI reply suggestions** controls the feature.
 - **Purchase cards.** Order and shipping emails can show a compact card above the message:
   merchant, order number, items, total, delivery estimates and tracking links when known.
   Cards consolidate updates from related messages, including ones in separate conversations.

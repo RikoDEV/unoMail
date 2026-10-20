@@ -40,6 +40,7 @@ pub mod lists;
 pub mod mailtools;
 pub mod models;
 pub mod summary_cards;
+pub mod smart_reply;
 pub mod me;
 pub mod oauth;
 pub mod openapi;
@@ -511,6 +512,7 @@ pub fn router(state: AppState) -> Router {
         .route("/me/unsubscribe", post(mailtools::unsubscribe))
         .route("/me/ai/models", get(models::available))
         .route("/me/ai/assist", post(models::assist))
+        .route("/me/ai/replies", post(smart_reply::suggest))
         .route("/models", get(models::list).post(models::create))
         .route("/models/{id}", put(models::update).delete(models::remove))
         .route("/models/{id}/test", post(models::test))

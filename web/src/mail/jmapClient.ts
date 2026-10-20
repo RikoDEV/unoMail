@@ -89,6 +89,8 @@ export interface DraftAttachment {
 }
 
 export interface Draft {
+  /** User-chosen initial content should be saved without requiring another edit. */
+  saveOnOpen?: boolean;
   to: string;
   cc: string;
   bcc: string;

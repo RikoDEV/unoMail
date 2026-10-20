@@ -48,7 +48,7 @@ import {
 } from './jmapClient';
 import { emailHtml, Reader, type ReaderAction } from './Reader';
 import { ShareDialog } from './ShareDialog';
-import { escapeHtml } from './sanitize';
+import { escapeHtml, textToHtml } from './sanitize';
 import { AdvancedSearch } from './AdvancedSearch';
 import { EmailRow, type RowHandlers } from './EmailRow';
 import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
@@ -78,7 +78,7 @@ function prefixed(subject: string, prefix: string): string {
 }
 
 /** Builds the initial draft for a reply or forward of `email`. */
-function draftFor(action: ReaderAction, email: EmailFull, ownAddress: string, accountId: string): Draft {
+function draftFor(action: ReaderAction, email: EmailFull, ownAddress: string, accountId: string, suggestedText?: string): Draft {
   const sender = email.replyTo?.length ? email.replyTo : (email.from ?? []);
   // The translation is plain text from our own files; the values are escaped before they go in.
   const attribution = escapeHtml(t('On {{date}}, {{sender}} wrote:', { date: new Date(email.receivedAt).toLocaleString(uiLocale()), sender: (email.from ?? []).map(formatAddress).join(', ') }));
@@ -95,7 +95,8 @@ function draftFor(action: ReaderAction, email: EmailFull, ownAddress: string, ac
     to: sender.map(formatAddress).join(', '),
     cc: others.map(formatAddress).join(', '),
     subject: prefixed(email.subject, 'Re:'),
-    html: quoted,
+    html: suggestedText ? `<div class="unomail-reply-text">${textToHtml(suggestedText)}</div>${quoted}` : quoted,
+    saveOnOpen: Boolean(suggestedText),
     answer: true,
     inReplyTo: email.messageId ?? undefined,
     references: references.length ? references : undefined,
@@ -1231,7 +1232,11 @@ export default function MailPage() {
               }}
               labels={labels}
               onToggleLabel={(name, on) => void toggleLabel(name, on)}
-              onAction={(action, email) => account && compose(draftFor(action, email, account.email, accountId))}
+              onAction={(action, email, suggestedText) => {
+                if (!account) return;
+                if (suggestedText && draft) { setNotice(t('Close the current draft before choosing a suggested reply.')); return; }
+                compose(draftFor(action, email, account.email, accountId, suggestedText));
+              }}
             />
           </Paper>
         )}

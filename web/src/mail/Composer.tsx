@@ -241,7 +241,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
   }, []);
   const [sendMenu, setSendMenu] = useState<HTMLElement | null>(null);
   const [scheduling, setScheduling] = useState<string | null>(null);
-  const dirty = useRef(false);
+  const dirty = useRef(initial.saveOnOpen === true);
   const saving = useRef(false);
   const closed = useRef(false);
   // Inline images are shown from local object URLs and referenced by Content-ID when sent.
@@ -301,6 +301,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
         const block = `<div class="${SIGNATURE_CLASS}">${signature}</div>`;
         // Below the place where the user writes: above any quoted text, or under it if preferred.
         if (initial.answer && placement.current.belowQuote) root.insertAdjacentHTML('beforeend', `<p><br></p>${block}`);
+        else if (root.querySelector(':scope > .unomail-reply-text')) root.querySelector(':scope > .unomail-reply-text')!.insertAdjacentHTML('afterend', `<p><br></p>${block}`);
         else root.insertAdjacentHTML('afterbegin', `<p><br></p>${block}`);
       }
     },

@@ -37,3 +37,19 @@ export function SummaryCardsSettings() {
     </Stack>
   </CardContent></Card>;
 }
+
+export function SmartReplySettings() {
+  const prefs = usePrefs();
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  return <Card variant="outlined"><CardContent>
+    <Typography variant="h6">{t('Smart replies')}</Typography>
+    {error && <Alert severity="error">{error}</Alert>}
+    <FormControlLabel control={<Switch checked={prefs.smart_reply !== false} disabled={busy} onChange={(event) => {
+      setBusy(true);
+      setError('');
+      void updatePrefs({ smart_reply: event.target.checked }).catch((err) => setError(errorText(err, t('Could not save')))).finally(() => setBusy(false));
+    }} />} label={t('Offer AI reply suggestions')} />
+    <Typography variant="body2" color="text.secondary">{t('Suggestions are generated only when you request them. Choose one to open a reply draft you can edit before sending.')}</Typography>
+  </CardContent></Card>;
+}
