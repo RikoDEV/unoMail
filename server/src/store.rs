@@ -458,6 +458,7 @@ impl Store {
     }
 
     /// `masked_to` is trusted SMTP envelope metadata, never extracted from MIME headers.
+    #[allow(clippy::too_many_arguments)]
     pub async fn append_with_provenance(&self,account_id:i64,mailbox_id:i64,raw:&[u8],flags:Flags,internal_date:Option<i64>,keywords:&[String],masked_to:Option<&str>)->Result<Appended,StoreError>{
         // Refuse before writing: a full account would otherwise leave a blob on disk with each
         // try, until the collector gets to it. The transaction below checks again.

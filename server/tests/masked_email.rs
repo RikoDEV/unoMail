@@ -30,7 +30,7 @@ async fn lifecycle_denials_win_over_catchall_and_reservations_survive_deletion()
     masks::destroy(&env.app,a.id,m.id).await.unwrap();
     assert_eq!(delivery::resolve(&env.app,&address).await.unwrap(),Resolution::NoSuchUser);
     assert_eq!(delivery::resolve(&env.app,&tagged).await.unwrap(),Resolution::NoSuchUser);
-    assert!(unomail::directory::create_alias(&env.app.db,&m.email,&[a.email.clone()]).await.is_err());
+    assert!(unomail::directory::create_alias(&env.app.db,&m.email,std::slice::from_ref(&a.email)).await.is_err());
     let api=Api::logged_in(&env,&a.email).await;
     assert_eq!(api.get(&format!("/api/me/masked-addresses/{}",m.id)).await.status,405);
     assert_eq!(api.patch(&format!("/api/me/masked-addresses/{}",m.id),json!({"enabled":true})).await.status,404);
@@ -63,10 +63,10 @@ async fn delivery_is_trusted_bcc_safe_and_sending_never_substitutes_the_primary(
     let mut mx=Client::connect(env.mx).await;assert!(mx.read_reply().await.starts_with("220"));mx.cmd("EHLO remote.test").await;
     assert!(mx.send_mail("sender@remote.test",&[&mask.email],"From: sender@remote.test\r\nTo: undisclosed-recipients:;\r\nSubject: Bcc mask\r\nDelivered-To: attacker@elsewhere.test\r\n\r\nHello\r\n").await.starts_with("250"));
     let inbox=env.app.store.mailbox_by_role(a.id,"inbox").await.unwrap().unwrap();let messages=env.app.store.messages_in(inbox.id).await.unwrap();
-    assert_eq!(masks::delivery_addresses(&env.app,a.id,messages[0].id).await.unwrap(),[mask.email.clone()]);
+    assert_eq!(masks::delivery_addresses(&env.app,a.id,messages[0].id).await.unwrap(),std::slice::from_ref(&mask.email));
     let archive=env.app.store.mailbox_by_role(a.id,"archive").await.unwrap().unwrap();
     let copied=env.app.store.copy_message(a.id,messages[0].id,archive.id).await.unwrap();
-    assert_eq!(masks::delivery_addresses(&env.app,a.id,copied.id).await.unwrap(),[mask.email.clone()]);
+    assert_eq!(masks::delivery_addresses(&env.app,a.id,copied.id).await.unwrap(),std::slice::from_ref(&mask.email));
     let target=env.app.store.mailbox_by_role(b.id,"inbox").await.unwrap().unwrap();
     let copy=env.app.store.copy_across(a.id,messages[0].id,b.id,target.id).await.unwrap();
     assert!(masks::delivery_addresses(&env.app,b.id,copy.id).await.unwrap().is_empty());

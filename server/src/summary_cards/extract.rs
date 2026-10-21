@@ -135,9 +135,8 @@ pub fn validate(mut p: Purchase) -> Result<Purchase, String> {
         s.delivery_from = s.delivery_from.take().and_then(|s| date(&s));
         s.delivery_until = s.delivery_until.take().and_then(|s| date(&s));
         if s.carrier.as_ref().into_iter().chain(s.tracking_number.as_ref()).any(|s| s.len() > 200 || s.chars().any(char::is_control)) { return Err("invalid shipment".into()); }
-        if let (Some(start), Some(end)) = (&s.delivery_from, &s.delivery_until) {
-            if start.len() == 10 && end.len() == 10 && start > end { return Err("delivery range is reversed".into()); }
-        }
+        if let (Some(start), Some(end)) = (&s.delivery_from, &s.delivery_until)
+            && start.len() == 10 && end.len() == 10 && start > end { return Err("delivery range is reversed".into()); }
     }
     Ok(p)
 }
@@ -147,7 +146,7 @@ pub fn source_urls(raw: &[u8]) -> Vec<String> {
     let mut urls = Vec::new();
     for text in (0..message.text_body.len()).filter_map(|i| message.body_text(i)).chain((0..message.html_body.len()).filter_map(|i| message.body_html(i))) {
         for found in URLS.find_iter(&text).take(100) {
-            if let Some(url) = safe_url(&found.as_str().replace("&amp;", "&")) { if !urls.contains(&url) { urls.push(url); } }
+            if let Some(url) = safe_url(&found.as_str().replace("&amp;", "&")) && !urls.contains(&url) { urls.push(url); }
             if urls.len() >= 50 { return urls; }
         }
     }

@@ -113,7 +113,7 @@ pub async fn identity_rows(state: &AppState, account: &crate::auth::Account) -> 
     }
     for row in &mut rows {
         row.available=true;
-        if let Some(address)=Address::parse(&row.email){if let Some(owned)=crate::masked_email::owned(state,account.id,&address).await?{row.masked=true;row.available=owned;}}
+        if let Some(address)=Address::parse(&row.email)&& let Some(owned)=crate::masked_email::owned(state,account.id,&address).await?{row.masked=true;row.available=owned;}
     }
     let masks:Vec<(i64,String,bool,Option<i64>,bool)>=sqlx::query_as("SELECT m.id,m.email,m.enabled,m.expires_at,d.enabled FROM masked_addresses m JOIN domains d ON d.id=m.domain_id WHERE m.account_id=? ORDER BY m.id DESC").bind(account.id).fetch_all(&state.db).await?;
     for (id,email,enabled,expires,domain) in masks{

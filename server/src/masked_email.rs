@@ -84,16 +84,26 @@ fn admit(account:i64) -> Result<(),ApiError> {
     let e=entries.entry(account).or_insert((t,0));
     if e.1>=30 {return Err(ApiError::RateLimited);} e.1+=1; Ok(())
 }
-pub async fn create(app:&AppState,account:i64,input:Create,by:&str) -> Result<Mask,ApiError> {
+/// Returns a slot taken by `admit` when the creation it guarded did not commit.
+fn release(account:i64) {
+    if let Some(e)=CREATIONS.lock().get_mut(&account) {e.1=e.1.saturating_sub(1);}
+}
+pub async fn create(app:&AppState,account:i64,mut input:Create,by:&str) -> Result<Mask,ApiError> {
     let cfg=config(app).await?;
     if !cfg.enabled {return Err(ApiError::bad("creation of masked addresses is disabled"));}
     if input.prefix.len()>37 || !input.prefix.bytes().all(|b|b.is_ascii_lowercase()||b.is_ascii_digit()||b==b'_') {return Err(ApiError::bad("prefix must be at most 37 lowercase letters, digits or underscores"));}
     if input.expires_at.is_some_and(|t|t<=now() || t>253402300799) {return Err(ApiError::bad("expiration must be a future UTC date"));}
     let description=clean(&input.description,200)?; let for_domain=website(&input.for_domain)?; let url=link(&input.integration_url)?;
     let allowed=domains(app,account).await?;
-    let domain=match input.domain {Some(d)=>normalize_domain(&d).ok_or_else(||ApiError::bad("invalid mask domain"))?,None=>allowed.first().cloned().ok_or_else(||ApiError::bad("no domains are available for masks"))?};
+    let domain=match input.domain.take() {Some(d)=>normalize_domain(&d).ok_or_else(||ApiError::bad("invalid mask domain"))?,None=>allowed.first().cloned().ok_or_else(||ApiError::bad("no domains are available for masks"))?};
     if !allowed.contains(&domain) {return Err(ApiError::bad("mask domain is not allowed for this account"));}
     admit(account)?;
+    let created=insert(app,account,input,by,domain,description,for_domain,url).await;
+    if created.is_err() {release(account);}
+    get(app,account,created?).await
+}
+#[allow(clippy::too_many_arguments)]
+async fn insert(app:&AppState,account:i64,input:Create,by:&str,domain:String,description:String,for_domain:String,url:String) -> Result<i64,ApiError> {
     // Acquire the SQLite write lock before reading quota; concurrent requests cannot exceed it.
     let mut tx=app.db.begin().await?;
     sqlx::query("INSERT INTO masked_account_policy(account_id) VALUES(?) ON CONFLICT(account_id) DO UPDATE SET account_id=excluded.account_id").bind(account).execute(&mut *tx).await?;
@@ -120,7 +130,7 @@ pub async fn create(app:&AppState,account:i64,input:Create,by:&str) -> Result<Ma
         .bind(account).bind(domain_id).bind(email).bind(description).bind(for_domain).bind(url).bind(input.enabled).bind(now()).bind(input.expires_at).bind(clean(by,100)?).bind(now()).execute(&mut *tx).await?.last_insert_rowid();
     record(&mut tx,account,id,"created").await?;
     tx.commit().await?;
-    get(app,account,id).await
+    Ok(id)
 }
 async fn record(tx:&mut sqlx::Transaction<'_,sqlx::Sqlite>,account:i64,id:i64,change:&str)->Result<(),sqlx::Error>{
     sqlx::query("INSERT INTO masked_changes(account_id,kind,item_id,change) VALUES(?,'masked',?,?)").bind(account).bind(id).bind(change).execute(&mut **tx).await?; Ok(())

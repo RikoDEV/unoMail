@@ -209,7 +209,7 @@ pub async fn reply_from_sieve(app: &App, account_id: i64, recipient: &str, sende
 
 /// Sends one autoreply unless `sender` already received one within the interval.
 async fn send_reply(app: &App, account_id: i64, recipient: &str, sender: &str, raw: &[u8], vacation: &Vacation, dedupe_suffix: &str) -> anyhow::Result<()> {
-    if let Some(address)=Address::parse(recipient){if crate::masked_email::owned(app,account_id,&address).await?==Some(false){return Ok(());}}
+    if let Some(address)=Address::parse(recipient)&& crate::masked_email::owned(app,account_id,&address).await?==Some(false){return Ok(());}
     {
         let Some(sender_address) = Address::parse(sender) else { return Ok(()) };
         let sender = sender_address.to_string();

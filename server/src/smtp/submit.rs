@@ -133,9 +133,9 @@ pub struct Inbound<'a> {
 /// Accepts a message received from another mail server for local recipients.
 pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
     for (_,targets) in msg.recipients{for target in targets{
-        if let Target::Local{address,..}=target{if let Some(address)=Address::parse(address){
+        if let Target::Local{address,..}=target&& let Some(address)=Address::parse(address){
             match crate::masked_email::resolve(app,&address).await{Ok(Some(None))=>return Outcome::Rejected("550 5.1.1 Masked address is inactive".into()),Err(e)=>return internal("mask lookup failed",e),_=>{}}
-        }}
+        }
     }}
     Metrics::inc(&app.metrics.messages_received);
     let remote = msg.ip.to_string();
