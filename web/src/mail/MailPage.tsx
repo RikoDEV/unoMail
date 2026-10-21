@@ -1,4 +1,5 @@
 import Add from '@mui/icons-material/Add';
+import AllInbox from '@mui/icons-material/AllInbox';
 import Archive from '@mui/icons-material/Archive';
 import Delete from '@mui/icons-material/Delete';
 import Drafts from '@mui/icons-material/Drafts';
@@ -173,13 +174,19 @@ export default function MailPage() {
   const mailbox = useMemo(() => mailboxes.find((m) => m.id === mailboxSlug) ?? mailboxes.find((m) => m.role === (mailboxSlug || 'inbox')), [mailboxes, mailboxSlug]);
   // "label:<name>" in the URL shows every conversation carrying that label.
   const label = mailboxSlug?.startsWith('label:') ? decodeLabel(mailboxSlug.slice(6)) : null;
+  // "all" is the virtual All mail folder: every message except those in Trash and Junk.
+  const allMail = mailboxSlug === 'all' && !mailbox;
+  const otherThan = useMemo(
+    () => (allMail ? ['trash', 'junk'].map((role) => mailboxes.find((m) => m.role === role)?.id).filter((id): id is string => Boolean(id)) : undefined),
+    [allMail, mailboxes],
+  );
   const unreadInbox = mailboxes.find((m) => m.role === 'inbox')?.unreadEmails ?? 0;
   useTitle(
     thread ? thread[0]?.subject || t('(no subject)') : null,
-    serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : mailbox && folderName(mailbox),
+    serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : mailbox && folderName(mailbox),
     unreadInbox > 0 && t('{{count}} unread', { count: unreadInbox }),
   );
-  const slug = label ? `label:${encodeURIComponent(label)}` : (mailbox?.id ?? 'inbox');
+  const slug = label ? `label:${encodeURIComponent(label)}` : allMail ? 'all' : (mailbox?.id ?? 'inbox');
   const byRole = useCallback((role: string) => mailboxes.find((m) => m.role === role), [mailboxes]);
 
   const [searchPanel, setSearchPanel] = useState<HTMLElement | null>(null);
@@ -239,9 +246,9 @@ export default function MailPage() {
 
   const load = useCallback(
     async (position: number) => {
-      if (!mailbox && !label) return;
+      if (!mailbox && !label && !allMail) return;
       const seq = ++requestSeq.current;
-      const cacheKey = position === 0 && !serverSearch ? (label ? `label:${label}` : activeCategory ? `${mailbox!.id}:${activeCategory}` : mailbox!.id) : null;
+      const cacheKey = position === 0 && !serverSearch ? (label ? `label:${label}` : allMail ? 'all' : activeCategory ? `${mailbox!.id}:${activeCategory}` : mailbox!.id) : null;
       // Show the saved copy at once; the network result replaces it when it arrives.
       const saved = cacheKey ? cachedList<EmailSummary[]>(cacheKey) : undefined;
       if (saved) {
@@ -250,7 +257,7 @@ export default function MailPage() {
       }
       setLoading(true);
       try {
-        const result = await queryEmails({ mailboxId: mailbox?.id, label: label ?? undefined, search: searchFilter, category: activeCategory, position, limit: PAGE_SIZE });
+        const result = await queryEmails({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory, position, limit: PAGE_SIZE });
         if (categorised) void categoryCounts().then(setCounts).catch(() => {});
         // A slower, older response must not overwrite a newer one.
         if (seq !== requestSeq.current) return;
@@ -274,7 +281,7 @@ export default function MailPage() {
         if (seq === requestSeq.current) setLoading(false);
       }
     },
-    [mailbox?.id, label, serverSearch, searchFilter, activeCategory, categorised],
+    [mailbox?.id, allMail, otherThan, label, serverSearch, searchFilter, activeCategory, categorised],
   );
 
   useEffect(() => {
@@ -340,7 +347,7 @@ export default function MailPage() {
   useEffect(() => {
     setSelected(new Set());
     setAllInFolder(false);
-  }, [mailbox?.id, label, serverSearch, activeCategory]);
+  }, [mailbox?.id, allMail, label, serverSearch, activeCategory]);
 
   // Tools inside the reader (block sender, move to category) ask for a reload this way.
   useEffect(() => {
@@ -509,7 +516,7 @@ export default function MailPage() {
 
   /** Message ids covered by the current selection. */
   async function selectionIds(): Promise<string[]> {
-    if (allInFolder) return queryAllIds({ mailboxId: mailbox?.id, label: label ?? undefined, search: searchFilter, category: activeCategory });
+    if (allInFolder) return queryAllIds({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory });
     const groups = await Promise.all(emails.filter((email) => selected.has(email.id)).map(conversationIds));
     return [...new Set(groups.flat())];
   }
@@ -989,6 +996,16 @@ export default function MailPage() {
                   </IconButton>
                 </ListItemButton>
               ))}
+              <ListItemButton
+                selected={allMail}
+                onClick={() => { setSearch(''); navigate('/mail/all'); }}
+                sx={{ mb: 0.25 }}
+                data-testid="folder-all"
+                {...named(t('All mail'))}
+              >
+                <ListItemIcon sx={{ minWidth: 40 }}><AllInbox /></ListItemIcon>
+                <ListItemText primary={t('All mail')} primaryTypographyProps={{ noWrap: true }} />
+              </ListItemButton>
               <ListItemButton className="mini-hide" onClick={() => setNewFolder('')}>
                 <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
                 <ListItemText primary={t('New folder')} />
@@ -1123,7 +1140,7 @@ export default function MailPage() {
             ) : (
               <>
                 <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }} component="h1" noWrap>
-                  {serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : (mailbox ? folderName(mailbox) : '')}
+                  {serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : (mailbox ? folderName(mailbox) : '')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
                   {t('{{shown}} of {{total}}', { shown: visible.length, total })}

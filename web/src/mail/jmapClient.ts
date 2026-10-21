@@ -198,6 +198,8 @@ export interface QueryResult {
 
 export interface ListFilter {
   mailboxId?: string;
+  /** "All mail": every message outside these folders (Trash and Junk); used without `mailboxId`. */
+  otherThan?: string[];
   label?: string;
   text?: string;
   /** Inbox category; only meaningful together with the inbox as `mailboxId`. */
@@ -215,7 +217,7 @@ function jmapFilter(options: ListFilter): Record<string, unknown> {
   else if (options.mailboxId) {
     filter.inMailbox = options.mailboxId;
     if (options.category) filter.category = options.category;
-  }
+  } else if (options.otherThan?.length) filter.inMailboxOtherThan = options.otherThan;
   return filter;
 }
 

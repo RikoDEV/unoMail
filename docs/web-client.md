@@ -85,6 +85,8 @@ Besides reading and writing mail, the web client offers:
   label to apply it. Folders can be exported as mbox files and `.eml`/mbox files imported
   (folder menu), and single messages downloaded as `.eml`. Folders without unread mail show
   their message count instead of the unread badge.
+- **All mail**, a virtual folder in the sidebar listing every message outside Trash and
+  Spam, newest first. Selection, bulk actions and search work as in any folder.
 - **Shared and global folders.** A folder's owner shares it from the folder menu with
   colleagues of the same domain, or with `anyone` (everybody in the domain), at three levels:
   read, read and file, read/file/delete. Shared folders appear under "Shared with me" and, for
