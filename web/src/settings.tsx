@@ -1,3 +1,4 @@
+import AlternateEmail from '@mui/icons-material/AlternateEmail';
 import Article from '@mui/icons-material/Article';
 import Badge from '@mui/icons-material/Badge';
 import BeachAccess from '@mui/icons-material/BeachAccess';
@@ -235,7 +236,7 @@ export default function SettingsPage() {
     { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><AppearanceCard /></> },
     { id: 'inbox', label: t('Inbox'), icon: <Inbox />, content: <><InboxCard /><SummaryCardsSettings /><SmartReplySettings /></> },
     { id: 'identities', label: t('Identities'), icon: <Badge />, content: <IdentitiesCard /> },
-    { id: 'masked-addresses', label: t('Masked addresses'), icon: <Badge />, content: <MaskedAddresses /> },
+    { id: 'masked-addresses', label: t('Masked addresses'), icon: <AlternateEmail />, content: <MaskedAddresses /> },
     { id: 'signatures', label: t('Signatures'), icon: <Draw />, content: <SignaturesCard /> },
     { id: 'templates', label: t('Templates'), icon: <Article />, content: <TemplatesCard /> },
     { id: 'filters', label: t('Filters'), icon: <FilterAlt />, content: <FiltersCard /> },

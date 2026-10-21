@@ -501,7 +501,7 @@ export function MessageListCard() {
             </Box>
           ))}
         </Stack>
-        <FormControlLabel control={<Switch checked={offline} onChange={(_, enabled) => { setPersistentCache(enabled); setOffline(enabled); }} />} label="Keep mail offline on this trusted device" />
+        <FormControlLabel sx={{ mt: 1.5 }} control={<Switch checked={offline} onChange={(_, enabled) => { setPersistentCache(enabled); setOffline(enabled); }} />} label="Keep mail offline on this trusted device" />
         <Typography variant="body2" color="text.secondary">Off by default. Cached messages are stored unencrypted in this browser and removed on sign-out.</Typography>
       </CardContent>
     </Card>
