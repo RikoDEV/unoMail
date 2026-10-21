@@ -29,6 +29,7 @@
   ", {{count}} skipped_one": ", {{count}} skipped",
   "Certificates of {{count}} correspondents are known, collected from their signed mail; you can encrypt mail to them._one": "The certificate of {{count}} correspondent is known, collected from their signed mail; you can encrypt mail to them.",
   "{{count}} aliases_one": "{{count}} alias",
+  "{{count}} messages_one": "{{count}} message",
   "{{count}} deferred_one": "{{count}} deferred",
   "{{count}} learned_one": "{{count}} learned",
   "{{count}} more_one": "{{count}} more",

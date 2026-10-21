@@ -983,7 +983,7 @@ export default function MailPage() {
                 >
                   <ListItemIcon sx={{ minWidth: 40 }}>{ICONS[m.role ?? ''] ?? (m.sharedWith ? <FolderShared /> : <Folder />)}</ListItemIcon>
                   <ListItemText primary={folderName(m)} primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }} />
-                  {m.unreadEmails > 0 && m.role !== 'drafts' && <Badge badgeContent={m.unreadEmails} color="primary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} />}
+                  {m.unreadEmails > 0 && m.role !== 'drafts' ? <Badge badgeContent={m.unreadEmails} color="primary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} /> : <FolderCount count={m.totalEmails} />}
                   <IconButton size="small" aria-label={t('Folder actions {{value}}', { value: folderName(m) })} onClick={(e) => { e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
                     <MoreVert fontSize="inherit" />
                   </IconButton>
@@ -1016,6 +1016,7 @@ export default function MailPage() {
                         primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }}
                         secondaryTypographyProps={{ noWrap: true }}
                       />
+                      <FolderCount count={m.totalEmails} />
                       <IconButton size="small" aria-label={t('Folder actions {{name}}', { name: m.name })} onClick={(e) => { e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
                         <MoreVert fontSize="inherit" />
                       </IconButton>
@@ -1420,5 +1421,15 @@ export default function MailPage() {
         }
       />
     </Box>
+  );
+}
+
+/** Muted message total beside a folder name; hidden when the sidebar is collapsed. */
+function FolderCount({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <Typography className="mini-hide" variant="caption" color="text.secondary" aria-label={t('{{count}} messages', { count })} sx={{ mr: 0.5, fontVariantNumeric: 'tabular-nums' }}>
+      {count}
+    </Typography>
   );
 }

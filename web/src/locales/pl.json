@@ -2028,5 +2028,9 @@
   "{{percent}} of {{mem_total}}": "{{percent}} z {{mem_total}}",
   "Other": "Inne",
   "Legend": "Legenda",
-  "Total": "Razem"
+  "Total": "Razem",
+  "{{count}} messages_one": "{{count}} wiadomość",
+  "{{count}} messages_few": "{{count}} wiadomości",
+  "{{count}} messages_many": "{{count}} wiadomości",
+  "{{count}} messages_other": "{{count}} wiadomości"
 }

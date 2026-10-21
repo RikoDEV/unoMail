@@ -2028,5 +2028,9 @@
   "{{percent}} of {{mem_total}}": "{{percent}} z {{mem_total}}",
   "Other": "Ostatní",
   "Legend": "Legenda",
-  "Total": "Celkem"
+  "Total": "Celkem",
+  "{{count}} messages_one": "{{count}} zpráva",
+  "{{count}} messages_few": "{{count}} zprávy",
+  "{{count}} messages_many": "{{count}} zprávy",
+  "{{count}} messages_other": "{{count}} zpráv"
 }

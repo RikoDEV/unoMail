@@ -83,7 +83,8 @@ Besides reading and writing mail, the web client offers:
   sent on your behalf, otherwise the sender's page.
 - **Folders and labels** with drag and drop: drop a conversation on a folder to move it, on a
   label to apply it. Folders can be exported as mbox files and `.eml`/mbox files imported
-  (folder menu), and single messages downloaded as `.eml`.
+  (folder menu), and single messages downloaded as `.eml`. Folders without unread mail show
+  their message count instead of the unread badge.
 - **Shared and global folders.** A folder's owner shares it from the folder menu with
   colleagues of the same domain, or with `anyone` (everybody in the domain), at three levels:
   read, read and file, read/file/delete. Shared folders appear under "Shared with me" and, for

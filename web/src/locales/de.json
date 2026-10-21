@@ -1946,5 +1946,7 @@
   "{{percent}} of {{mem_total}}": "{{percent}} von {{mem_total}}",
   "Other": "Sonstiges",
   "Legend": "Legende",
-  "Total": "Gesamt"
+  "Total": "Gesamt",
+  "{{count}} messages_one": "{{count}} Nachricht",
+  "{{count}} messages_other": "{{count}} Nachrichten"
 }
