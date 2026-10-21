@@ -151,7 +151,7 @@ export function DailyStatsChart() {
         </Stack>
 
         {/* The legend: every line by name with its total for the period; a click hides or shows it. */}
-        <Box component="ul" aria-label={t('Series')} sx={{ listStyle: 'none', m: 0, mb: 1.5, p: 0, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        <Box component="ul" aria-label={t('Series')} sx={{ listStyle: 'none', m: 0, mb: 1.5, p: 0, display: 'flex', flexWrap: { xs: 'nowrap', sm: 'wrap' }, gap: 1, overflowX: { xs: 'auto', sm: 'visible' }, scrollbarWidth: 'thin', '& > li': { flexShrink: 0 } }}>
           {SERIES.map((series) => {
             const off = hidden.has(series.id);
             return (
@@ -173,7 +173,7 @@ export function DailyStatsChart() {
                       <Typography component="span" variant="body2" fontWeight={600}>{number(totals[series.id]?.value ?? 0)}</Typography>
                     </Typography>
                     {series.parts?.map((part, index) => (
-                      <Typography key={part.label} component="span" variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      <Typography key={part.label} component="span" variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
                         {number(totals[series.id]?.parts[index] ?? 0)} – {part.label}
                       </Typography>
                     ))}

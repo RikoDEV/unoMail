@@ -218,16 +218,16 @@ function Capacity() {
 
 function Metric({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <Card variant="outlined" sx={{ minWidth: 170, flex: '1 1 170px' }}>
-      <CardContent>
-        <Typography variant="body2" color="text.secondary">
+    <Card variant="outlined" sx={{ minWidth: 0 }}>
+      <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+        <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
           {label}
         </Typography>
-        <Typography variant="h4" component="div" data-testid={`metric-${label}`}>
+        <Typography variant="h4" component="div" noWrap sx={{ fontSize: { xs: '1.375rem', sm: '2.125rem' } }} data-testid={`metric-${label}`}>
           {value}
         </Typography>
         {hint && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" noWrap component="div">
             {hint}
           </Typography>
         )}
@@ -282,7 +282,7 @@ export function DashboardPage() {
           {t('{{count}} accounts are blocked from sending because of suspicious outbound activity.', { count: data.blocked_accounts })}
         </Alert>
       )}
-      <Stack direction="row" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
+      <Box sx={{ display: 'grid', gap: { xs: 1, sm: 2 }, mb: 3, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(auto-fill, minmax(170px, 1fr))' } }}>
         <Metric label={t('Queue size')} value={data.queue_size} hint={t('{{count}} deferred', { count: data.queue_deferred })} />
         <Metric label={t('Active connections')} value={data.active_connections} />
         <Metric label={t('Disk usage')} value={formatBytes(data.disk_bytes)} hint={t('{{mail_bytes}} in mailboxes', { mail_bytes: formatBytes(data.mail_bytes) })} />
@@ -291,7 +291,7 @@ export function DashboardPage() {
         <Metric label={t('Domains')} value={data.domains} />
         <Metric label={t('Mailboxes')} value={data.mailboxes} hint={t('{{count}} aliases', { count: data.aliases })} />
         <Metric label={t('Failed logins')} value={data.auth_failures} hint={t('since start')} />
-      </Stack>
+      </Box>
       <DailyStatsChart />
       <ActivityTables flow={data.last_24h} activity={activity.data ?? null} />
       <Capacity />
