@@ -454,6 +454,11 @@ impl Store {
         internal_date: Option<i64>,
         keywords: &[String],
     ) -> Result<Appended, StoreError> {
+        self.append_with_provenance(account_id,mailbox_id,raw,flags,internal_date,keywords,None).await
+    }
+
+    /// `masked_to` is trusted SMTP envelope metadata, never extracted from MIME headers.
+    pub async fn append_with_provenance(&self,account_id:i64,mailbox_id:i64,raw:&[u8],flags:Flags,internal_date:Option<i64>,keywords:&[String],masked_to:Option<&str>)->Result<Appended,StoreError>{
         // Refuse before writing: a full account would otherwise leave a blob on disk with each
         // try, until the collector gets to it. The transaction below checks again.
         let fits: Option<bool> = sqlx::query_scalar("SELECT quota_bytes = 0 OR used_bytes + ? <= quota_bytes FROM accounts WHERE id = ?")
@@ -555,6 +560,7 @@ impl Store {
         Self::record(&mut *tx, account_id, "mailbox", mailbox_id, None, "updated").await?;
         // Searchable at once, in the same transaction.
         crate::search::store_in(&mut tx, &hash, &indexed).await?;
+        if let Some(address)=masked_to{sqlx::query("INSERT INTO message_mask_delivery(message_id,email) VALUES(?,?)").bind(id).bind(address).execute(&mut *tx).await?;}
         // Durable, local-first card extraction happens off the delivery path. Bound the queue
         // during large imports; older messages can still be processed explicitly in the reader.
         sqlx::query("INSERT OR IGNORE INTO summary_card_jobs (message_id, account_id) SELECT ?1, ?2 WHERE ?3 = 0 AND ?4 = 0 AND COALESCE((SELECT role FROM mailboxes WHERE id = ?5), '') NOT IN ('junk', 'trash', 'drafts', 'sent') AND (SELECT COUNT(*) FROM summary_card_jobs WHERE state IN ('pending', 'running')) < 5000")
@@ -830,7 +836,8 @@ impl Store {
         let raw = self.read_blob(&msg.blob_hash).await?;
         let flags =
             Flags { seen: msg.seen, answered: msg.answered, flagged: msg.flagged, deleted: false, draft: msg.draft };
-        self.append(account_id, target_mailbox, &raw, flags, Some(msg.internal_date)).await
+        let masked:Option<String>=sqlx::query_scalar("SELECT email FROM message_mask_delivery WHERE message_id=? LIMIT 1").bind(id).fetch_optional(&self.db).await?;
+        self.append_with_provenance(account_id, target_mailbox, &raw, flags, Some(msg.internal_date),&[],masked.as_deref()).await
     }
 
     /// Copies a message into a mailbox that may belong to another account (shared folders).
@@ -839,7 +846,8 @@ impl Store {
         let msg = self.message(owner, id).await?;
         let raw = self.read_blob(&msg.blob_hash).await?;
         let flags = Flags { seen: msg.seen, answered: msg.answered, flagged: msg.flagged, deleted: false, draft: msg.draft };
-        let appended = self.append(target_owner, target_mailbox, &raw, flags, Some(msg.internal_date)).await?;
+        let masked:Option<String>=if owner==target_owner{sqlx::query_scalar("SELECT email FROM message_mask_delivery WHERE message_id=? LIMIT 1").bind(id).fetch_optional(&self.db).await?}else{None};
+        let appended = self.append_with_provenance(target_owner, target_mailbox, &raw, flags, Some(msg.internal_date),&[],masked.as_deref()).await?;
         let keywords: Vec<String> = serde_json::from_str(&msg.keywords).unwrap_or_default();
         if !keywords.is_empty() {
             self.set_flags_and_keywords(target_owner, appended.id, flags, &keywords).await?;

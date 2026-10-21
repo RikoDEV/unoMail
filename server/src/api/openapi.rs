@@ -5,6 +5,22 @@ use serde_json::{Map, Value, json};
 
 /// (method, path, tag, summary, required role)
 const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
+    ("get", "/api/me/masked-addresses", "masked-email", "List owned masked addresses, allowed domains and quota usage", "user"),
+    ("post", "/api/me/masked-addresses", "masked-email", "Create a disposable address with optional prefix, domain and immutable expiration", "user"),
+    ("patch", "/api/me/masked-addresses/{id}", "masked-email", "Edit mask metadata or enable/disable an owned address", "user"),
+    ("delete", "/api/me/masked-addresses/{id}", "masked-email", "Delete a mask and permanently reserve its address", "user"),
+    ("get", "/api/me/masked-addresses/domains", "masked-email", "Hosted domains this account may use for masks", "user"),
+    ("get", "/api/me/masked-addresses/tokens", "masked-email", "List mask-only integration tokens without their secrets", "user"),
+    ("post", "/api/me/masked-addresses/tokens", "masked-email", "Create a mask-only token (name and expires_at, at most one year)", "user"),
+    ("delete", "/api/me/masked-addresses/tokens/{id}", "masked-email", "Revoke an owned mask integration token", "user"),
+    ("get", "/api/accounts/{account}/masked-addresses", "masked-email", "List masks of a managed mailbox", "domain_admin"),
+    ("post", "/api/accounts/{account}/masked-addresses", "masked-email", "Create a mask for a managed mailbox", "domain_admin"),
+    ("patch", "/api/accounts/{account}/masked-addresses/{id}", "masked-email", "Update a mask of a managed mailbox", "domain_admin"),
+    ("delete", "/api/accounts/{account}/masked-addresses/{id}", "masked-email", "Delete a mask of a managed mailbox", "domain_admin"),
+    ("get", "/api/accounts/{account}/masked-policy", "masked-email", "Mask quota override and additional domains of a managed mailbox", "domain_admin"),
+    ("put", "/api/accounts/{account}/masked-policy", "masked-email", "Set mask quota and additional managed domains", "domain_admin"),
+    ("get", "/api/masked-email/config", "masked-email", "Server mask creation policy", "super_admin"),
+    ("put", "/api/masked-email/config", "masked-email", "Configure new-mask availability, default quota and closed domains", "super_admin"),
     ("post", "/api/me/ai/replies", "mail", "Suggest up to three plain-text replies to an owned email using model_id, email_id and language (auto follows the email)", "user"),
     ("get", "/api/models/summary-cards", "models", "Purchase-card extraction model and automatic-processing policy", "super_admin"),
     ("put", "/api/models/summary-cards", "models", "Configure the extraction model and automatic-processing policy", "super_admin"),

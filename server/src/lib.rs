@@ -29,6 +29,7 @@ pub mod ldap;
 pub mod lists;
 pub mod logstream;
 pub mod managesieve;
+pub mod masked_email;
 pub mod milter;
 pub mod net;
 pub mod oauth;

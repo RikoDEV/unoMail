@@ -102,11 +102,26 @@ Without a command, runs the server. Commands (configured by the same UNOMAIL_* v
   migrate-blobs [--from DIR]  copy message contents into the configured store (e.g. from
                               the old blobs directory after switching to S3) and bring them
                               into the configured form (sealed with UNOMAIL_ENCRYPT_MAIL)
+  masked-email OP ACCOUNT [ID] [JSON]
+                              list/create/update/delete masks of ACCOUNT (mailbox address)
   help                        show this text";
 
 /// One-off administrative commands.
 async fn run_command(cfg: Config, command: &str, args: &[String]) -> anyhow::Result<()> {
     match command {
+        "masked-email" => {
+            let (Some(op),Some(email))=(args.first(),args.get(1)) else {anyhow::bail!("{USAGE}")};
+            let app=App::new(cfg,None).await?;
+            let account=unomail::auth::Account::by_email(&app.db,email).await?.context("mailbox not found")?;
+            let output=match op.as_str(){
+                "list"=>serde_json::json!(unomail::masked_email::list(&app,account.id).await?.iter().map(|m|m.view()).collect::<Vec<_>>()),
+                "create"=>unomail::masked_email::create(&app,account.id,serde_json::from_str(args.get(2).map(String::as_str).unwrap_or("{}"))?,"CLI").await?.view(),
+                "update"=>{let id=args.get(2).context("mask id is required")?.parse()?;unomail::masked_email::update(&app,account.id,id,serde_json::from_str(args.get(3).context("update JSON is required")?)?).await?.view()},
+                "delete"=>{unomail::masked_email::destroy(&app,account.id,args.get(2).context("mask id is required")?.parse()?).await?;serde_json::json!({"ok":true})},
+                _=>anyhow::bail!("{USAGE}"),
+            };
+            println!("{}",serde_json::to_string_pretty(&output)?);
+        }
         "backup" => {
             let app = App::new(cfg, None).await?;
             let outcome = unomail::backup::run(&app).await?;
@@ -211,6 +226,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(unomail::jmap::push::run(app.clone()));
     tokio::spawn(unomail::jmap::submission::run(app.clone()));
     tokio::spawn(unomail::snooze::run(app.clone()));
+    tokio::spawn(unomail::masked_email::run(app.clone()));
     tokio::spawn(reports(app.clone()));
     tokio::spawn(unomail::backup::schedule(app.clone()));
     tokio::spawn(acme::renewal_loop(app.clone()));

@@ -8,6 +8,7 @@ use super::{Context, MAX_OBJECTS, MethodError, MethodResult, account_id};
 
 /// The state of one data type: the last change logged for it.
 pub async fn state(ctx: &Context<'_>, kind: &str) -> Result<String, MethodError> {
+    if kind=="masked" {return Ok(sqlx::query_scalar::<_,i64>("SELECT COALESCE(MAX(id),0) FROM masked_changes WHERE account_id=?").bind(ctx.account.id).fetch_one(&ctx.app.db).await?.to_string());}
     let last: i64 = sqlx::query_scalar("SELECT COALESCE(MAX(id), 0) FROM jmap_changes WHERE account_id = ? AND kind = ?").bind(ctx.account.id).bind(kind).fetch_one(&ctx.app.db).await?;
     // Every type answers with a number: "0" until something changed.
     let floor = floor(ctx).await?;
@@ -39,10 +40,11 @@ pub async fn changes(ctx: &Context<'_>, args: &Map<String, Value>, kind: &str, p
         .ok_or_else(|| MethodError("cannotCalculateChanges", "unknown state".into()))?;
     let max = args.get("maxChanges").and_then(Value::as_u64).unwrap_or(MAX_OBJECTS as u64).clamp(1, MAX_OBJECTS as u64) as usize;
     let current: i64 = state(ctx, kind).await?.parse().unwrap_or(0);
-    if since < floor(ctx).await? || since > current {
+    if since < if kind=="masked"{0}else{floor(ctx).await?} || since > current {
         return Err(MethodError("cannotCalculateChanges", "the state is too old; refetch the data".into()));
     }
-    let rows: Vec<(i64, i64, String)> = sqlx::query_as("SELECT id, item_id, change FROM jmap_changes WHERE account_id = ? AND kind = ? AND id > ? ORDER BY id")
+    let sql=if kind=="masked"{"SELECT id,item_id,change FROM masked_changes WHERE account_id=? AND kind=? AND id>? ORDER BY id"}else{"SELECT id, item_id, change FROM jmap_changes WHERE account_id = ? AND kind = ? AND id > ? ORDER BY id"};
+    let rows: Vec<(i64, i64, String)> = sqlx::query_as(sql)
         .bind(ctx.account.id)
         .bind(kind)
         .bind(since)

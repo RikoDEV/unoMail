@@ -38,6 +38,7 @@ pub mod snooze;
 pub mod storage;
 pub mod lists;
 pub mod mailtools;
+pub mod masked_email;
 pub mod models;
 pub mod summary_cards;
 pub mod smart_reply;
@@ -511,6 +512,17 @@ pub fn router(state: AppState) -> Router {
         .route("/me/categories/learning", get(mailtools::category_learning).delete(mailtools::category_learning_reset))
         .route("/me/unsubscribe", post(mailtools::unsubscribe))
         .route("/me/ai/models", get(models::available))
+        .route("/me/masked-addresses", get(masked_email::own_list).post(masked_email::own_create))
+        .route("/me/masked-addresses/{id}", patch(masked_email::own_update).delete(masked_email::own_delete))
+        .route("/me/masked-addresses/domains", get(masked_email::own_domains))
+        .route("/me/masked-addresses/tokens", get(masked_email::tokens).post(masked_email::token_create))
+        .route("/me/masked-addresses/tokens/{id}", delete(masked_email::token_delete))
+        .route("/accounts/{account}/masked-addresses", get(masked_email::admin_list).post(masked_email::admin_create))
+        .route("/accounts/{account}/masked-addresses/{id}", patch(masked_email::admin_update).delete(masked_email::admin_delete))
+        .route("/accounts/{account}/masked-policy", get(masked_email::policy_get).put(masked_email::policy_put))
+        .route("/masked-email/config", get(masked_email::config_get).put(masked_email::config_put))
+        .route("/masked-email/session", get(masked_email::integration_session))
+        .route("/masked-email/jmap", post(masked_email::integration_jmap))
         .route("/me/ai/assist", post(models::assist))
         .route("/me/ai/replies", post(smart_reply::suggest))
         .route("/models", get(models::list).post(models::create))

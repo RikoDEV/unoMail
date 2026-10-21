@@ -34,6 +34,7 @@ mod calendar;
 mod contacts;
 mod email;
 mod mailbox;
+mod masked_email;
 mod mdn;
 pub mod objects;
 mod quota;
@@ -214,6 +215,7 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
                 "collationAlgorithms": [],
             },
             "urn:ietf:params:jmap:mail": mail_caps,
+            crate::masked_email::CAPABILITY: {},
             "urn:ietf:params:jmap:submission": submission_caps.clone(),
             "urn:ietf:params:jmap:websocket": { "url": ws::url(&state), "supportsPush": true },
             "urn:ietf:params:jmap:mdn": {},
@@ -230,6 +232,7 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
                 "isReadOnly": false,
                 "accountCapabilities": {
                     "urn:ietf:params:jmap:mail": mail_caps,
+                    crate::masked_email::CAPABILITY: {},
                     "urn:ietf:params:jmap:submission": submission_caps,
                     "urn:ietf:params:jmap:quota": {},
                     "urn:ietf:params:jmap:sieve": sieve::capability(),
@@ -239,6 +242,7 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
             }
         },
         "primaryAccounts": {
+            crate::masked_email::CAPABILITY: id,
             "urn:ietf:params:jmap:mail": id, "urn:ietf:params:jmap:submission": id, "urn:ietf:params:jmap:quota": id,
             "urn:ietf:params:jmap:sieve": id, "urn:ietf:params:jmap:contacts": id, "urn:ietf:params:jmap:calendars": id,
         },
@@ -345,6 +349,9 @@ impl Context<'_> {
 }
 
 async fn dispatch(ctx: &mut Context<'_>, name: &str, args: &Map<String, Value>) -> MethodResult {
+    if ctx.origin.starts_with("masked-token:") && !matches!(name,"Core/echo"|"MaskedEmail/get"|"MaskedEmail/query"|"MaskedEmail/set"|"MaskedEmail/changes") {
+        return Err(MethodError("forbidden","this credential can only manage masked addresses".into()));
+    }
     if name == "Core/echo" {
         return Ok(Value::Object(args.clone()));
     }
@@ -367,6 +374,10 @@ async fn dispatch(ctx: &mut Context<'_>, name: &str, args: &Map<String, Value>) 
         "Email/import" => email::import(ctx, args).await,
         "Thread/get" => email::thread_get(ctx, args).await,
         "Identity/get" => email::identity_get(ctx, args).await,
+        "MaskedEmail/get" => masked_email::get(ctx,args).await,
+        "MaskedEmail/query" => masked_email::query(ctx,args).await,
+        "MaskedEmail/set" => masked_email::set(ctx,args).await,
+        "MaskedEmail/changes" => objects::changes(ctx,args,"masked",'x').await,
         "EmailSubmission/set" => submission::set(ctx, args).await,
         "EmailSubmission/get" => submission::get(ctx, args).await,
         "MDN/send" => mdn::send(ctx, args).await,

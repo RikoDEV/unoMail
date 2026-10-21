@@ -37,6 +37,10 @@ fn text(value: &str, max: usize, what: &str) -> Result<String, ApiError> {
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct IdentityRow {
+    #[sqlx(skip)]
+    pub masked: bool,
+    #[sqlx(skip)]
+    pub available: bool,
     pub id: i64,
     pub name: String,
     pub email: String,
@@ -56,7 +60,7 @@ const IDENTITY_COLUMNS: &str = "id, name, email, reply_to, is_default, smtp_host
 
 impl IdentityRow {
     fn view(&self) -> Value {
-        json!({
+        let mut view = json!({
             "id": self.id,
             "name": self.name,
             "email": self.email,
@@ -71,7 +75,12 @@ impl IdentityRow {
                 "username": self.smtp_username,
                 "has_password": !self.smtp_password.is_empty(),
             })),
-        })
+        });
+        if self.masked {
+            view["masked"] = json!(true);
+            view["available"] = json!(self.available);
+        }
+        view
     }
 }
 
@@ -85,6 +94,8 @@ pub async fn identity_rows(state: &AppState, account: &crate::auth::Account) -> 
             .await?;
     if !rows.iter().any(|row| row.email == account.email) {
         let primary = IdentityRow {
+            masked: false,
+            available: true,
             id: 0,
             name: account.display_name.clone(),
             email: account.email.clone(),
@@ -99,6 +110,14 @@ pub async fn identity_rows(state: &AppState, account: &crate::auth::Account) -> 
         };
         let at = if primary.is_default { 0 } else { rows.len() };
         rows.insert(at, primary);
+    }
+    for row in &mut rows {
+        row.available=true;
+        if let Some(address)=Address::parse(&row.email){if let Some(owned)=crate::masked_email::owned(state,account.id,&address).await?{row.masked=true;row.available=owned;}}
+    }
+    let masks:Vec<(i64,String,bool,Option<i64>,bool)>=sqlx::query_as("SELECT m.id,m.email,m.enabled,m.expires_at,d.enabled FROM masked_addresses m JOIN domains d ON d.id=m.domain_id WHERE m.account_id=? ORDER BY m.id DESC").bind(account.id).fetch_all(&state.db).await?;
+    for (id,email,enabled,expires,domain) in masks{
+        if !rows.iter().any(|r|r.email==email){rows.push(IdentityRow{id:-id,name:String::new(),email:email.clone(),reply_to:email,signature_html:String::new(),is_default:false,smtp_host:None,smtp_port:None,smtp_security:None,smtp_username:String::new(),smtp_password:String::new(),masked:true,available:enabled && domain && expires.is_none_or(|t|t>now())});}
     }
     let signatures = new_message_signatures(&state.db, account.id).await?;
     for row in &mut rows {

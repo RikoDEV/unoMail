@@ -66,6 +66,9 @@ pub async fn resolve(app: &App, recipient: &Address) -> sqlx::Result<Resolution>
     if !is_local_domain(app, &recipient.domain).await? {
         return Ok(Resolution::NotLocal);
     }
+    if let Some(owner)=crate::masked_email::resolve(app,recipient).await? {
+        return Ok(match owner{Some(account_id)=>Resolution::Deliver(vec![Target::Local{account_id,address:recipient.without_tag().to_string()}]),None=>Resolution::NoSuchUser});
+    }
     if crate::security::filter::is_trap(app, &recipient.to_string()) {
         return Ok(Resolution::Deliver(vec![Target::Trap]));
     }
@@ -87,6 +90,10 @@ pub async fn resolve(app: &App, recipient: &Address) -> sqlx::Result<Resolution>
         }
         if !is_local_domain(app, &addr.domain).await? {
             targets.push(Target::Remote(addr));
+            continue;
+        }
+        if let Some(owner) = crate::masked_email::resolve(app,&addr).await? {
+            if let Some(account_id)=owner{targets.push(Target::Local{account_id,address:addr.without_tag().to_string()});}
             continue;
         }
         if let Some(list) = crate::lists::target(app, &addr).await? {
@@ -304,9 +311,14 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
     }
 
     let mut result: Result<(), StoreError> = Ok(());
+    let mask = if let Some(address)=Address::parse(d.recipient){
+        let email=address.without_tag().to_string();
+        let reserved:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM address_reservations WHERE email=? AND kind='masked')").bind(&email).fetch_one(&app.db).await?;
+        reserved.then_some(email)
+    }else{None};
     for (mailbox, flag_names) in &targets {
         let (flags, keywords) = split_flags(flag_names);
-        match app.store.append_with(d.account_id, *mailbox, &message, flags, None, &keywords).await {
+        match app.store.append_with_provenance(d.account_id, *mailbox, &message, flags, None, &keywords, mask.as_deref()).await {
             Ok(_) => {}
             Err(err) => {
                 result = Err(err);

@@ -101,6 +101,7 @@ pub async fn identity_allowed(app: &App, account: &Account, address: &Address) -
 
 /// True when `address` belongs to `account`: its own address, or an alias that delivers to it.
 pub async fn owns_address(app: &App, account: &Account, address: &Address) -> sqlx::Result<bool> {
+    if let Some(owned)=crate::masked_email::owned(app,account.id,address).await?{return Ok(owned);}
     let address = address.to_string();
     if address == account.email {
         return Ok(true);
@@ -131,6 +132,11 @@ pub struct Inbound<'a> {
 
 /// Accepts a message received from another mail server for local recipients.
 pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
+    for (_,targets) in msg.recipients{for target in targets{
+        if let Target::Local{address,..}=target{if let Some(address)=Address::parse(address){
+            match crate::masked_email::resolve(app,&address).await{Ok(Some(None))=>return Outcome::Rejected("550 5.1.1 Masked address is inactive".into()),Err(e)=>return internal("mask lookup failed",e),_=>{}}
+        }}
+    }}
     Metrics::inc(&app.metrics.messages_received);
     let remote = msg.ip.to_string();
     let reject = |reply: &str, detail: String| {
@@ -626,6 +632,12 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
             Ok(true) => {}
             Ok(false) => return Outcome::Rejected("550 5.7.1 From header rejected: not owned by authenticated user".into()),
             Err(err) => return internal("identity lookup failed", err),
+        }
+    }
+    for from in &from_addresses {
+        match crate::masked_email::owned(app,account.id,from).await {
+            Ok(Some(false))=>return Outcome::Rejected("550 5.7.1 Masked sender is inactive or not owned by this account".into()),
+            Err(e)=>return internal("mask sender lookup failed",e),_=>{}
         }
     }
     if received_count(sub.raw) > MAX_RECEIVED_HEADERS {

@@ -20,7 +20,8 @@ use crate::{
 const SYSTEM_KEYWORDS: [&str; 4] = ["$seen", "$answered", "$flagged", "$draft"];
 const MAX_KEYWORDS: usize = 30;
 /// Body properties that require parsing the stored message.
-const BODY_PROPERTIES: [&str; 16] = [
+const BODY_PROPERTIES: [&str; 18] = [
+    "maskedAddresses", "ownedAddresses",
     "bodyValues", "textBody", "htmlBody", "cc", "bcc", "replyTo", "messageId", "inReplyTo", "references", "sentAt", "headers", "unsubscribe", "security",
     "receiptRequestedBy", "receiptAutomaticAllowed", "smime",
 ];
@@ -155,6 +156,13 @@ pub async fn get(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodResu
             continue;
         };
         let mut out = summary(&message);
+        if need_body && message.account_id==ctx.account.id {
+            let delivered=crate::masked_email::delivery_addresses(ctx.app,ctx.account.id,message.id).await?;
+            let mut own:Vec<String>=sqlx::query_scalar("SELECT email FROM masked_addresses WHERE account_id=?").bind(ctx.account.id).fetch_all(&ctx.app.db).await?;
+            own.push(ctx.account.email.clone());own.extend(delivered.iter().cloned());
+            out.insert("maskedAddresses".into(),json!(delivered));
+            out.insert("ownedAddresses".into(),json!(own));
+        }
         if need_body {
             match ctx.app.store.read_blob(&message.blob_hash).await {
                 Ok(raw) => {
@@ -633,9 +641,10 @@ pub async fn identity_get(ctx: &mut Context<'_>, _args: &Map<String, Value>) -> 
     let rows = crate::api::personal::identity_rows(ctx.app, ctx.account).await?;
     let mut list: Vec<Value> = rows
         .iter()
+        .filter(|row|row.available)
         .map(|row| {
             let reply_to = if row.reply_to.is_empty() { Value::Null } else { json!([{ "name": null, "email": row.reply_to }]) };
-            json!({ "id": format!("i{}", row.id), "name": row.name, "email": row.email, "replyTo": reply_to, "bcc": null, "textSignature": "", "htmlSignature": row.signature_html, "mayDelete": row.id != 0 })
+            json!({ "id": format!("i{}", row.id), "name": row.name, "email": row.email, "replyTo": reply_to, "bcc": null, "textSignature": "", "htmlSignature": row.signature_html, "mayDelete": row.id > 0 })
         })
         .collect();
     for email in identities(ctx.app, ctx.account).await? {
@@ -1114,6 +1123,9 @@ pub(super) async fn prepare_email(ctx: &Context<'_>, message_id: i64) -> Result<
         .and_then(|a| a.address())
         .and_then(Address::parse)
         .ok_or_else(|| set_error("invalidEmail", "the message has no valid From address"))?;
+    if !crate::smtp::submit::identity_allowed(ctx.app,ctx.account,&sender).await.map_err(|_|set_error("serverFail","sender lookup failed"))?{
+        return Err(set_error("forbiddenToSend","the sending address is inactive or no longer belongs to this account"));
+    }
     let mut recipients: Vec<Address> = Vec::new();
     for list in [parsed.to(), parsed.cc(), parsed.bcc()].into_iter().flatten() {
         for entry in list.iter() {

@@ -37,7 +37,8 @@ pub async fn send(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodRes
     for (creation_id, spec) in args.get("send").and_then(Value::as_object).into_iter().flatten() {
         match send_one(ctx, spec).await {
             Ok(message_id) => {
-                sent.insert(creation_id.clone(), json!({ "finalRecipient": format!("rfc822; {}", ctx.account.email) }));
+                let masked=crate::masked_email::delivery_addresses(ctx.app,ctx.account.id,message_id).await.unwrap_or_default();
+                sent.insert(creation_id.clone(), json!({ "finalRecipient": format!("rfc822; {}", masked.first().unwrap_or(&ctx.account.email)) }));
                 // Remember that the receipt went out, so that nobody is asked twice.
                 let patch = args.get("onSuccessUpdateEmail").and_then(|u| u.get(format!("#{creation_id}"))).and_then(Value::as_object).cloned()
                     .unwrap_or_else(|| Map::from_iter([("keywords/$mdnsent".to_owned(), Value::Bool(true))]));
@@ -78,10 +79,13 @@ async fn send_one(ctx: &Context<'_>, spec: &Value) -> Result<i64, Value> {
     let parsed = MessageParser::default().parse_headers(&raw);
     let subject = parsed.as_ref().and_then(|m| m.subject()).unwrap_or("").to_owned();
     let original_id = parsed.as_ref().and_then(|m| m.message_id()).map(str::to_owned);
-    let me = Address::parse(&ctx.account.email).ok_or_else(|| set_error("forbiddenFrom", "invalid account address"))?;
+    let delivered=crate::masked_email::delivery_addresses(ctx.app,ctx.account.id,message_id).await.map_err(|_|set_error("serverFail","delivery lookup failed"))?;
+    let address=delivered.first().unwrap_or(&ctx.account.email);
+    let me = Address::parse(address).ok_or_else(|| set_error("forbiddenFrom", "invalid account address"))?;
+    if !submit::owns_address(ctx.app,ctx.account,&me).await.map_err(|_|set_error("serverFail","sender lookup failed"))?{return Err(set_error("forbiddenFrom","the masked delivery address is inactive"));}
     let boundary = format!("mdn-{}", random_token());
     let text = spec["textBody"].as_str().map(sanitize_text).unwrap_or_else(|| {
-        format!("The message \"{}\" sent to {} was {kind} on {}.", sanitize_line(&subject), ctx.account.email, rfc2822_now())
+        format!("The message \"{}\" sent to {} was {kind} on {}.", sanitize_line(&subject), me, rfc2822_now())
     });
     let mut out = format!(
         "From: <{me}>\r\nTo: <{recipient}>\r\nSubject: {subject}\r\nDate: {date}\r\nMessage-ID: <{id}@{domain}>\r\nAuto-Submitted: {auto}\r\nMIME-Version: 1.0\r\n\
