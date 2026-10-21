@@ -7,7 +7,8 @@ import Inbox from '@mui/icons-material/Inbox';
 import MenuIcon from '@mui/icons-material/Menu';
 import Security from '@mui/icons-material/Security';
 import Tune from '@mui/icons-material/Tune';
-import { Alert, Box, Button, Card, CardContent, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, LinearProgress, Paper, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, SwipeableDrawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, LinearProgress, Paper, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { SWIPE } from './swipe';
 import { useEffect, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiltersCard } from './settingsFilters';
@@ -252,9 +253,9 @@ export default function SettingsPage() {
       />
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {compact ? (
-          <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
+          <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
             {nav}
-          </Drawer>
+          </SwipeableDrawer>
         ) : (
           nav
         )}

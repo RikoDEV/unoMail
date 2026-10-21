@@ -153,7 +153,9 @@ Besides reading and writing mail, the web client offers:
   accounts* ends every session. Each account's sessions stay separate on the server; the
   browser keeps the others in an `HttpOnly`, `SameSite=Strict` cookie.
 - **Navigation.** The name in the header leads back to the inbox from every page. The
-  sidebar switch reduces the sidebar to a strip of icons instead of hiding it.
+  sidebar switch reduces the sidebar to a strip of icons instead of hiding it. On phones the
+  side menu (mail, calendar, settings, administration) opens with a swipe from the left edge
+  and closes with a swipe back.
 - **Attachment previews** for images, text files and PDFs, next to the download link. Text
   (HTML included) is shown as plain text, PDFs are drawn by pdf.js without running anything
   inside them.

@@ -17,7 +17,8 @@ import ListAlt from '@mui/icons-material/ListAlt';
 import People from '@mui/icons-material/People';
 import Schedule from '@mui/icons-material/Schedule';
 import Security from '@mui/icons-material/Security';
-import { Box, Drawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Paper, Tooltip, useMediaQuery, useTheme } from '@mui/material';
+import { Box, SwipeableDrawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Paper, Tooltip, useMediaQuery, useTheme } from '@mui/material';
+import { SWIPE } from '../swipe';
 import { type ReactElement, useEffect, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from '../app';
@@ -99,9 +100,9 @@ export default function AdminApp() {
       />
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {compact ? (
-          <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
+          <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
             {nav}
-          </Drawer>
+          </SwipeableDrawer>
         ) : (
           nav
         )}

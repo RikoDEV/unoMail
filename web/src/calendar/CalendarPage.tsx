@@ -8,9 +8,10 @@ import Today from '@mui/icons-material/Today';
 import MoreVert from '@mui/icons-material/MoreVert';
 import Sync from '@mui/icons-material/Sync';
 import {
-  Box, Button, Checkbox, Drawer, Fab, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Select, Snackbar, Stack, ToggleButton, ToggleButtonGroup, Typography,
+  Box, Button, Checkbox, SwipeableDrawer, Fab, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Select, Snackbar, Stack, ToggleButton, ToggleButtonGroup, Typography,
   useMediaQuery, useTheme,
 } from '@mui/material';
+import { SWIPE } from '../swipe';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { del, get, postRaw, errorText } from '../api';
@@ -423,9 +424,9 @@ export default function CalendarPage() {
 
   const wrapNav = (nav: ReactElement) =>
     compact ? (
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}>
+      <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}>
         {nav}
-      </Drawer>
+      </SwipeableDrawer>
     ) : (
       nav
     );

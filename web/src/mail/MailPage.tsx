@@ -25,9 +25,10 @@ import Snooze from '@mui/icons-material/Snooze';
 import Tune from '@mui/icons-material/Tune';
 import SendIcon from '@mui/icons-material/Send';
 import {
-  Alert, Badge, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Drawer, Fab, IconButton, InputBase, LinearProgress, List,
+  Alert, Badge, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, LinearProgress, List,
   ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Snackbar, Stack, Tab, Tabs, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
+import { SWIPE } from '../swipe';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -888,9 +889,9 @@ export default function MailPage() {
 
   const wrapNav = (nav: ReactElement) =>
     compact ? (
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} ModalProps={{ keepMounted: true }} slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}>
+      <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} ModalProps={{ keepMounted: true }} slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}>
         {nav}
-      </Drawer>
+      </SwipeableDrawer>
     ) : (
       nav
     );
