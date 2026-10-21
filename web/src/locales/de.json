@@ -1948,5 +1948,7 @@
   "Legend": "Legende",
   "Total": "Gesamt",
   "{{count}} messages_one": "{{count}} Nachricht",
-  "{{count}} messages_other": "{{count}} Nachrichten"
+  "{{count}} messages_other": "{{count}} Nachrichten",
+  "Sending in the last hour:": "In der letzten Stunde gesendet:",
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Dieses Postfach kann keine E-Mails mehr senden; eingehende E-Mails kommen weiterhin an. Wenden Sie sich an Ihren Administrator."
 }

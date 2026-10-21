@@ -19,6 +19,12 @@ use crate::{
     vacation::{self, Vacation},
 };
 
+/// Mail sent over the last hour against this mailbox's hourly sending limits.
+pub async fn sending(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
+    let (messages, recipients, max_messages, max_recipients, blocked) = crate::security::outbound::usage(&state, session.account.id).await?;
+    Ok(Json(json!({ "sent_messages": messages, "sent_recipients": recipients, "max_messages_per_hour": max_messages, "max_recipients_per_hour": max_recipients, "blocked": blocked })))
+}
+
 pub async fn vacation_get(State(state): State<AppState>, session: Session) -> JsonResult<Vacation> {
     Ok(Json(vacation::load(&state, session.account.id).await?))
 }

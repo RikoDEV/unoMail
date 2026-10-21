@@ -38,6 +38,19 @@ async fn hour_totals(app: &App, account_id: i64) -> sqlx::Result<(i64, i64, i64)
     .await
 }
 
+/// The account's sending over the last hour against its effective hourly limits:
+/// (messages, recipients, message limit, recipient limit, blocked).
+pub async fn usage(app: &App, account_id: i64) -> sqlx::Result<(i64, i64, i64, i64, bool)> {
+    let (blocked, max_messages, max_recipients): (bool, Option<i64>, Option<i64>) =
+        sqlx::query_as("SELECT outbound_blocked, max_messages_per_hour, max_recipients_per_hour FROM accounts WHERE id = ?")
+            .bind(account_id)
+            .fetch_one(&app.db)
+            .await?;
+    let (messages, recipients, _) = hour_totals(app, account_id).await?;
+    let rt = app.rt();
+    Ok((messages, recipients, max_messages.unwrap_or(rt.outbound_max_messages_per_hour), max_recipients.unwrap_or(rt.outbound_max_recipients_per_hour), blocked))
+}
+
 /// Accounts for one submission with `recipients` recipients, refusing it when the account is
 /// blocked or the submission exceeds its hourly allowance.
 pub async fn register_submission(app: &App, account: &Account, recipients: usize) -> anyhow::Result<Result<(), Refusal>> {

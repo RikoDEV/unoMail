@@ -14,7 +14,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FiltersCard } from './settingsFilters';
 import { SignaturesCard } from './settingsSignatures';
 import { ApiError, del, formatBytes, formatTime, get, post, put, errorText } from './api';
-import { useLoad } from './admin/common';
+import { UsageBar, useLoad } from './admin/common';
 import { useAuth } from './app';
 import { AppearanceCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListCard, NotificationsCard, SendingCard, SmimeCard, TemplatesCard } from './settingsWebmail';
 import { Copyright, TopBar, useTitle } from './shell';
@@ -97,6 +97,15 @@ function VacationCard() {
   );
 }
 
+/** Mail sent over the last hour against this mailbox's hourly sending limits. */
+interface Sending {
+  sent_messages: number;
+  sent_recipients: number;
+  max_messages_per_hour: number;
+  max_recipients_per_hour: number;
+  blocked: boolean;
+}
+
 export default function SettingsPage() {
   useTitle(t('Settings'));
   const [params, setParams] = useSearchParams();
@@ -104,6 +113,7 @@ export default function SettingsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { account } = useAuth();
   const sessions = useLoad(() => get<SessionRow[]>('/api/auth/sessions'), []);
+  const sending = useLoad(() => get<Sending>('/api/me/sending'), []);
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -149,7 +159,17 @@ export default function SettingsPage() {
         <Typography variant="body2">
           {t('Storage:')} {t('{{used}} of {{quota}}', { used: formatBytes(account.used_bytes), quota: account.quota_bytes ? formatBytes(account.quota_bytes) : t('unlimited') })}
         </Typography>
-        {account.quota_bytes > 0 && <LinearProgress variant="determinate" value={used} sx={{ mt: 1, height: 8, borderRadius: 1.5, maxWidth: 520 }} />}
+        {account.quota_bytes > 0 && <LinearProgress variant="determinate" value={used} color={used >= 90 ? 'error' : 'primary'} sx={{ mt: 1, height: 8, borderRadius: 1.5, maxWidth: 520 }} />}
+        {sending.data && (
+          <Box sx={{ mt: 2, maxWidth: 520 }}>
+            <Typography variant="body2" sx={{ mb: 0.5 }}>{t('Sending in the last hour:')}</Typography>
+            <Stack spacing={1}>
+              <Box><UsageBar label={t('Messages')} used={sending.data.sent_messages} limit={sending.data.max_messages_per_hour} /></Box>
+              <Box><UsageBar label={t('Recipients')} used={sending.data.sent_recipients} limit={sending.data.max_recipients_per_hour} /></Box>
+            </Stack>
+            {sending.data.blocked && <Alert severity="error" sx={{ mt: 1 }}>{t('This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.')}</Alert>}
+          </Box>
+        )}
       </CardContent>
     </Card>
   );

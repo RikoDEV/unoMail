@@ -159,6 +159,9 @@ Besides reading and writing mail, the web client offers:
   sidebar switch reduces the sidebar to a strip of icons instead of hiding it. On phones the
   side menu (mail, calendar, settings, administration) opens with a swipe from the left edge
   and closes with a swipe back.
+- **Account usage** (Settings → General): storage against the quota, and mail sent over the
+  last hour against the mailbox's hourly sending limits, with a notice when the mailbox has
+  been blocked from sending.
 - **Attachment previews** for images, text files and PDFs, next to the download link. Text
   (HTML included) is shown as plain text, PDFs are drawn by pdf.js without running anything
   inside them.

@@ -1990,5 +1990,7 @@
   "Total": "Total",
   "{{count}} messages_one": "{{count}} message",
   "{{count}} messages_many": "{{count}} messages",
-  "{{count}} messages_other": "{{count}} messages"
+  "{{count}} messages_other": "{{count}} messages",
+  "Sending in the last hour:": "Envoyés au cours de la dernière heure :",
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Cette boîte ne peut plus envoyer de messages ; le courrier entrant arrive toujours. Contactez votre administrateur."
 }

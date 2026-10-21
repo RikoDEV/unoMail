@@ -2032,5 +2032,7 @@
   "{{count}} messages_one": "{{count}} zpráva",
   "{{count}} messages_few": "{{count}} zprávy",
   "{{count}} messages_many": "{{count}} zprávy",
-  "{{count}} messages_other": "{{count}} zpráv"
+  "{{count}} messages_other": "{{count}} zpráv",
+  "Sending in the last hour:": "Odesláno za poslední hodinu:",
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Z této schránky už nelze odesílat poštu; příchozí pošta stále dorazí. Obraťte se na správce."
 }

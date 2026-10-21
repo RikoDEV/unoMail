@@ -2032,5 +2032,7 @@
   "{{count}} messages_one": "{{count}} wiadomość",
   "{{count}} messages_few": "{{count}} wiadomości",
   "{{count}} messages_many": "{{count}} wiadomości",
-  "{{count}} messages_other": "{{count}} wiadomości"
+  "{{count}} messages_other": "{{count}} wiadomości",
+  "Sending in the last hour:": "Wysłane w ciągu ostatniej godziny:",
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Ta skrzynka nie może już wysyłać poczty; poczta przychodząca nadal dociera. Skontaktuj się z administratorem."
 }
