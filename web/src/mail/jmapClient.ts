@@ -54,6 +54,9 @@ export interface BodyPart {
 }
 
 export interface EmailFull extends EmailSummary {
+  /** Trusted delivery-envelope provenance, never inferred from message headers. */
+  maskedAddresses?: string[];
+  ownedAddresses?: string[];
   cc: EmailAddress[] | null;
   bcc: EmailAddress[] | null;
   replyTo: EmailAddress[] | null;

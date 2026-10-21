@@ -19,6 +19,7 @@ import { AppearanceCard, EncryptionCard, IdentitiesCard, InboxCard, MessageListC
 import { Copyright, TopBar, useTitle } from './shell';
 import { AppPasswordsCard, TwoStepCard } from './settingsSecurity';
 import { SmartReplySettings, SummaryCardsSettings } from './settingsSummaryCards';
+import { MaskedAddresses } from './settingsMaskedEmail';
 
 import { t } from './i18n';
 interface SessionRow {
@@ -213,6 +214,7 @@ export default function SettingsPage() {
     { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><AppearanceCard /></> },
     { id: 'inbox', label: t('Inbox'), icon: <Inbox />, content: <><InboxCard /><SummaryCardsSettings /><SmartReplySettings /></> },
     { id: 'identities', label: t('Identities'), icon: <Badge />, content: <IdentitiesCard /> },
+    { id: 'masked-addresses', label: t('Masked addresses'), icon: <Badge />, content: <MaskedAddresses /> },
     { id: 'signatures', label: t('Signatures'), icon: <Draw />, content: <SignaturesCard /> },
     { id: 'templates', label: t('Templates'), icon: <Article />, content: <TemplatesCard /> },
     { id: 'filters', label: t('Filters'), icon: <FilterAlt />, content: <FiltersCard /> },

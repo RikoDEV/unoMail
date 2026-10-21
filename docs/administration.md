@@ -1,5 +1,102 @@
 # Administration
 
+## Masked addresses
+
+Users manage their own disposable addresses in Settings → Masked addresses.
+Administration → Masked addresses (`/admin/masked-addresses`) lets administrators load a
+managed mailbox, create/edit/disable/delete its masks, override its quota and grant
+additional hosted domains. Domain administrators remain confined to ordinary accounts
+in their managed domains and can grant only domains they administer.
+
+Super administrators set the server default quota (100), permit or stop new mask creation,
+and close selected domains to new masks. These creation switches do not disable existing
+active addresses. Blank account quota overrides inherit the server default; zero blocks
+new masks. Active, disabled and expired records count toward the quota; deleted address
+reservations do not. Creation is limited to 30 attempts per account per hour.
+
+The account's primary domain is allowed by default when active and not closed to new masks.
+Additional domains require an explicit grant. Sharing an ordinary alias does not grant
+permission to create new addresses in its domain. Masks point directly to an account ID,
+so changing its primary email does not break them. A mask cannot authenticate as a mailbox.
+
+Addresses contain 128 random bits encoded in 26 lowercase base32 characters. An optional
+prefix of up to 37 lowercase letters, digits or underscores is followed by an underscore
+and the random suffix. Database reservations coordinate masks, mailboxes, aliases and list
+addresses, including list control addresses. Deleted masks retain only an address reservation
+to prevent reassignment and catch-all reactivation. Expiration is checked on every lookup;
+a background worker publishes expiration changes for synchronization every 30 seconds.
+Messages accepted before deactivation are retained. Mask state is checked again before
+accepting inbound DATA and when sending or releasing a scheduled reply. Read receipts and
+vacation replies use the mask; quoted message content and user-configured signatures are
+still whatever the user chose to include.
+
+### REST and JMAP
+
+Browser sessions use the management API and its usual CSRF protection:
+
+```text
+GET/POST      /api/me/masked-addresses
+PATCH/DELETE  /api/me/masked-addresses/{id}
+GET           /api/me/masked-addresses/domains
+GET/POST      /api/me/masked-addresses/tokens
+DELETE        /api/me/masked-addresses/tokens/{id}
+```
+
+Create accepts `description`, `for_domain`, `integration_url`, `prefix`, `domain`,
+`expires_at` (Unix UTC seconds or null) and `enabled` (default true). Updates accept only
+`description`, `for_domain`, `integration_url` and `enabled`. Integration URLs must be HTTPS
+without embedded credentials. Metadata and tokens are scoped to the authenticated account.
+
+JMAP advertises the unoMail-specific `urn:unomail:params:jmap:masked-email` capability and
+implements `MaskedEmail/get`, `MaskedEmail/query`, `MaskedEmail/set` and `MaskedEmail/changes`.
+Normal JMAP clients use `/jmap/api` with their existing credentials. Mask-only integrations
+use a separately scoped Bearer token and these endpoints:
+
+```text
+GET   /api/masked-email/session
+POST  /api/masked-email/jmap
+Authorization: Bearer um_mask_...
+```
+
+These credentials cannot authenticate to the normal mail APIs, read messages, send mail
+or manage another account's masks. At most ten unexpired tokens can exist per account.
+The UI issues 90-day tokens; the token API accepts an expiration up to one year away.
+Only a token hash is stored. Revocation and account/domain disablement take effect on the
+next request. Session discovery returns an account ID without revealing the primary address.
+This is an explicit integration API, not a claim of compatibility with every password manager
+or Stalwart's separate vendor namespace.
+
+Example request (`accountId` comes from session discovery):
+
+```json
+{
+  "using": ["urn:ietf:params:jmap:core", "urn:unomail:params:jmap:masked-email"],
+  "methodCalls": [["MaskedEmail/set", {
+    "accountId": "a1",
+    "create": {"new": {"description": "Shopping", "forDomain": "https://shop.example"}}
+  }, "create"]]
+}
+```
+
+JMAP properties use camelCase: `emailPrefix`, `emailDomain`, `forDomain`, `url` and
+RFC 3339 `expiresAt`. The server supplies `email`, `accountId`, `createdAt` and `createdBy`.
+Creation provenance comes from the credential's integration name, not a client-supplied value.
+Query is scoped by the top-level `accountId`, uses creation-descending order and supports
+pagination. Changes support state-based synchronization; creation/update/destroy responses
+use normal RFC 8620 per-object success/error shapes.
+
+### CLI
+
+The server binary exposes the same domain service to administrators with access to its
+configuration and data directory:
+
+```sh
+unomail masked-email list alice@example.com
+unomail masked-email create alice@example.com '{"description":"Shopping","prefix":"shop"}'
+unomail masked-email update alice@example.com 1 '{"enabled":false}'
+unomail masked-email delete alice@example.com 1
+```
+
 ## AI models (Administration → Models)
 
 Super administrators can add, edit, disable, test and delete models at `/admin/models`.

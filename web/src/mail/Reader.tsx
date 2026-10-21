@@ -435,6 +435,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
             </Typography>
           )}
           <SecurityWarnings email={email} />
+          {email.maskedAddresses?.map((address) => <Typography key={address} variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>{t('Received via {{address}}', { address })}</Typography>)}
           <SmimeBadges status={email.smime} />
           {!encrypted && !email.smime?.encrypted && <SummaryCards key={`cards-${email.id}`} emailId={email.id} />}
           {!encrypted && !email.smime?.encrypted && <AiAssist key={email.id} email={email} />}

@@ -13,6 +13,8 @@ export interface IdentitySmtp {
 }
 
 export interface Identity {
+  masked?: boolean;
+  available?: boolean;
   /** 0 for the account's own address before it was first saved. */
   id: number;
   name: string;

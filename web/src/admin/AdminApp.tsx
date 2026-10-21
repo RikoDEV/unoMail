@@ -29,6 +29,7 @@ import { DomainDetail, Domains } from './Domains';
 import { ApiDocs, Diagnostics, Dmarc } from './Insights';
 import { Integrations } from './Integrations';
 import { Models } from './Models';
+import { MaskedEmails } from './MaskedEmails';
 import { Logs, Queue } from './QueueLogs';
 import { ServerSettings } from './ServerSettings';
 import { SmtpAccess } from './SmtpAccess';
@@ -51,6 +52,7 @@ const NAV: NavItem[] = [
   { path: 'domains', label: t('Domains'), icon: <Dns /> },
   { path: 'mailboxes', label: t('Mailboxes'), icon: <People /> },
   { path: 'aliases', label: t('Aliases'), icon: <AlternateEmail /> },
+  { path: 'masked-addresses', label: t('Masked addresses'), icon: <AlternateEmail /> },
   { path: 'lists', label: t('Mailing lists'), icon: <Groups /> },
   { path: 'certificates', label: t('Certificates'), icon: <Security />, superOnly: true },
   { path: 'queue', label: t('Queue'), icon: <Schedule />, superOnly: true },
@@ -111,6 +113,7 @@ export default function AdminApp() {
             <Route path="domains/:id" element={<DomainDetail />} />
             <Route path="mailboxes" element={<Mailboxes />} />
             <Route path="aliases" element={<Aliases />} />
+            <Route path="masked-addresses" element={<MaskedEmails />} />
             {isSuper && <Route path="certificates" element={<Certificates />} />}
             {isSuper && <Route path="queue" element={<Queue />} />}
             <Route path="logs" element={<Logs />} />

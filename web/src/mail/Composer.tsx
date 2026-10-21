@@ -333,8 +333,10 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
       .then(([list, signatureList]) => {
         if (cancelled) return;
         const hints = (initial.fromHint ?? []).map((address) => address.toLowerCase());
-        const chosen = list.find((candidate) => hints.includes(candidate.email)) ?? list.find((candidate) => candidate.is_default) ?? list[0];
-        setIdentities(list);
+        const intended = initial.from?.email;
+        const unavailable: Identity | undefined = intended && !list.some((candidate) => candidate.email === intended) ? { id: -Number.MAX_SAFE_INTEGER, name: '', email: intended, reply_to: intended, signature_html: '', is_default: false, smtp: null, masked: true, available: false } : undefined;
+        const chosen = intended ? list.find((candidate) => candidate.email === intended) ?? unavailable : list.find((candidate) => hints.includes(candidate.email)) ?? list.find((candidate) => candidate.is_default) ?? list[0];
+        setIdentities(unavailable ? [...list, unavailable] : list);
         setSignatures(signatureList);
         setIdentityId(chosen?.id ?? null);
         // A draft being continued keeps the signature it has (or the lack of one).
@@ -345,7 +347,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     return () => {
       cancelled = true;
     };
-  }, [initial.fromHint, applySignature, defaultSignature, draftEmailId]);
+  }, [initial.fromHint, initial.from, applySignature, defaultSignature, draftEmailId]);
 
   const currentDraft = useCallback((): Draft => {
     let html = editor.current?.innerHTML ?? '';
@@ -355,9 +357,9 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     // Whatever was typed or pasted is sanitized again before it leaves the browser.
     html = sanitizeEmailHtml(html, (cid) => `cid:${cid}`);
     const used = attachments.filter((a) => !a.cid || html.includes(`cid:${a.cid}`));
-    const from = identity ? { name: identity.name || null, email: identity.email } : undefined;
+    const from = identity ? { name: identity.name || null, email: identity.email } : initial.from;
     return { to, cc, bcc, subject, html, attachments: used, inReplyTo: initial.inReplyTo, references: initial.references, from, replyTo: identity?.reply_to || undefined };
-  }, [to, cc, bcc, subject, attachments, initial.inReplyTo, initial.references, identity]);
+  }, [to, cc, bcc, subject, attachments, initial.inReplyTo, initial.references, initial.from, identity]);
 
   const markDirty = () => {
     dirty.current = true;
@@ -526,7 +528,8 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
   }
 
   async function send(at?: Date) {
-    const sender = identity?.email ?? account?.email;
+    if (identity?.available === false) { setError(t('Selected sending address is unavailable. Choose another address.')); return; }
+    const sender = identity?.email ?? initial.from?.email ?? account?.email;
     const draft = { ...currentDraft(), receiptTo: receipt ? sender : undefined, smime: smimeAvailable ? smime : undefined };
     const undoSeconds = at ? undefined : (prefs.undo_send_seconds ?? 5);
     const options: SendOptions | undefined = at ? { sendAt: at } : undoSeconds ? { holdFor: undoSeconds } : undefined;
@@ -645,6 +648,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
       </Stack>
       <Box sx={{ display: minimized ? 'none' : 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
+        {identity?.available === false && <Alert severity="warning">{t('Selected sending address is unavailable. Choose another address.')}</Alert>}
         {encrypt && (
           <Alert severity="success" icon={<Lock />} sx={{ py: 0 }}>
             {t('Body and attachments will be encrypted')}{isUnlocked() ? t(' and signed') : ''}{t('. The subject stays readable.')}
@@ -657,7 +661,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
             </Typography>
             <Select variant="standard" disableUnderline fullWidth value={identityId ?? ''} onChange={(e) => changeIdentity(Number(e.target.value))} SelectDisplayProps={{ 'aria-label': t('From') }} sx={{ fontSize: 14 }}>
               {identities.map((candidate) => (
-                <MenuItem key={candidate.id} value={candidate.id}>
+                <MenuItem key={candidate.id} value={candidate.id} disabled={candidate.available === false}>
                   {candidate.name ? `${candidate.name} <${candidate.email}>` : candidate.email}
                 </MenuItem>
               ))}

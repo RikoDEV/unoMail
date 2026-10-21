@@ -2,6 +2,21 @@
 
 Besides reading and writing mail, the web client offers:
 
+- **Masked addresses** (Settings → Masked addresses): create a separate, randomly generated
+  address for each website. Incoming mail uses the existing mailbox and its normal spam and
+  Sieve processing. Give the address a description, website label, optional prefix, domain
+  and expiration. The website label is informational, not a sender restriction. Addresses
+  and expiry dates are immutable; descriptions and website metadata can be edited.
+  Disable/re-enable an address or delete it permanently; existing messages remain available.
+  Disabled, expired and deleted masks reject incoming mail even on catch-all domains.
+  The reader shows **Received via …**, including for Bcc mail, using trusted SMTP envelope
+  metadata. Reply, Reply all and Smart Reply choose that mask as the sender. It is also
+  available in the composer's From selector. An unavailable mask remains selected with an
+  error rather than falling back to the primary address. Sending and scheduled release
+  recheck ownership and expiry. Mask identities start with a blank display name and no
+  primary-address signature; an explicit identity/signature can be configured separately.
+  **Mask integrations** creates revocable, mask-only JMAP tokens shown once and expiring
+  after 90 days. See [administration](administration.md#masked-addresses) for API details.
 - **Smart replies.** With an AI model configured, **Suggest replies** below a received
   message generates up to three response options. It uses the model selected in the
   message's AI tools and the email's language by default; **Reply language** selects another.

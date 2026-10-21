@@ -194,7 +194,7 @@ test.describe('message list, reader and search', () => {
     await page.getByRole('button', { name: 'Account menu' }).click();
     await page.getByRole('menuitem', { name: 'Settings' }).click();
     const sections = page.getByRole('navigation', { name: 'Settings sections' });
-    await expect(sections.getByRole('button')).toHaveText(['General', 'Inbox', 'Identities', 'Signatures', 'Templates', 'Filters', 'Out of office', 'Security']);
+    await expect(sections.getByRole('button')).toHaveText(['General', 'Inbox', 'Identities', 'Masked addresses', 'Signatures', 'Templates', 'Filters', 'Out of office', 'Security']);
     await expect(page.getByRole('heading', { name: 'General', level: 2 })).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Message list density' })).toBeVisible();
     await expect(page.getByLabel('Sieve script')).toHaveCount(0);

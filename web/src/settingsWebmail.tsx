@@ -170,7 +170,7 @@ export function IdentitiesCard() {
           </TableRow>
         </TableHead>
         <TableBody>
-          {items.map((identity) => (
+          {items.filter((identity) => !identity.masked || identity.id > 0).map((identity) => (
             <TableRow key={`${identity.id}-${identity.email}`}>
               <TableCell>{identity.name || '—'}</TableCell>
               <TableCell>

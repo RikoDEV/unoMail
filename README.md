@@ -38,6 +38,7 @@ and built-in spam and virus filtering. Written in Rust and React.
 - Condensed or expanded message list with quick actions, drag and drop and bulk selection
 - Gmail-style search operators, filters (Sieve), templates, signatures and identities
 - Out-of-office replies, read receipts and one-click unsubscribe
+- Disposable masked addresses with automatic reply identities, expiration and scoped integration tokens
 - On-demand AI summaries and translations with administrator-configured models
 - Context-aware AI reply suggestions that open editable, auto-saved reply drafts
 - Purchase cards with order totals, shipment tracking and updates from related emails

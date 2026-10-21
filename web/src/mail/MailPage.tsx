@@ -87,11 +87,14 @@ function draftFor(action: ReaderAction, email: EmailFull, ownAddress: string, ac
   if (action === 'forward') {
     return { ...EMPTY_DRAFT, subject: prefixed(email.subject, 'Fwd:'), html: quoted, answer: true };
   }
-  const others = action === 'replyAll' ? [...(email.to ?? []), ...(email.cc ?? [])].filter((a) => a.email.toLowerCase() !== ownAddress.toLowerCase()) : [];
+  const owned = new Set([ownAddress, ...(email.ownedAddresses ?? []), ...(email.maskedAddresses ?? [])].map((a) => a.toLowerCase()));
+  const others = action === 'replyAll' ? [...(email.to ?? []), ...(email.cc ?? [])].filter((a) => !owned.has(a.email.toLowerCase())) : [];
+  const mask = email.maskedAddresses?.[0];
   return {
     ...EMPTY_DRAFT,
     // Answer from the identity the message was addressed to, if the user has one for it.
-    fromHint: [...(email.to ?? []), ...(email.cc ?? [])].map((a) => a.email),
+    fromHint: mask ? [mask] : [...(email.to ?? []), ...(email.cc ?? [])].map((a) => a.email),
+    from: mask ? { name: null, email: mask } : undefined,
     to: sender.map(formatAddress).join(', '),
     cc: others.map(formatAddress).join(', '),
     subject: prefixed(email.subject, 'Re:'),
