@@ -12,7 +12,8 @@ Super administrators set the server default quota (100), permit or stop new mask
 and close selected domains to new masks. These creation switches do not disable existing
 active addresses. Blank account quota overrides inherit the server default; zero blocks
 new masks. Active, disabled and expired records count toward the quota; deleted address
-reservations do not. Creation is limited to 30 attempts per account per hour.
+reservations do not. Creation is limited to 30 masks per account per hour; a request that fails (quota
+reached, domain disabled, database error) does not count.
 
 The account's primary domain is allowed by default when active and not closed to new masks.
 Additional domains require an explicit grant. Sharing an ordinary alias does not grant
