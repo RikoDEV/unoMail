@@ -2,15 +2,19 @@
 //! (checked with the provider), or ALTCHA (a proof of work checked here, nothing leaves the
 //! server).
 
-use std::{collections::HashMap, net::IpAddr, sync::LazyLock};
+use std::{
+    net::IpAddr,
+    sync::LazyLock,
+    time::{Duration, Instant},
+};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use parking_lot::Mutex;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::{
     app::AppState,
+    expiring::Expiring,
     util::{ct_eq, hmac_sha256, now, random_bytes, sha256_hex},
 };
 
@@ -18,13 +22,13 @@ use crate::{
 const ALTCHA_TTL_SECS: i64 = 600;
 /// Upper bound of the secret number; a browser tries half of them on average.
 const ALTCHA_MAX_NUMBER: u64 = 100_000;
-/// Answered challenges remembered until they expire, so each is good for one sign-in.
+/// How many answered challenges can be remembered at once.
 const MAX_SPENT: usize = 100_000;
 
 /// Signs ALTCHA challenges. Challenges are short-lived, so a key per process is enough.
 static ALTCHA_KEY: LazyLock<[u8; 32]> = LazyLock::new(random_bytes::<32>);
-/// challenge → expiry.
-static SPENT: LazyLock<Mutex<HashMap<String, i64>>> = LazyLock::new(Default::default);
+/// Answered challenges, remembered until they expire so that each is good for one sign-in.
+static SPENT: LazyLock<Expiring<()>> = LazyLock::new(|| Expiring::new(Duration::from_secs(ALTCHA_TTL_SECS as u64), MAX_SPENT));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provider {
@@ -119,12 +123,8 @@ fn altcha_verify(answer: &str) -> bool {
     if expires <= now || payload.number > ALTCHA_MAX_NUMBER || sha256_hex(format!("{}{}", payload.salt, payload.number).as_bytes()) != payload.challenge {
         return false;
     }
-    let mut spent = SPENT.lock();
-    if spent.len() >= MAX_SPENT {
-        spent.retain(|_, at| *at > now);
-    }
-    // Still full of live challenges: refuse rather than forget one that could be replayed.
-    spent.len() < MAX_SPENT && spent.insert(payload.challenge, expires).is_none()
+    // When full of live challenges this refuses, rather than forget one that could be replayed.
+    SPENT.insert_until(payload.challenge, (), Instant::now() + Duration::from_secs((expires - now) as u64))
 }
 
 #[derive(Deserialize)]

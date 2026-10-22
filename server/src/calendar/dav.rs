@@ -24,7 +24,7 @@
 use std::{
     collections::HashMap,
     sync::LazyLock,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use axum::{
@@ -34,7 +34,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
-use parking_lot::Mutex;
 
 use super::{
     carddav, ical,
@@ -44,6 +43,7 @@ use crate::{
     api::PeerAddr,
     app::AppState,
     auth::{self, Account, AuthError, Protocol},
+    expiring::Expiring,
     util::sha256_hex,
 };
 
@@ -58,10 +58,10 @@ pub(super) const NAMESPACES: &str = r#"xmlns:D="DAV:" xmlns:C="urn:ietf:params:x
 /// every request of a synchronising client. Keyed by a hash of address and password; an entry
 /// is only honoured while the credential is still what it was: the same password hash (and
 /// still no second factor), or the same app password not revoked since.
-static VERIFIED: LazyLock<Mutex<HashMap<String, Verified>>> = LazyLock::new(Default::default);
+static VERIFIED: LazyLock<Expiring<Verified>> = LazyLock::new(|| Expiring::new(AUTH_CACHE_TTL, 10_000));
 
-/// Account id, the password hash or app password that was verified, and when.
-type Verified = (i64, String, Instant);
+/// Account id, and the password hash or app password that was verified.
+type Verified = (i64, String);
 
 async fn still_valid(state: &AppState, account: &Account, credential: &str) -> bool {
     match credential.strip_prefix("app:").and_then(|id| id.parse::<i64>().ok()) {
@@ -84,7 +84,7 @@ async fn authenticate(state: &AppState, headers: &HeaderMap, ip: std::net::IpAdd
         .and_then(|pair| pair.split_once(':').map(|(user, password)| (user.trim().to_lowercase(), password.to_owned())));
     let Some((user, password)) = credentials else { return Err(unauthorized()) };
     let key = sha256_hex(format!("{user}\0{password}").as_bytes());
-    let cached = VERIFIED.lock().get(&key).filter(|(_, _, at)| at.elapsed() < AUTH_CACHE_TTL).map(|(id, hash, _)| (*id, hash.clone()));
+    let cached = VERIFIED.get(&key);
     if let Some((id, credential)) = cached
         && let Ok(Some(account)) = Account::by_id(&state.db, id).await
         && account.enabled
@@ -98,11 +98,9 @@ async fn authenticate(state: &AppState, headers: &HeaderMap, ip: std::net::IpAdd
                 auth::Credential::Password => account.password_hash.clone(),
                 auth::Credential::AppPassword(id) => format!("app:{id}"),
             };
-            let mut verified = VERIFIED.lock();
-            verified.retain(|_, (_, _, at)| at.elapsed() < AUTH_CACHE_TTL);
-            if verified.len() < 10_000 {
-                verified.insert(key, (account.id, fingerprint, Instant::now()));
-            }
+            // A stale entry for the same credentials is replaced.
+            VERIFIED.remove(&key);
+            VERIFIED.insert(key, (account.id, fingerprint));
             Ok(account)
         }
         Err(AuthError::RateLimited) => Err((StatusCode::TOO_MANY_REQUESTS, "too many failed attempts").into_response()),

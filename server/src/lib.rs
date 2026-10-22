@@ -22,6 +22,7 @@ pub mod dmarc_outgoing;
 pub mod dmarc_reports;
 pub mod dns;
 pub mod error;
+pub mod expiring;
 pub mod http;
 pub mod imap;
 pub mod import;

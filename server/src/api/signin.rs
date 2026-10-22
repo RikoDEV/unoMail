@@ -2,7 +2,6 @@
 //! authenticator apps, passkeys, recovery codes and app passwords.
 
 use std::{
-    collections::HashMap,
     sync::LazyLock,
     time::{Duration, Instant},
 };
@@ -13,7 +12,6 @@ use axum::{
     http::HeaderMap,
 };
 use axum_extra::extract::cookie::CookieJar;
-use parking_lot::Mutex;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -22,6 +20,7 @@ use crate::{
     app::AppState,
     auth::{self, Account, AuthError, Protocol},
     error::ApiError,
+    expiring::Expiring,
     twofactor::{self, RelyingParty, b64url, unb64url},
     util::{now, random_token, sha256_hex},
 };
@@ -31,10 +30,10 @@ const MAX_SECOND_FACTOR_TRIES: u32 = 5;
 const MAX_PASSKEYS: i64 = 20;
 const MAX_APP_PASSWORDS: i64 = 50;
 
-/// Sign-ins waiting for their second step: token hash → (account, network, tries, since).
-/// A sign-in waiting for its second step: account, address, failed tries, start.
-type Pending = (i64, std::net::IpAddr, u32, Instant);
-static PENDING: LazyLock<Mutex<HashMap<String, Pending>>> = LazyLock::new(Default::default);
+/// A sign-in waiting for its second step: account, address, failed tries.
+type Pending = (i64, std::net::IpAddr, u32);
+/// Sign-ins waiting for their second step, by token hash.
+static PENDING: LazyLock<Expiring<Pending>> = LazyLock::new(|| Expiring::new(PENDING_TTL, 50_000));
 
 fn relying_party(state: &AppState) -> Option<RelyingParty> {
     RelyingParty::from_url(&state.cfg.public_url())
@@ -84,13 +83,8 @@ pub async fn begin(state: &AppState, account: &Account, ip: std::net::IpAddr) ->
     }
     let token = random_token();
     let key = sha256_hex(token.as_bytes());
-    {
-        let mut pending = PENDING.lock();
-        pending.retain(|_, (.., since)| since.elapsed() < PENDING_TTL);
-        if pending.len() > 50_000 {
-            return Err(ApiError::RateLimited);
-        }
-        pending.insert(key.clone(), (account.id, ip, 0, Instant::now()));
+    if !PENDING.insert(key.clone(), (account.id, ip, 0)) {
+        return Err(ApiError::RateLimited);
     }
     let passkey = assertion_options(state, account.id, &format!("login:{key}")).await?;
     Ok(Some(json!({
@@ -156,9 +150,8 @@ async fn check_passkey(state: &AppState, account_id: Option<i64>, answer: &Passk
 
 // --- Signing in with a passkey alone -----------------------------------------------------------
 
-/// Passkey sign-ins waiting for their answer: token hash → (address, its network, since).
-type PasskeyLogins = HashMap<String, (std::net::IpAddr, String, Instant)>;
-static PASSKEY_LOGINS: LazyLock<Mutex<PasskeyLogins>> = LazyLock::new(Default::default);
+/// Passkey sign-ins waiting for their answer: token hash → (address, its network).
+static PASSKEY_LOGINS: LazyLock<Expiring<(std::net::IpAddr, String)>> = LazyLock::new(|| Expiring::new(PENDING_TTL, MAX_PASSKEY_LOGINS));
 /// Open passkey sign-ins per network (an address, or an IPv6 /64) and in all, so that challenges cannot be hoarded. Every
 /// visit to the sign-in page opens one (for the autofill), and an office behind one address
 /// has many visitors.
@@ -172,14 +165,10 @@ pub async fn passkey_login_options(State(state): State<AppState>, ClientIp(ip): 
     let rp = relying_party(&state).ok_or_else(|| ApiError::bad("passkeys need the web client to be reached by a host name, not an IP address"))?;
     let token = random_token();
     let key = sha256_hex(token.as_bytes());
-    {
-        let mut open = PASSKEY_LOGINS.lock();
-        open.retain(|_, (.., since)| since.elapsed() < PENDING_TTL);
-        let network = crate::auth::network(ip);
-        if open.len() >= MAX_PASSKEY_LOGINS || open.values().filter(|(_, from, _)| *from == network).count() >= MAX_PASSKEY_LOGINS_PER_ADDRESS {
-            return Err(ApiError::RateLimited);
-        }
-        open.insert(key.clone(), (ip, network, Instant::now()));
+    let network = crate::auth::network(ip);
+    let opened = PASSKEY_LOGINS.insert_limited(key.clone(), (ip, network.clone()), Instant::now() + PENDING_TTL, |(_, from)| *from == network, MAX_PASSKEY_LOGINS_PER_ADDRESS);
+    if !opened {
+        return Err(ApiError::RateLimited);
     }
     let challenge = state.challenges.issue(&format!("passkey-login:{key}"));
     Ok(Json(json!({
@@ -204,7 +193,7 @@ pub struct PasskeyLogin {
 /// the PIN or biometrics that unlock it), so no second step follows.
 pub async fn passkey_login(State(state): State<AppState>, ClientIp(ip): ClientIp, headers: HeaderMap, jar: CookieJar, Json(input): Json<PasskeyLogin>) -> Result<(CookieJar, Json<Value>), ApiError> {
     let key = sha256_hex(input.token.as_bytes());
-    let started = PASSKEY_LOGINS.lock().remove(&key).filter(|(from, _, since)| *from == ip && since.elapsed() < PENDING_TTL);
+    let started = PASSKEY_LOGINS.take(&key).filter(|(from, _)| *from == ip);
     if started.is_none() {
         return Err(ApiError::bad("the sign-in has expired; try again"));
     }
@@ -238,8 +227,7 @@ pub struct SecondFactor {
 /// The second step of a sign-in: an authenticator code, a passkey, or a recovery code.
 pub async fn second_factor(State(state): State<AppState>, ClientIp(ip): ClientIp, headers: HeaderMap, jar: CookieJar, Json(input): Json<SecondFactor>) -> Result<(CookieJar, Json<Value>), ApiError> {
     let key = sha256_hex(input.token.as_bytes());
-    let pending = PENDING.lock().get(&key).copied().filter(|(.., since)| since.elapsed() < PENDING_TTL);
-    let Some((account_id, started_from, tries, _)) = pending else { return Err(ApiError::bad("the sign-in has expired; enter your password again")) };
+    let Some((account_id, started_from, tries)) = PENDING.get(&key) else { return Err(ApiError::bad("the sign-in has expired; enter your password again")) };
     if started_from != ip {
         return Err(ApiError::bad("the sign-in has expired; enter your password again"));
     }
@@ -258,13 +246,10 @@ pub async fn second_factor(State(state): State<AppState>, ClientIp(ip): ClientIp
         return Err(ApiError::bad("enter a code or use a passkey"));
     };
     if !ok {
-        {
-            let mut pending = PENDING.lock();
-            if tries + 1 >= MAX_SECOND_FACTOR_TRIES {
-                pending.remove(&key);
-            } else if let Some(entry) = pending.get_mut(&key) {
-                entry.2 += 1;
-            }
+        if tries + 1 >= MAX_SECOND_FACTOR_TRIES {
+            PENDING.remove(&key);
+        } else {
+            PENDING.update(&key, |entry| entry.2 += 1);
         }
         tokio::time::sleep(state.limiter.tarpit(ip)).await;
         crate::db::audit(&state.db, &account.email, "login.second_factor_failed", "web", &ip.to_string(), "").await;
@@ -272,7 +257,7 @@ pub async fn second_factor(State(state): State<AppState>, ClientIp(ip): ClientIp
         let passkey = if input.passkey.is_some() { assertion_options(&state, account.id, &format!("login:{key}")).await? } else { None };
         return Err(ApiError::Conflict(if passkey.is_some() { "that did not work; try again".into() } else { "the code is not correct".into() }));
     }
-    PENDING.lock().remove(&key);
+    PENDING.remove(&key);
     state.limiter.forgive(&account.email, ip);
     let (token, csrf_token) = super::auth::start_session(&state, &account, ip, &headers).await?;
     let how = if input.code.is_some() { "totp" } else if input.recovery_code.is_some() { "recovery code" } else { "passkey" };
@@ -289,8 +274,7 @@ pub struct TokenOnly {
 
 pub async fn passkey_retry(State(state): State<AppState>, Json(input): Json<TokenOnly>) -> JsonResult<Value> {
     let key = sha256_hex(input.token.as_bytes());
-    let pending = PENDING.lock().get(&key).copied().filter(|(.., since)| since.elapsed() < PENDING_TTL);
-    let Some((account_id, ..)) = pending else { return Err(ApiError::bad("the sign-in has expired; enter your password again")) };
+    let Some((account_id, ..)) = PENDING.get(&key) else { return Err(ApiError::bad("the sign-in has expired; enter your password again")) };
     Ok(Json(json!({ "passkey": assertion_options(&state, account_id, &format!("login:{key}")).await? })))
 }
 

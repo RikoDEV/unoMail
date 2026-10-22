@@ -2,7 +2,6 @@
 //! administration.
 
 use std::{
-    collections::HashMap,
     sync::LazyLock,
     time::{Duration, Instant},
 };
@@ -14,7 +13,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
-use parking_lot::Mutex;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -22,6 +20,7 @@ use super::{ClientIp, JsonResult, Session};
 use crate::{
     app::AppState,
     error::ApiError,
+    expiring::Expiring,
     oauth::{self, OauthConfig},
     util::{ct_eq, random_token, sanitize_line},
 };
@@ -37,9 +36,8 @@ const MAX_RESULTS: usize = 10_000;
 /// outcomes, and must not crowd out everybody else's.
 const MAX_RESULTS_PER_NETWORK: usize = 50;
 
-/// id → (outcome, network of the browser, created).
-type Results = HashMap<String, (Value, String, Instant)>;
-static RESULTS: LazyLock<Mutex<Results>> = LazyLock::new(Default::default);
+/// id → (outcome, network of the browser).
+static RESULTS: LazyLock<Expiring<(Value, String)>> = LazyLock::new(|| Expiring::new(RESULT_TTL, MAX_RESULTS));
 
 fn state_cookie(state: &AppState, value: String, max_age_secs: i64) -> Cookie<'static> {
     Cookie::build((STATE_COOKIE, value))
@@ -69,14 +67,9 @@ fn redirect(location: &str) -> Response {
 /// Sends the browser to the sign-in page, which picks `outcome` up from [`result`].
 fn hand_over(state: &AppState, ip: std::net::IpAddr, jar: CookieJar, outcome: Value) -> (CookieJar, Response) {
     let id = random_token();
-    {
-        let mut results = RESULTS.lock();
-        results.retain(|_, (.., at)| at.elapsed() < RESULT_TTL);
-        let network = crate::auth::network(ip);
-        if results.len() >= MAX_RESULTS || results.values().filter(|(_, from, _)| *from == network).count() >= MAX_RESULTS_PER_NETWORK {
-            return (jar, redirect("/login"));
-        }
-        results.insert(id.clone(), (outcome, network, Instant::now()));
+    let network = crate::auth::network(ip);
+    if !RESULTS.insert_limited(id.clone(), (outcome, network.clone()), Instant::now() + RESULT_TTL, |(_, from)| *from == network, MAX_RESULTS_PER_NETWORK) {
+        return (jar, redirect("/login"));
     }
     (jar.add(result_cookie(state, id, RESULT_TTL.as_secs() as i64)), redirect("/login?sso=1"))
 }
@@ -98,7 +91,7 @@ pub async fn info(State(state): State<AppState>) -> JsonResult<Value> {
 pub async fn result(State(state): State<AppState>, jar: CookieJar) -> (CookieJar, Json<Value>) {
     let id = jar.get(RESULT_COOKIE).map(|c| c.value().to_owned()).unwrap_or_default();
     let jar = jar.remove(result_cookie(&state, String::new(), 0));
-    let outcome = RESULTS.lock().remove(&id).filter(|(.., at)| at.elapsed() < RESULT_TTL).map_or_else(|| json!({}), |(outcome, ..)| outcome);
+    let outcome = RESULTS.take(&id).map_or_else(|| json!({}), |(outcome, _)| outcome);
     (jar, Json(outcome))
 }
 
