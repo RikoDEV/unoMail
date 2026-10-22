@@ -47,6 +47,7 @@ pub mod smtp;
 pub mod smime;
 pub mod snapshot;
 pub mod snooze;
+pub mod subscriptions;
 pub mod store;
 pub mod summary_cards;
 pub mod sysstat;

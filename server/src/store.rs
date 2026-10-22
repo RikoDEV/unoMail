@@ -474,6 +474,7 @@ impl Store {
         // Parsing and text extraction happen before the write turn is taken.
         let parsed = parse_metadata(raw);
         let indexed = crate::search::extract(raw, &hash);
+        let offers_unsubscribe = crate::subscriptions::offered(raw);
         let size = raw.len() as i64;
         let mut keywords = keywords.to_vec();
         keywords.sort();
@@ -561,6 +562,7 @@ impl Store {
         Self::record(&mut *tx, account_id, "mailbox", mailbox_id, None, "updated").await?;
         // Searchable at once, in the same transaction.
         crate::search::store_in(&mut tx, &hash, &indexed).await?;
+        crate::subscriptions::store(&mut *tx, &hash, offers_unsubscribe).await?;
         if let Some(address)=masked_to{sqlx::query("INSERT INTO message_mask_delivery(message_id,email) VALUES(?,?)").bind(id).bind(address).execute(&mut *tx).await?;}
         // Durable, local-first card extraction happens off the delivery path. Bound the queue
         // during large imports; older messages can still be processed explicitly in the reader.

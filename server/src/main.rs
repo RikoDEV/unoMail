@@ -222,6 +222,7 @@ async fn main() -> anyhow::Result<()> {
     }
     tokio::spawn(smtp::queue::run(app.clone()));
     tokio::spawn(unomail::search::backfill(app.clone()));
+    tokio::spawn(unomail::subscriptions::backfill(app.clone()));
     tokio::spawn(unomail::summary_cards::jobs::run(app.clone()));
     tokio::spawn(unomail::jmap::push::run(app.clone()));
     tokio::spawn(unomail::jmap::submission::run(app.clone()));

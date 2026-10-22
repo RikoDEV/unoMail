@@ -105,6 +105,9 @@ async fn incoming_mail_is_sorted_into_inbox_categories() {
     assert_eq!(bad[0][1]["type"], "unsupportedFilter");
 
     assert_eq!(api.get("/api/me/categories").await.body, json!({ "general": 1, "offers": 1, "communities": 1, "notifications": 1, "forums": 1 }));
+    let latest = api.get("/api/me/categories/latest").await.body;
+    assert_eq!(latest["forums"]["subject"], "[dev] New API");
+    assert_eq!(latest["forums"]["senders"].as_array().map(Vec::len), Some(1), "{latest}");
     // Categories are not labels: they do not show up among the user's labels.
     assert_eq!(api.get("/api/me/labels").await.body, json!([]));
     assert_eq!(api.get("/api/me/label-details").await.body, json!([]));
@@ -256,6 +259,16 @@ async fn unsubscribing_uses_what_the_sender_offers() {
 
     assert_eq!(api.post("/api/me/unsubscribe", json!({ "email_id": id("By link") })).await.body, json!({ "method": "link", "url": "https://shop.example/preferences" }));
     assert_eq!(api.post("/api/me/unsubscribe", json!({ "email_id": id("Personal") })).await.status, StatusCode::BAD_REQUEST);
+
+    // Manage subscriptions lists the senders that offer a way out, not personal mail.
+    let senders = |list: Value| -> Vec<String> { list.as_array().unwrap().iter().map(|s| s["sender"].as_str().unwrap().to_owned()).collect() };
+    let listed = senders(api.get("/api/me/subscriptions").await.body);
+    assert!(listed.contains(&"ads@shop.example".to_owned()) && listed.contains(&"news@list.example".to_owned()), "{listed:?}");
+    assert!(!listed.contains(&"anna@partner.example".to_owned()));
+    let by_sender = api.post("/api/me/subscriptions/unsubscribe", json!({ "sender": "ads@shop.example" })).await;
+    assert_eq!(by_sender.body, json!({ "method": "link", "url": "https://shop.example/preferences" }));
+    assert!(!senders(api.get("/api/me/subscriptions").await.body).contains(&"ads@shop.example".to_owned()), "an unsubscribed sender is hidden");
+    assert_eq!(api.post("/api/me/subscriptions/unsubscribe", json!({ "sender": "anna@partner.example" })).await.status, StatusCode::NOT_FOUND);
     assert_eq!(api.post("/api/me/unsubscribe", json!({ "email_id": "m999999" })).await.status, StatusCode::NOT_FOUND);
     // Nobody can unsubscribe (or send mail) on another user's behalf.
     let carol = Api::logged_in(&env, "carol@example.org").await;

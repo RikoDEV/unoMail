@@ -172,7 +172,7 @@ export function readableOn(background: string): string {
 
 /** Inbox categories, in tab order. `general` is everything without a category. */
 export const CATEGORIES = [
-  { id: 'general', label: t('General') },
+  { id: 'general', label: t('Primary') },
   { id: 'offers', label: t('Offers') },
   { id: 'communities', label: t('Communities') },
   { id: 'notifications', label: t('Notifications') },
@@ -181,6 +181,13 @@ export const CATEGORIES = [
 export type CategoryName = (typeof CATEGORIES)[number]['id'];
 
 export const categoryCounts = () => get<Record<CategoryName, number>>('/api/me/categories');
+
+/** The newest unread mail of a category: who sent it and what it is about. */
+export interface CategoryLatest {
+  senders: string[];
+  subject: string;
+}
+export const categoryLatest = () => get<Partial<Record<CategoryName, CategoryLatest>>>('/api/me/categories/latest');
 
 /** What the inbox categories learned from the user moving messages between them. */
 export interface CategoryLearning {

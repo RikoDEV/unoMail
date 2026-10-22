@@ -227,6 +227,7 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("get", "/api/me/label-details", "webmail", "Labels with their colours", "user"),
     ("put", "/api/me/label-details", "webmail", "Define a label or change its colour", "user"),
     ("get", "/api/me/categories", "webmail", "Unread conversations per inbox category", "user"),
+    ("get", "/api/me/categories/latest", "webmail", "Senders and subject of the newest unread mail per inbox category", "user"),
     ("get", "/api/me/categories/learning", "webmail", "What the inbox categories have learned from the user's corrections", "user"),
     ("delete", "/api/me/categories/learning", "webmail", "Forget what the inbox categories have learned", "user"),
     ("get", "/api/me/newest-unread", "webmail", "The newest unread inbox message, for new-mail notifications", "user"),
@@ -251,6 +252,8 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("get", "/api/me/calendars/{id}/export", "calendar", "Download a calendar as an iCalendar file", "user"),
     ("post", "/api/me/calendars/{id}/import", "calendar", "Import an iCalendar file", "user"),
     ("post", "/api/me/unsubscribe", "webmail", "Unsubscribe from the mailing list a message came from", "user"),
+    ("get", "/api/me/subscriptions", "webmail", "Senders of recent mail that offers a way to unsubscribe", "user"),
+    ("post", "/api/me/subscriptions/unsubscribe", "webmail", "Unsubscribe from a sender and hide it from the subscriptions", "user"),
 ];
 
 pub fn document(hostname: &str) -> Value {

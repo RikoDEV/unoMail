@@ -209,6 +209,32 @@ pub async fn category_counts(State(state): State<AppState>, session: Session) ->
     Ok(Json(Value::Object(out)))
 }
 
+/// The newest unread mail of each inbox category, for the preview line under the category tabs:
+/// up to three senders, newest first, and the subject of the newest message.
+pub async fn category_latest(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT COALESCE((SELECT k.keyword FROM message_keywords k WHERE k.message_id = m.id AND k.keyword >= '$cat_' AND k.keyword < '$cat`' LIMIT 1), '$cat_general') AS category,
+                m.from_name, m.from_addr, m.subject
+         FROM messages m
+         WHERE m.mailbox_id = (SELECT id FROM mailboxes WHERE account_id = ?1 AND role = 'inbox') AND m.account_id = ?1 AND m.seen = 0
+         ORDER BY m.internal_date DESC LIMIT 500",
+    )
+    .bind(session.account.id)
+    .fetch_all(&state.db)
+    .await?;
+    let mut out = Map::new();
+    for (keyword, from_name, from_addr, subject) in rows {
+        let Some(name) = keyword.strip_prefix(categories::PREFIX).filter(|name| categories::valid_name(name)) else { continue };
+        let sender = if from_name.trim().is_empty() { from_addr } else { from_name };
+        let entry = out.entry(name.to_owned()).or_insert_with(|| json!({ "senders": [], "subject": subject }));
+        let senders = entry["senders"].as_array_mut().expect("senders is an array");
+        if senders.len() < 3 && !sender.is_empty() && !senders.iter().any(|s| s == &sender) {
+            senders.push(json!(sender));
+        }
+    }
+    Ok(Json(Value::Object(out)))
+}
+
 /// What the inbox categories have learned from the user's corrections.
 pub async fn category_learning(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
     let learned = categories::counts(&state.db, session.account.id).await?;
@@ -324,6 +350,10 @@ pub struct UnsubscribeRequest {
 /// both, a link for the user to open.
 pub async fn unsubscribe(State(state): State<AppState>, session: Session, Json(request): Json<UnsubscribeRequest>) -> JsonResult<Value> {
     let id = crate::jmap::parse_id(&request.email_id, 'm').ok_or(ApiError::NotFound)?;
+    unsubscribe_message(&state, &session, id).await
+}
+
+async fn unsubscribe_message(state: &AppState, session: &Session, id: i64) -> JsonResult<Value> {
     // Only for the user's own mail: the request is made (or the mail sent) in their name.
     let message = state.store.message(session.account.id, id).await?;
     let raw = state.store.read_blob(&message.blob_hash).await?;
@@ -370,6 +400,25 @@ pub async fn unsubscribe(State(state): State<AppState>, session: Session, Json(r
         None if options.one_click.is_some() => Err(ApiError::bad("the sender's unsubscribe service did not accept the request")),
         None => Err(ApiError::bad("this message does not offer a way to unsubscribe")),
     }
+}
+
+/// The user's subscriptions, for the Manage subscriptions page.
+pub async fn subscriptions(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
+    Ok(Json(Value::Array(crate::subscriptions::list(&state.db, session.account.id).await?)))
+}
+
+#[derive(Deserialize)]
+pub struct UnsubscribeSenderRequest {
+    sender: String,
+}
+
+/// Unsubscribes from a sender using its newest mail that offers a way, then hides the sender
+/// from the subscriptions. A link the user still has to open counts too: the page is theirs now.
+pub async fn unsubscribe_sender(State(state): State<AppState>, session: Session, Json(request): Json<UnsubscribeSenderRequest>) -> JsonResult<Value> {
+    let id = crate::subscriptions::newest_offering(&state.db, session.account.id, &request.sender).await?.ok_or(ApiError::NotFound)?;
+    let outcome = unsubscribe_message(&state, &session, id).await?;
+    crate::subscriptions::mark_unsubscribed(&state.db, session.account.id, &request.sender).await?;
+    Ok(outcome)
 }
 
 #[cfg(test)]

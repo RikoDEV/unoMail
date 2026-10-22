@@ -40,5 +40,7 @@
   "{{count}} unread_one": "{{count}} unread",
   "{{matching}} of {{count}} rules_one": "{{matching}} of {{count}} rule",
   "{{count}} people_one": "{{count}} person",
-  "{{count}} seconds_one": "{{count}} second"
+  "{{count}} seconds_one": "{{count}} second",
+  "{{count}} new_one": "{{count}} new",
+  "{{count}} new_other": "{{count}} new"
 }

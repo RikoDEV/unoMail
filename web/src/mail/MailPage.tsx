@@ -1,12 +1,17 @@
 import Add from '@mui/icons-material/Add';
 import AllInbox from '@mui/icons-material/AllInbox';
 import Archive from '@mui/icons-material/Archive';
+import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
 import Delete from '@mui/icons-material/Delete';
 import Drafts from '@mui/icons-material/Drafts';
 import Edit from '@mui/icons-material/Edit';
 import CalendarMonth from '@mui/icons-material/CalendarMonth';
 import Contacts from '@mui/icons-material/Contacts';
 import Extension from '@mui/icons-material/Extension';
+import ForumOutlined from '@mui/icons-material/ForumOutlined';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
+import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
+import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
 import Folder from '@mui/icons-material/Folder';
 import FolderShared from '@mui/icons-material/FolderShared';
 import Inbox from '@mui/icons-material/Inbox';
@@ -25,11 +30,13 @@ import Search from '@mui/icons-material/Search';
 import Snooze from '@mui/icons-material/Snooze';
 import Tune from '@mui/icons-material/Tune';
 import SendIcon from '@mui/icons-material/Send';
+import UnsubscribeIcon from '@mui/icons-material/Unsubscribe';
 import {
   Alert, Badge, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, LinearProgress, List,
   ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Snackbar, Stack, Tab, Tabs, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { SWIPE } from '../swipe';
+import { Subscriptions } from './Subscriptions';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -40,7 +47,7 @@ import { usePrefs } from '../prefs';
 import { Copyright, TopBar, useTitle } from '../shell';
 import { cachedList, cachedMailboxes, cachedThread, cacheList, cacheMailboxes, cacheThread, openCache } from './cache';
 import { Composer, type SentInfo } from './Composer';
-import { CATEGORIES, type CategoryName, categoryCounts, exportUrl, importMessages, LABEL_COLORS, type LabelDetail, listLabelDetails, saveLabel } from './extra';
+import { CATEGORIES, type CategoryLatest, type CategoryName, categoryCounts, categoryLatest, exportUrl, importMessages, LABEL_COLORS, type LabelDetail, listLabelDetails, saveLabel } from './extra';
 import { flushOutbox, openOutbox, pendingCount, performOrQueue, queuedPendingFiles } from './outbox';
 import { sweepPendingFiles } from './pendingFiles';
 import {
@@ -57,6 +64,14 @@ import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
 import { AttachmentPreview, type PreviewFile } from './Preview';
 import { parseMailto } from './mailto';
 import { pageNotifier } from './notifications';
+
+const CATEGORY_ICONS: Record<CategoryName, ReactElement> = {
+  general: <Inbox />,
+  offers: <LocalOfferOutlined />,
+  communities: <PeopleOutlined />,
+  notifications: <InfoOutlined />,
+  forums: <ForumOutlined />,
+};
 import { parseQuery, withScope } from './searchQuery';
 
 import { t, uiLocale } from '../i18n';
@@ -154,10 +169,17 @@ export default function MailPage() {
   // Inbox categories (General, Offers, ...) and their unread counts.
   const [category, setCategoryTab] = useState<CategoryName>('general');
   const [counts, setCounts] = useState<Partial<Record<CategoryName, number>>>({});
+  const [latest, setLatest] = useState<Partial<Record<CategoryName, CategoryLatest>>>({});
+  const refreshCategories = useCallback(() => {
+    void categoryCounts().then(setCounts).catch(() => {});
+    void categoryLatest().then(setLatest).catch(() => {});
+  }, []);
   // Selection in the list: ids of the listed conversations, or everything in the folder.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allInFolder, setAllInFolder] = useState(false);
   const [bulkMenu, setBulkMenu] = useState<{ anchor: HTMLElement; kind: 'move' | 'label' } | null>(null);
+  const [selectMenu, setSelectMenu] = useState<HTMLElement | null>(null);
+  const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
   const [rowMenu, setRowMenu] = useState<RowMenuTarget | null>(null);
   const [threadVersion, setThreadVersion] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -179,6 +201,8 @@ export default function MailPage() {
   const label = mailboxSlug?.startsWith('label:') ? decodeLabel(mailboxSlug.slice(6)) : null;
   // "all" is the virtual All mail folder: every message except those in Trash and Junk.
   const allMail = mailboxSlug === 'all' && !mailbox;
+  // "subscriptions" is the Manage subscriptions page, shown in place of the message list.
+  const subscriptionsPage = mailboxSlug === 'subscriptions' && !mailbox;
   const otherThan = useMemo(
     () => (allMail ? ['trash', 'junk'].map((role) => mailboxes.find((m) => m.role === role)?.id).filter((id): id is string => Boolean(id)) : undefined),
     [allMail, mailboxes],
@@ -186,7 +210,7 @@ export default function MailPage() {
   const unreadInbox = mailboxes.find((m) => m.role === 'inbox')?.unreadEmails ?? 0;
   useTitle(
     thread ? thread[0]?.subject || t('(no subject)') : null,
-    serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : mailbox && folderName(mailbox),
+    serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : subscriptionsPage ? t('Subscriptions') : mailbox && folderName(mailbox),
     unreadInbox > 0 && t('{{count}} unread', { count: unreadInbox }),
   );
   const slug = label ? `label:${encodeURIComponent(label)}` : allMail ? 'all' : (mailbox?.id ?? 'inbox');
@@ -261,7 +285,7 @@ export default function MailPage() {
       setLoading(true);
       try {
         const result = await queryEmails({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory, position, limit: PAGE_SIZE });
-        if (categorised) void categoryCounts().then(setCounts).catch(() => {});
+        if (categorised) refreshCategories();
         // A slower, older response must not overwrite a newer one.
         if (seq !== requestSeq.current) return;
         setOffline(false);
@@ -284,7 +308,7 @@ export default function MailPage() {
         if (seq === requestSeq.current) setLoading(false);
       }
     },
-    [mailbox?.id, allMail, otherThan, label, serverSearch, searchFilter, activeCategory, categorised],
+    [mailbox?.id, allMail, otherThan, label, serverSearch, searchFilter, activeCategory, categorised, refreshCategories],
   );
 
   useEffect(() => {
@@ -518,18 +542,18 @@ export default function MailPage() {
   }, []);
 
   /** Message ids covered by the current selection. */
-  async function selectionIds(): Promise<string[]> {
-    if (allInFolder) return queryAllIds({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory });
+  async function selectionIds(all = allInFolder): Promise<string[]> {
+    if (all) return queryAllIds({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory });
     const groups = await Promise.all(emails.filter((email) => selected.has(email.id)).map(conversationIds));
     return [...new Set(groups.flat())];
   }
 
   /** Applies one action to everything that is selected. */
-  async function bulk(action: 'archive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'move' | 'label', argument?: string) {
+  async function bulk(action: 'archive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'move' | 'label', argument?: string, all = allInFolder) {
     setBulkMenu(null);
-    const count = allInFolder ? total : selected.size;
+    const count = all ? total : selected.size;
     try {
-      const ids = await selectionIds();
+      const ids = await selectionIds(all);
       if (ids.length === 0) return;
       let wasQueued = false;
       if (action === 'read' || action === 'unread') {
@@ -601,7 +625,7 @@ export default function MailPage() {
           await setCategory(await conversationIds(email), moved);
           setEmails((current) => current.filter((e) => e.threadId !== email.threadId));
           setNotice(t('Moved to {{label}}. New mail from this sender will go there too.', { label: CATEGORIES.find((c) => c.id === moved)?.label }));
-          void categoryCounts().then(setCounts).catch(() => {});
+          refreshCategories();
           return;
         }
         const destination = target.mailbox;
@@ -1009,6 +1033,10 @@ export default function MailPage() {
                 <ListItemIcon sx={{ minWidth: 40 }}><AllInbox /></ListItemIcon>
                 <ListItemText primary={t('All mail')} primaryTypographyProps={{ noWrap: true }} />
               </ListItemButton>)}
+              {tip(t('Manage subscriptions'), <ListItemButton selected={subscriptionsPage} {...linkTo('/mail/subscriptions')} sx={{ mb: 0.25 }} {...named(t('Manage subscriptions'))}>
+                <ListItemIcon sx={{ minWidth: 40 }}><UnsubscribeIcon /></ListItemIcon>
+                <ListItemText primary={t('Manage subscriptions')} primaryTypographyProps={{ noWrap: true }} />
+              </ListItemButton>)}
               <ListItemButton className="mini-hide" onClick={() => setNewFolder('')}>
                 <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
                 <ListItemText primary={t('New folder')} />
@@ -1110,8 +1138,12 @@ export default function MailPage() {
             <Copyright placement="sidebar" className="mini-hide" sx={{ mt: account ? 0 : 'auto', px: 2, pt: account ? 1 : 3, pb: 2, flexShrink: 0 }} />
           </Box>,
         )}
+        {subscriptionsPage ? <Subscriptions /> : (
         <Paper elevation={0} sx={{ width: { xs: '100%', md: threadId ? 400 : '100%' }, flexShrink: { md: threadId ? 0 : 1 }, flex: threadId ? undefined : 1, display: { xs: threadId ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, overflow: 'hidden', minWidth: 0 }}>
           <Stack direction="row" alignItems="center" sx={{ pl: 0.5, pr: 2, py: 0.5, minHeight: 48 }}>
+            <Typography component="h1" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
+              {serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : (mailbox ? folderName(mailbox) : '')}
+            </Typography>
             <Checkbox
               size="small"
               inputProps={{ 'aria-label': t('Select all conversations') }}
@@ -1122,7 +1154,11 @@ export default function MailPage() {
                 setAllInFolder(false);
                 setSelected(e.target.checked ? new Set(visible.map((email) => email.id)) : new Set());
               }}
+              sx={{ mr: -1 }}
             />
+            <IconButton size="small" aria-label={t('Select')} aria-haspopup="menu" disabled={visible.length === 0} onClick={(e) => setSelectMenu(e.currentTarget)} sx={{ width: 20, borderRadius: 1 }}>
+              <ArrowDropDown fontSize="small" />
+            </IconButton>
             {selected.size > 0 ? (
               <Stack direction="row" alignItems="center" sx={{ flex: 1, minWidth: 0 }} role="toolbar" aria-label={t('Actions for the selection')}>
                 <Tooltip title={t('Archive')}><IconButton aria-label={t('Archive selected')} onClick={() => void bulk('archive')}><Archive /></IconButton></Tooltip>
@@ -1142,16 +1178,32 @@ export default function MailPage() {
               </Stack>
             ) : (
               <>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ flex: 1 }} component="h1" noWrap>
-                  {serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : (mailbox ? folderName(mailbox) : '')}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                  {t('{{shown}} of {{total}}', { shown: visible.length, total })}
-                </Typography>
-                <Tooltip title={t('Refresh')}><IconButton aria-label={t('Refresh')} onClick={() => { void load(0); void refreshMailboxes(); }}><Refresh /></IconButton></Tooltip>
+                <Tooltip title={t('Refresh')}><IconButton aria-label={t('Refresh')} onClick={() => { void load(0); void refreshMailboxes(); }}><Refresh fontSize="small" /></IconButton></Tooltip>
+                <Tooltip title={t('More')}><IconButton aria-label={t('More')} aria-haspopup="menu" onClick={(e) => setMoreMenu(e.currentTarget)}><MoreVert fontSize="small" /></IconButton></Tooltip>
+                <Box sx={{ flex: 1 }} />
+                {visible.length > 0 && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('{{from}}–{{to}} of {{total}}', { from: 1, to: visible.length, total: total.toLocaleString() })}
+                  </Typography>
+                )}
               </>
             )}
           </Stack>
+          <Menu anchorEl={selectMenu} open={Boolean(selectMenu)} onClose={() => setSelectMenu(null)}>
+            {([
+              [t('All'), () => true],
+              [t('None'), () => false],
+              [t('Read'), (e: EmailSummary) => Boolean(e.keywords.$seen)],
+              [t('Unread'), (e: EmailSummary) => !e.keywords.$seen],
+              [t('Starred'), (e: EmailSummary) => Boolean(e.keywords.$flagged)],
+              [t('Unstarred'), (e: EmailSummary) => !e.keywords.$flagged],
+            ] as const).map(([name, pick]) => (
+              <MenuItem key={name} dense onClick={() => { setAllInFolder(false); setSelected(new Set(visible.filter(pick).map((e) => e.id))); setSelectMenu(null); }}>{name}</MenuItem>
+            ))}
+          </Menu>
+          <Menu anchorEl={moreMenu} open={Boolean(moreMenu)} onClose={() => setMoreMenu(null)}>
+            <MenuItem dense disabled={visible.length === 0} onClick={() => { setMoreMenu(null); void bulk('read', undefined, true); }}>{t('Mark all as read')}</MenuItem>
+          </Menu>
           {selected.size > 0 && visible.every((e) => selected.has(e.id)) && total > visible.length && (
             <Alert severity="info" icon={false} sx={{ borderRadius: 0, py: 0 }}>
               {allInFolder ? t('All {{total}} conversations here are selected. ', { total }) : t('The {{length}} conversations shown are selected. ', { length: visible.length })}
@@ -1161,17 +1213,38 @@ export default function MailPage() {
             </Alert>
           )}
           {categorised && !serverSearch && (
-            <Tabs value={category} onChange={(_, value) => setCategoryTab(value)} variant="scrollable" scrollButtons="auto" aria-label={t('Inbox categories')} sx={{ minHeight: 40, borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs
+              value={category}
+              onChange={(_, value) => setCategoryTab(value)}
+              variant="scrollable"
+              scrollButtons="auto"
+              aria-label={t('Inbox categories')}
+              // Like Gmail: equal tabs with the icon and name on the left, and a rounded bar under the open one.
+              sx={{ minHeight: 56, borderBottom: 1, borderColor: 'divider', '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' } }}
+            >
               {CATEGORIES.map((entry) => (
                 <Tab
                   key={entry.id}
                   value={entry.id}
-                  sx={{ minHeight: 40, textTransform: 'none', ...dropStyle(`category:${entry.id}`) }}
+                  icon={CATEGORY_ICONS[entry.id]}
+                  iconPosition="start"
+                  sx={{
+                    minHeight: 56, flex: '1 0 auto', minWidth: 160, maxWidth: 'none', justifyContent: 'flex-start', gap: 1.5, px: 2,
+                    textTransform: 'none', fontWeight: entry.id === category ? 700 : 400, ...dropStyle(`category:${entry.id}`),
+                  }}
                   label={
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <span>{entry.label}</span>
-                      {(counts[entry.id] ?? 0) > 0 && <Chip size="small" color={entry.id === category ? 'primary' : 'default'} label={counts[entry.id]} sx={{ height: 18, fontSize: 11 }} aria-label={t('{{count}} unread', { count: counts[entry.id] })} />}
-                    </Stack>
+                    <Box sx={{ minWidth: 0, textAlign: 'left' }}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <span>{entry.label}</span>
+                        {entry.id !== 'general' && (counts[entry.id] ?? 0) > 0 && <Chip size="small" color="primary" label={t('{{count}} new', { count: counts[entry.id] })} sx={{ height: 18, fontSize: 11, fontWeight: 700 }} aria-label={t('{{count}} unread', { count: counts[entry.id] })} />}
+                      </Stack>
+                      {/* Like Gmail, a closed category with new mail shows who wrote and about what. */}
+                      {entry.id !== 'general' && entry.id !== category && (counts[entry.id] ?? 0) > 0 && latest[entry.id] && (
+                        <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ maxWidth: 220, fontWeight: 400 }}>
+                          {latest[entry.id]!.senders.join(', ')}{latest[entry.id]!.subject ? ` – ${latest[entry.id]!.subject}` : ''}
+                        </Typography>
+                      )}
+                    </Box>
                   }
                   {...(entry.id === category ? {} : dropProps(`category:${entry.id}`, { category: entry.id }))}
                 />
@@ -1218,6 +1291,7 @@ export default function MailPage() {
             {loading && emails.length > 0 && <Box sx={{ p: 2, textAlign: 'center' }}><CircularProgress size={24} /></Box>}
           </Box>
         </Paper>
+        )}
         {threadId && (
           <Paper elevation={0} sx={{ flex: 1, minWidth: 0, borderRadius: { xs: 0, sm: 1.5 }, mx: { xs: 0, sm: 1, md: 0 }, mr: { md: 1 }, mb: { xs: 0, sm: 1 }, overflow: 'hidden' }}>
             <Reader
