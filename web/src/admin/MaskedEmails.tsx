@@ -1,4 +1,4 @@
-import { Alert, Box, Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Alert, Autocomplete, Box, Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { get, put } from '../api';
 import { useAuth } from '../app';
@@ -22,6 +22,7 @@ function AccountPolicy({ id, onSaved }: { id: number; onSaved: () => void }) {
 }
 function ServerPolicy() {
   const current = useLoad(() => get<{ enabled: boolean; default_limit: number; disabled_domains: string[] }>('/api/masked-email/config'), []);
+  const domains = useLoad(() => get<{ name: string }[]>('/api/domains'), []);
   const [draft, setDraft] = useState<typeof current.data>(null);
   const { run, feedback } = useAction();
   const value = draft ?? current.data;
@@ -31,7 +32,16 @@ function ServerPolicy() {
     <Stack spacing={1} alignItems="flex-start">
       <FormControlLabel control={<Switch checked={value.enabled} onChange={(e) => setDraft({ ...value, enabled: e.target.checked })} />} label={t('Allow new masked addresses')} />
       <TextField type="number" label={t('Default mask quota')} value={value.default_limit} onChange={(e) => setDraft({ ...value, default_limit: Number(e.target.value) })} />
-      <TextField label={t('Domains closed to new masks')} value={value.disabled_domains.join(', ')} onChange={(e) => setDraft({ ...value, disabled_domains: e.target.value.split(',').map((s) => s.trim()) })} helperText={t('Creation policy does not disable existing active addresses.')} />
+      {/* Hosted domains to pick from; a closed domain since removed stays listed so it can be cleared. */}
+      <Autocomplete
+        multiple
+        filterSelectedOptions
+        options={[...new Set([...(domains.data ?? []).map((d) => d.name), ...value.disabled_domains])]}
+        value={value.disabled_domains}
+        onChange={(_, picked) => setDraft({ ...value, disabled_domains: picked })}
+        sx={{ minWidth: 320 }}
+        renderInput={(params) => <TextField {...params} label={t('Domains closed to new masks')} helperText={t('Creation policy does not disable existing active addresses.')} />}
+      />
       <Button disabled={!draft} variant="outlined" onClick={() => void run(() => put('/api/masked-email/config', { ...value, disabled_domains: value.disabled_domains.filter(Boolean) }), t('Settings saved')).then((ok) => { if (ok) { setDraft(null); void current.reload(); } })}>{t('Save')}</Button>
     </Stack>
   </Box>;
