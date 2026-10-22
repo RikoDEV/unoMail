@@ -222,11 +222,13 @@ test.describe('sender details, warnings and navigation', () => {
     await expect(nav.getByText('New folder')).toBeHidden();
     await expect(nav.getByText('Labels')).toBeHidden();
     await expect(nav.getByRole('button', { name: 'Compose' })).toBeVisible();
-    for (const name of ['Inbox', 'Drafts', 'Sent', 'Archive', 'Junk', 'Trash', 'Calendar', 'Contacts']) await expect(nav.getByRole('button', { name, exact: true })).toBeVisible();
-    await expect(nav.getByRole('button', { name: 'Sent', exact: true })).toHaveAttribute('title', 'Sent');
+    // Entries are links, so they open in a new tab with a middle click.
+    for (const name of ['Inbox', 'Drafts', 'Sent', 'Archive', 'Junk', 'Trash', 'Calendar', 'Contacts']) await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
+    await nav.getByRole('link', { name: 'Sent', exact: true }).hover();
+    await expect(page.getByRole('tooltip').filter({ hasText: 'Sent' })).toBeVisible();
     // Nothing spills out of the strip.
     for (const name of ['Inbox', 'Calendar']) {
-      const [strip, box] = [(await nav.boundingBox())!, (await nav.getByRole('button', { name, exact: true }).boundingBox())!];
+      const [strip, box] = [(await nav.boundingBox())!, (await nav.getByRole('link', { name, exact: true }).boundingBox())!];
       expect(box.x).toBeGreaterThanOrEqual(strip.x);
       expect(box.x + box.width).toBeLessThanOrEqual(strip.x + strip.width + 1);
     }
@@ -235,7 +237,7 @@ test.describe('sender details, warnings and navigation', () => {
     expect((await page.getByRole('list', { name: 'Messages' }).boundingBox())!.x).toBeLessThan(120);
 
     // It works as before, and stays that way after a reload.
-    await nav.getByRole('button', { name: 'Sent', exact: true }).click();
+    await nav.getByRole('link', { name: 'Sent', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Sent', level: 1 })).toBeVisible();
     await nav.getByRole('button', { name: 'Compose' }).click();
     await expect(page.getByRole('dialog', { name: 'New message' })).toBeVisible();

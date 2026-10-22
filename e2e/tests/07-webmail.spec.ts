@@ -255,7 +255,7 @@ test.describe('web mail extras', () => {
     await logout(page);
 
     await login(page, ALICE, USER_PASSWORD);
-    const shared = page.getByRole('list', { name: 'Shared folders' }).getByRole('button', { name: /Projects/ }).first();
+    const shared = page.getByRole('list', { name: 'Shared folders' }).getByRole('link', { name: /Projects/ }).first();
     await expect(shared).toContainText(BOB);
     await shared.click();
     await expect(page.getByTestId('email-row')).toHaveCount(2);

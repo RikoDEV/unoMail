@@ -109,6 +109,7 @@ pub async fn notify(app: &App, original_sender: &str, recipient: &str, action: A
                         remote: "",
                         direction: Direction::Local,
                         author_verified: false,
+                        sender_verified: false,
                     };
                     if let Err(err) = delivery::deliver_local(app, delivery).await {
                         tracing::warn!(%err, recipient = address, "could not deliver a delivery notification");

@@ -40,7 +40,7 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
   return (
     <>
       <Stack direction="row" alignItems="center" sx={{ pl: 0.5, pr: 2, py: 0.5, minHeight: 48 }}>
-        <Typography component="h1" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>{heading}</Typography>
+        <Typography component="h1" sx={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>{heading}</Typography>
         <Checkbox
           size="small"
           inputProps={{ 'aria-label': t('Select all conversations') }}

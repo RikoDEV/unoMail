@@ -188,6 +188,7 @@ const GROUPS: Group[] = [
     title: t('Sending mail'),
     fields: [
       { key: 'strict_from_check', label: t('Strict “From” header check'), help: t('Users can only send with a From address of their own: their address, aliases and identities'), kind: 'bool' },
+      { key: 'sieve_external_redirect', label: t('Allow forwarding by mail filters'), help: t('Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new'), kind: 'bool' },
       { key: 'outbound_require_tls', label: t('Require verified TLS for outgoing mail'), help: t('Never deliver over plaintext or unverifiable connections'), kind: 'bool' },
       { key: 'mta_sts_enabled', label: t('Honour MTA-STS policies'), help: t('Deliver only over verified TLS to domains that ask for it (RFC 8461)'), kind: 'bool' },
       { key: 'dane_enabled', label: t('Check DANE (TLSA) records'), help: t('Verify certificates against DNSSEC-signed TLSA records where receivers publish them (RFC 7672)'), kind: 'bool' },

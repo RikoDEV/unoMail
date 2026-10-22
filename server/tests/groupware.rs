@@ -216,6 +216,16 @@ async fn guests_are_invited_by_mail_and_their_answers_come_back() {
     assert_eq!(carol.post("/api/me/calendars/invitations/respond", json!({ "ics": "hello", "response": "accepted" })).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(carol.raw(Method::POST, "/api/me/calendars/invitations/inspect", b"hello".to_vec(), "text/calendar").await.status, StatusCode::BAD_REQUEST);
     assert_eq!(bob.post(&format!("/api/me/calendars/{bobs}/events"), json!({ "summary": "x", "start": "2026-10-20T18:00", "end": "2026-10-20T20:00", "timezone": "UTC", "attendees": ["nonsense"] })).await.status, StatusCode::BAD_REQUEST);
+
+    // A guest knows the UID of Bob's dinner. An invitation of their own under that UID cannot
+    // remove or replace the event Bob organizes.
+    let forged = invitation.replace("ORGANIZER:mailto:bob@example.org", "ORGANIZER:mailto:mallory@remote.example");
+    assert_ne!(forged, invitation);
+    for response in ["declined", "accepted"] {
+        assert_eq!(bob.post("/api/me/calendars/invitations/respond", json!({ "ics": forged, "response": response })).await.status, StatusCode::CONFLICT, "{response}");
+    }
+    let dinner = &bob.get(&october).await.body[0];
+    assert_eq!((dinner["summary"].as_str(), dinner["organizer"].as_str()), (Some("Dinner"), Some("bob@example.org")), "{dinner}");
 }
 
 #[tokio::test]

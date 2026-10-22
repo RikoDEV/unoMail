@@ -340,10 +340,10 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
     // policy of their own, which must not be replaced by the application's.
     if !headers.contains_key("content-security-policy") {
         // A captcha on the sign-in page loads its widget from the provider.
-        let [scripts, frames, styles, connections] = state.rt().captcha().map_or([""; 4], crate::captcha::Provider::csp_sources);
+        let [scripts, frames, styles, connections] = state.rt().captcha().map_or([""; 4], crate::captcha::Provider::csp_sources).map(|sources| if sources.is_empty() { String::new() } else { format!(" {sources}") });
         let policy = format!(
-            "default-src 'self'; script-src 'self' {scripts}; style-src 'self' 'unsafe-inline' {styles}; img-src 'self' data: blob:; \
-             font-src 'self' data:; connect-src 'self' {connections}; frame-src 'self' {frames}; worker-src 'self'; object-src 'none'; base-uri 'self'; \
+            "default-src 'self'; script-src 'self'{scripts}; style-src 'self' 'unsafe-inline'{styles}; img-src 'self' data: blob:; \
+             font-src 'self' data:; connect-src 'self'{connections}; frame-src 'self'{frames}; worker-src 'self'; object-src 'none'; base-uri 'self'; \
              form-action 'self'; frame-ancestors 'none'"
         );
         if let Ok(value) = HeaderValue::from_str(&policy) {

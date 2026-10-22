@@ -2106,5 +2106,7 @@
   "Site key": "Kľúč webu",
   "The public key the widget is shown with": "Verejný kľúč, s ktorým sa widget zobrazuje",
   "Secret key": "Tajný kľúč",
-  "Enter the site key and the secret key. Until then no captcha is asked for.": "Zadajte kľúč webu a tajný kľúč. Dovtedy sa captcha nevyžaduje."
+  "Enter the site key and the secret key. Until then no captcha is asked for.": "Zadajte kľúč webu a tajný kľúč. Dovtedy sa captcha nevyžaduje.",
+  "Allow forwarding by mail filters": "Povoliť preposielanie filtrami pošty",
+  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filtre môžu presmerovať poštu na adresy mimo tohto servera. Používateľ dostane upozornenie, keď filter začne preposielať poštu na nové miesto"
 }

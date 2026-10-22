@@ -403,6 +403,7 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
                             remote: &remote,
                             direction: Direction::Inbound,
                             author_verified,
+                            sender_verified,
                         },
                     )
                     .await;
@@ -733,11 +734,14 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
     // Unless the administrator wants it shown, the submitting client's address stays private.
     let client = if rt.privacy_hide_client_ip { "localhost (localhost [127.0.0.1])".to_owned() } else { format!("[{0}] ([{0}])", sub.ip) };
     let received = format!("Received: from {client}\r\n\tby {} with ESMTPSA id {id};\r\n\t{}\r\n", app.cfg.hostname, rfc2822_now());
+    // Results in this server's name are written by this server only: a colleague's copy must
+    // not show checks that never happened.
+    let own = authn::strip_forged_results(sub.raw, &app.cfg.hostname);
     // What the sender's program says about itself, removed before signing if asked.
     let raw = if rt.privacy_remove_x_headers || rt.privacy_remove_user_agent {
-        remove_headers(sub.raw, |name| (rt.privacy_remove_x_headers && name.len() > 2 && name[..2].eq_ignore_ascii_case("x-")) || (rt.privacy_remove_user_agent && name.eq_ignore_ascii_case("user-agent")))
+        remove_headers(&own, |name| (rt.privacy_remove_x_headers && name.len() > 2 && name[..2].eq_ignore_ascii_case("x-")) || (rt.privacy_remove_user_agent && name.eq_ignore_ascii_case("user-agent")))
     } else {
-        sub.raw.to_vec()
+        own
     };
     let body = ensure_headers(&raw, &sub.sender.domain);
     let signed = match relay {
@@ -769,6 +773,7 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
                         remote: "",
                         direction: Direction::Local,
                         author_verified: rt.strict_from_check,
+                        sender_verified: true,
                     },
                 )
                 .await;

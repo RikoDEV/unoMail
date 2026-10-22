@@ -2106,5 +2106,7 @@
   "Site key": "Klucz witryny",
   "The public key the widget is shown with": "Klucz publiczny, z którym wyświetlany jest widżet",
   "Secret key": "Klucz tajny",
-  "Enter the site key and the secret key. Until then no captcha is asked for.": "Wpisz klucz witryny i klucz tajny. Do tego czasu captcha nie jest wymagana."
+  "Enter the site key and the secret key. Until then no captcha is asked for.": "Wpisz klucz witryny i klucz tajny. Do tego czasu captcha nie jest wymagana.",
+  "Allow forwarding by mail filters": "Zezwalaj na przekazywanie przez filtry poczty",
+  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filtry mogą przekierowywać pocztę na adresy spoza tego serwera. Użytkownik dostaje powiadomienie, gdy filtr zacznie przekazywać pocztę w nowe miejsce"
 }
