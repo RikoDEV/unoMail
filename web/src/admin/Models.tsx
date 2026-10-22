@@ -30,6 +30,8 @@ interface Model {
 
 const emptyModel: Model = { id: '', name: '', provider: 'openai', model: '', base_url: PROVIDERS[0].url, enabled: true, has_api_key: false };
 
+const LOCAL_ONLY = '__local__';
+
 function ExtractionSettings({ models }: { models: Model[] }) {
   const settings = useLoad(() => get<{ model_id: string; automatic_ai: boolean }>('/api/models/summary-cards'), []);
   const [draft, setDraft] = useState<{ model_id: string; automatic_ai: boolean } | null>(null);
@@ -41,8 +43,9 @@ function ExtractionSettings({ models }: { models: Model[] }) {
     <Typography variant="h6" sx={{ mb: 1 }}>{t('Purchase card extraction')}</Typography>
     {feedback}
     <Stack spacing={1.5} alignItems="flex-start">
-      <TextField select label={t('Extraction model')} value={models.some((m) => m.id === value.model_id && m.enabled) ? value.model_id : ''} onChange={(e) => setDraft({ ...value, model_id: e.target.value, automatic_ai: e.target.value ? value.automatic_ai : false })} sx={{ minWidth: 260 }}>
-        <MenuItem value="">{t('Local structured data only')}</MenuItem>
+      {/* MUI renders an empty-string select value as nothing selected, so local-only uses a sentinel. */}
+      <TextField select label={t('Extraction model')} value={models.some((m) => m.id === value.model_id && m.enabled) ? value.model_id : LOCAL_ONLY} onChange={(e) => { const id = e.target.value === LOCAL_ONLY ? '' : e.target.value; setDraft({ ...value, model_id: id, automatic_ai: id ? value.automatic_ai : false }); }} sx={{ minWidth: 260 }}>
+        <MenuItem value={LOCAL_ONLY}>{t('Local structured data only')}</MenuItem>
         {models.filter((m) => m.enabled).map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
       </TextField>
       <FormControlLabel control={<Switch checked={value.automatic_ai} disabled={!value.model_id} onChange={(e) => setDraft({ ...value, automatic_ai: e.target.checked })} />} label={t('Allow automatic AI extraction')} />
