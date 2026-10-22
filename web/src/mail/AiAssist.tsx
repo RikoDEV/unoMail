@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { errorText, get, post } from '../api';
 import { currentLanguage, t } from '../i18n';
 import type { EmailFull } from './jmapClient';
+import { canTranslateLocally, localTranslationSupported, translateLocally } from './localTranslator';
 
 interface Model { id: string; name: string; provider: string }
 const ModelsContext = createContext<{ models: Model[]; selected: string; select: (id: string) => void }>({ models: [], selected: '', select: () => {} });
@@ -36,14 +37,18 @@ type Task = 'summary' | 'translate';
 export function AiAssist({ email }: { email: EmailFull }) {
   const { models, model, select } = useAiModel();
   const [foreignLanguage, setForeignLanguage] = useState(false);
+  const [source, setSource] = useState<string | null>(null);
+  // Without an AI model, translation can still run on the device where the browser supports it.
+  const local = models.length === 0 && localTranslationSupported();
   useEffect(() => {
-    if (!models.length) return;
+    if (!models.length && !local) return;
     let active = true;
     import('./messageLanguage').then(({ detectMessageLanguage, translationSuggested }) => {
-      if (active) setForeignLanguage(translationSuggested(detectMessageLanguage(email), currentLanguage()));
+      const detected = detectMessageLanguage(email);
+      if (active) { setSource(detected); setForeignLanguage(translationSuggested(detected, currentLanguage())); }
     }).catch(() => { if (active) setForeignLanguage(false); });
     return () => { active = false; };
-  }, [email, models.length]);
+  }, [email, models.length, local]);
   const modelId = model?.id ?? '';
   const [language, setLanguage] = useState(currentLanguage());
   const [busy, setBusy] = useState<Task | null>(null);
@@ -71,7 +76,7 @@ export function AiAssist({ email }: { email: EmailFull }) {
       if (generation.current === version) setBusy(null);
     }
   }
-  if (models.length === 0) return null;
+  if (models.length === 0) return local && foreignLanguage && source ? <LocalTranslation email={email} source={source} /> : null;
   return (
     <Box component="section" aria-label={t('AI assistance')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
@@ -98,6 +103,69 @@ export function AiAssist({ email }: { email: EmailFull }) {
             <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: 0.5 }}>{results[task]!.text}</Typography>
           </Box>
         ))}
+      </Box>
+    </Box>
+  );
+}
+
+/** Translation by the browser's on-device model, offered when no AI model is configured. */
+function LocalTranslation({ email, source }: { email: EmailFull; source: string }) {
+  const [language, setLanguage] = useState(currentLanguage().split(/[-_]/)[0]);
+  const [available, setAvailable] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState('');
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
+  useEffect(() => {
+    let active = true;
+    setAvailable(false);
+    void canTranslateLocally(source, language).then((ok) => { if (active) setAvailable(ok); });
+    return () => { active = false; };
+  }, [source, language]);
+
+  async function translate() {
+    const version = ++generation.current;
+    setBusy(true);
+    setError('');
+    setProgress(null);
+    try {
+      const { messageText } = await import('./messageLanguage');
+      const text = await translateLocally(`${email.subject ?? ''}
+
+${messageText(email)}`.trim(), source, language, (share) => { if (generation.current === version) setProgress(share); });
+      if (generation.current === version) setResult(text);
+    } catch (err) {
+      if (generation.current === version) setError(errorText(err, t('Translation on this device failed')));
+    } finally {
+      if (generation.current === version) { setBusy(false); setProgress(null); }
+    }
+  }
+  const languageName = LANGUAGES.find(([code]) => code === language)?.[1] ?? language;
+  return (
+    <Box component="section" aria-label={t('Translation')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+        <Translate color="action" fontSize="small" />
+        <TextField select size="small" label={t('Target language')} value={language} disabled={busy} onChange={(e) => { generation.current += 1; setLanguage(e.target.value); setResult(''); setError(''); setBusy(false); }} sx={{ minWidth: 140 }}>
+          {LANGUAGES.map(([code, name]) => <MenuItem key={code} value={code}>{name}</MenuItem>)}
+        </TextField>
+        <Button size="small" startIcon={busy ? <CircularProgress size={16} /> : <Translate />} disabled={busy || !available} onClick={() => void translate()}>{t('Translate to {{language}}', { language: languageName })}</Button>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+        {!available ? t('This browser cannot translate into this language on the device.') : progress !== null && progress < 1 ? t('Downloading the language pack: {{percent}}%', { percent: Math.round(progress * 100) }) : t('Translated on this device; the message is not sent anywhere.')}
+      </Typography>
+      {error && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError('')}>{error}</Alert>}
+      <Box aria-live="polite" aria-busy={busy}>
+        {result && (
+          <Box sx={{ mt: 1.5, borderTop: 1, borderColor: 'divider', pt: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Typography variant="subtitle2" component="h3" sx={{ flex: 1 }}>{t('Translation')}</Typography>
+              <Button size="small" onClick={() => setResult('')}>{t('Hide')}</Button>
+            </Stack>
+            <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: 0.5 }}>{result}</Typography>
+          </Box>
+        )}
       </Box>
     </Box>
   );

@@ -2034,5 +2034,9 @@
   "{{count}} messages_many": "{{count}} wiadomości",
   "{{count}} messages_other": "{{count}} wiadomości",
   "Sending in the last hour:": "Wysłane w ciągu ostatniej godziny:",
-  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Ta skrzynka nie może już wysyłać poczty; poczta przychodząca nadal dociera. Skontaktuj się z administratorem."
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Ta skrzynka nie może już wysyłać poczty; poczta przychodząca nadal dociera. Skontaktuj się z administratorem.",
+  "Translation on this device failed": "Tłumaczenie na tym urządzeniu nie powiodło się",
+  "This browser cannot translate into this language on the device.": "Ta przeglądarka nie potrafi tłumaczyć na ten język na urządzeniu.",
+  "Downloading the language pack: {{percent}}%": "Pobieranie pakietu językowego: {{percent}}%",
+  "Translated on this device; the message is not sent anywhere.": "Przetłumaczono na tym urządzeniu; wiadomość nie jest nigdzie wysyłana."
 }

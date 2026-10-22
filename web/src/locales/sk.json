@@ -2034,5 +2034,9 @@
   "{{count}} messages_many": "{{count}} správy",
   "{{count}} messages_other": "{{count}} správ",
   "Sending in the last hour:": "Odoslané za poslednú hodinu:",
-  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Z tejto schránky už nie je možné odosielať poštu; prichádzajúca pošta stále prichádza. Obráťte sa na správcu."
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Z tejto schránky už nie je možné odosielať poštu; prichádzajúca pošta stále prichádza. Obráťte sa na správcu.",
+  "Translation on this device failed": "Preklad v tomto zariadení zlyhal",
+  "This browser cannot translate into this language on the device.": "Tento prehliadač nedokáže prekladať do tohto jazyka priamo v zariadení.",
+  "Downloading the language pack: {{percent}}%": "Sťahovanie jazykového balíka: {{percent}} %",
+  "Translated on this device; the message is not sent anywhere.": "Preložené v tomto zariadení; správa sa nikam neodosiela."
 }

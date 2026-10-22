@@ -1992,5 +1992,9 @@
   "{{count}} messages_many": "{{count}} messages",
   "{{count}} messages_other": "{{count}} messages",
   "Sending in the last hour:": "Envoyés au cours de la dernière heure :",
-  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Cette boîte ne peut plus envoyer de messages ; le courrier entrant arrive toujours. Contactez votre administrateur."
+  "This mailbox can no longer send mail; incoming mail still arrives. Contact your administrator.": "Cette boîte ne peut plus envoyer de messages ; le courrier entrant arrive toujours. Contactez votre administrateur.",
+  "Translation on this device failed": "La traduction sur cet appareil a échoué",
+  "This browser cannot translate into this language on the device.": "Ce navigateur ne peut pas traduire vers cette langue sur l’appareil.",
+  "Downloading the language pack: {{percent}}%": "Téléchargement du pack de langue : {{percent}} %",
+  "Translated on this device; the message is not sent anywhere.": "Traduit sur cet appareil ; le message n’est envoyé nulle part."
 }

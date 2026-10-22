@@ -45,7 +45,10 @@ Besides reading and writing mail, the web client offers:
   and requested actions; **Translate to …** shows a translation of the subject and body.
   Results appear alongside the original message and can be hidden separately. Content is
   sent to the selected provider only when an action is requested. Encrypted messages and
-  other accounts' shared messages cannot be processed.
+  other accounts' shared messages cannot be processed. Without a configured model, browsers
+  with a built-in on-device translator (Chrome and Edge on desktop) still offer **Translate
+  to …** for foreign-language messages; the browser downloads a language pack on first use
+  and the message never leaves the device.
 - **A one-line-per-conversation list** with checkboxes: select some or all conversations (or
   everything in the folder) and archive, delete, report, mark read/unread, move or label them
   in one go. `x` selects the highlighted conversation.
