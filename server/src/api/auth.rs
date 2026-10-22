@@ -21,6 +21,9 @@ pub const MAX_ACCOUNTS: usize = 5;
 pub struct LoginRequest {
     email: String,
     password: String,
+    /// The answer to the captcha, when one is set up.
+    #[serde(default)]
+    captcha: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -53,6 +56,10 @@ pub async fn login(
     jar: CookieJar,
     Json(req): Json<LoginRequest>,
 ) -> Result<(CookieJar, Json<Value>), ApiError> {
+    // Before the password: unsolved captchas neither reach nor count toward the login limits.
+    if !crate::captcha::verify(&state, req.captcha.as_deref(), ip).await {
+        return Err(ApiError::bad("captcha"));
+    }
     let account = match auth::authenticate(&state.db, &state.limiter, &req.email, &req.password, ip, Protocol::Web).await {
         Ok(account) => account,
         Err(AuthError::Invalid) => {
@@ -225,6 +232,11 @@ pub async fn logout(State(state): State<AppState>, session: Session, jar: Cookie
     let jar = jar.remove(session_cookie(&state, String::new(), 0));
     let jar = if had_others { jar.remove(others_cookie(&state, &[], 0)) } else { jar };
     Ok((jar, Json(json!({ "ok": true, "next": null }))))
+}
+
+/// The captcha the sign-in page shows, with a fresh challenge for ALTCHA.
+pub async fn captcha(State(state): State<AppState>) -> Json<Value> {
+    Json(crate::captcha::widget(&state))
 }
 
 pub async fn me(session: Session) -> JsonResult<Value> {

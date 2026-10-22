@@ -52,7 +52,7 @@ interface AuthState {
   /** Makes another signed-in account the current one (the page reloads). */
   switchAccount: (id: number) => Promise<void>;
   /** Signs in with the password; returns the second step when one is needed. */
-  login: (email: string, password: string) => Promise<SecondFactorChallenge | null>;
+  login: (email: string, password: string, captcha?: string) => Promise<SecondFactorChallenge | null>;
   /** Completes a sign-in with what the second step returned. */
   completeLogin: (data: { account: Account; csrf_token: string }) => void;
   /** Signs out of the current account (or, with `all`, of every one). */
@@ -234,9 +234,9 @@ export function App() {
     setAccount(data.account);
   }, []);
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, captcha?: string) => {
       if (logoutPending) throw new Error('Confirm server sign-out before signing in again.');
-      const data = await post<{ account?: Account; csrf_token?: string; second_factor?: SecondFactorChallenge }>('/api/auth/login', { email, password });
+      const data = await post<{ account?: Account; csrf_token?: string; second_factor?: SecondFactorChallenge }>('/api/auth/login', { email, password, captcha });
       if (data.second_factor) return data.second_factor;
       completeLogin({ account: data.account!, csrf_token: data.csrf_token! });
       return null;

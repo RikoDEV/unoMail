@@ -2094,5 +2094,17 @@
   "After you unsubscribe, it can take senders a few days to stop sending you mail.": "Po odhlášení může odesílatelům trvat několik dní, než vám přestanou posílat poštu.",
   "No subscriptions in your recent mail.": "V nedávné poště nejsou žádné odběry.",
   "Unsubscribe from {{sender}}": "Odhlásit odběr od {{sender}}",
-  "Loading": "Načítání"
+  "Loading": "Načítání",
+  "The verification could not be loaded. Reload the page to try again.": "Ověření se nepodařilo načíst. Obnovte stránku a zkuste to znovu.",
+  "Verified that you are not a robot": "Ověřeno, že nejste robot",
+  "Checking that you are not a robot…": "Ověřujeme, že nejste robot…",
+  "Complete the verification and try again.": "Dokončete ověření a zkuste to znovu.",
+  "Sign-in captcha": "Captcha při přihlášení",
+  "Ask for a captcha on the web sign-in page before the password is checked. ALTCHA is a proof of work solved by the browser: it needs no account and sends nothing to anyone else.": "Vyžadovat captchu na přihlašovací stránce před kontrolou hesla. ALTCHA je důkaz práce, který vyřeší prohlížeč: nepotřebuje účet a nic nikomu neposílá.",
+  "Captcha": "Captcha",
+  "hCaptcha, Turnstile and reCAPTCHA (v2 checkbox) need the keys of a site registered with them": "hCaptcha, Turnstile a reCAPTCHA (zaškrtávací políčko v2) potřebují klíče webu u nich registrovaného",
+  "Site key": "Klíč webu",
+  "The public key the widget is shown with": "Veřejný klíč, se kterým se widget zobrazuje",
+  "Secret key": "Tajný klíč",
+  "Enter the site key and the secret key. Until then no captcha is asked for.": "Zadejte klíč webu a tajný klíč. Do té doby se captcha nevyžaduje."
 }

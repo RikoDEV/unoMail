@@ -9,6 +9,7 @@ pub mod backup;
 pub mod bayes;
 pub mod blobstore;
 pub mod calendar;
+pub mod captcha;
 pub mod categories;
 pub mod config;
 pub mod dailystats;

@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, get, post, type Account, errorText } from './api';
 import { announceAccountChange, type SecondFactorChallenge, useAuth } from './app';
 import { Link as RouterLink } from 'react-router-dom';
+import { Captcha } from './captcha';
 import { autofillAvailable, forgetUnknownPasskey, type PasskeyAnswer, passkeysAvailable, type RequestOptions, signWithPasskey, wasDismissed } from './webauthn';
 
 import { currentLanguage, LANGUAGES, setLanguage, t } from './i18n';
@@ -112,6 +113,9 @@ export function Login({ adding = false }: { adding?: boolean }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [sso, setSso] = useState<{ enabled: boolean; name?: string }>({ enabled: false });
+  // The captcha's answer: undefined without a captcha, null until it is answered.
+  const [captcha, setCaptcha] = useState<string | null | undefined>(undefined);
+  const [captchaRound, setCaptchaRound] = useState(0);
 
   useEffect(() => {
     get<{ enabled: boolean; name?: string }>('/api/auth/oauth').then(setSso).catch(() => {});
@@ -224,14 +228,17 @@ export function Login({ adding = false }: { adding?: boolean }) {
     setBusy(true);
     setError('');
     try {
-      const second = await login(email.trim(), password);
+      const second = await login(email.trim(), password, captcha ?? undefined);
       if (second) {
         setChallenge(second);
         return;
       }
       finished();
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 429 ? t('Too many attempts. Please try again later.') : t('Incorrect e-mail address or password.'));
+      if (err instanceof ApiError && err.status === 400 && err.message === 'captcha') setError(t('Complete the verification and try again.'));
+      else setError(err instanceof ApiError && err.status === 429 ? t('Too many attempts. Please try again later.') : t('Incorrect e-mail address or password.'));
+      // An answer signs in once: the next try needs a new one.
+      if (captcha !== undefined) setCaptchaRound((round) => round + 1);
     } finally {
       setBusy(false);
     }
@@ -269,7 +276,8 @@ export function Login({ adding = false }: { adding?: boolean }) {
             {/* Not type="email": browsers refuse internationalized addresses in such fields. */}
             <TextField label={t('E-mail address')} type="text" slotProps={{ htmlInput: { inputMode: 'email', autoCapitalize: 'none', spellCheck: false } }} autoComplete="username webauthn" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus size="medium" />
             <TextField label={t('Password')} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required size="medium" />
-            <Button type="submit" variant="contained" size="large" disabled={busy}>
+            <Captcha onAnswer={setCaptcha} resetKey={captchaRound} />
+            <Button type="submit" variant="contained" size="large" disabled={busy || captcha === null}>
               {t('Sign in')}
             </Button>
             {passkeys && (

@@ -339,14 +339,16 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
     // Handlers serving user-controlled content (downloads, proxied images) set a stricter
     // policy of their own, which must not be replaced by the application's.
     if !headers.contains_key("content-security-policy") {
-        headers.insert(
-            HeaderName::from_static("content-security-policy"),
-            HeaderValue::from_static(
-                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; \
-                 font-src 'self' data:; connect-src 'self'; frame-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; \
-                 form-action 'self'; frame-ancestors 'none'",
-            ),
+        // A captcha on the sign-in page loads its widget from the provider.
+        let [scripts, frames, styles, connections] = state.rt().captcha().map_or([""; 4], crate::captcha::Provider::csp_sources);
+        let policy = format!(
+            "default-src 'self'; script-src 'self' {scripts}; style-src 'self' 'unsafe-inline' {styles}; img-src 'self' data: blob:; \
+             font-src 'self' data:; connect-src 'self' {connections}; frame-src 'self' {frames}; worker-src 'self'; object-src 'none'; base-uri 'self'; \
+             form-action 'self'; frame-ancestors 'none'"
         );
+        if let Ok(value) = HeaderValue::from_str(&policy) {
+            headers.insert(HeaderName::from_static("content-security-policy"), value);
+        }
     }
     response
 }
@@ -401,6 +403,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/accounts", get(auth::accounts))
         .route("/auth/switch", post(auth::switch))
         .route("/auth/me", get(auth::me))
+        .route("/auth/captcha", get(auth::captcha))
         .route("/auth/oauth", get(oauth::info))
         .route("/auth/oauth/start", get(oauth::start))
         .route("/auth/oauth/callback", get(oauth::callback))

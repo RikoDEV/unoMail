@@ -1,6 +1,6 @@
 // Global server configuration: settings that can be changed while the server runs.
 
-import { Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, Stack, Switch, TableBody, TableCell, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, MenuItem, Stack, Switch, TableBody, TableCell, TableRow, TextField, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { del, get, patch, put } from '../api';
 import { PageHeader, useAction, useLoad, ScrollTable } from './common';
@@ -20,8 +20,9 @@ interface Field {
   key: string;
   label: string;
   help: string;
-  /** `decimal` allows a fraction; `text` is one line; `secret` is write-only. */
-  kind: 'bool' | 'number' | 'decimal' | 'megabytes' | 'list' | 'text' | 'secret';
+  /** `decimal` allows a fraction; `text` is one line; `secret` is write-only; `select` is one of `options`. */
+  kind: 'bool' | 'number' | 'decimal' | 'megabytes' | 'list' | 'text' | 'secret' | 'select';
+  options?: { value: string; label: string }[];
   min?: number;
   max?: number;
   /** For text: whether it may be left empty, and what it must look like. */
@@ -33,6 +34,8 @@ interface Field {
   items?: 'zone' | 'country' | 'asn' | 'address';
   /** Shown only while these switches are on. */
   dependsOn?: string[];
+  /** Shown only for these values of the first `dependsOn` setting. */
+  dependsOnValues?: string[];
 }
 
 interface Group {
@@ -107,6 +110,42 @@ const GROUPS: Group[] = [
       { key: 'login_tarpit_after', label: t('Slow down after failures'), help: t('From this many failures from a network, each further answer is delayed'), kind: 'number', min: 1, max: 10000 },
       { key: 'login_report_after', label: t('Report after failures'), help: t('A network with this many failures is reported for guessing passwords'), kind: 'number', min: 1, max: 10000 },
     ],
+  },
+  {
+    title: t('Sign-in captcha'),
+    description: t('Ask for a captcha on the web sign-in page before the password is checked. ALTCHA is a proof of work solved by the browser: it needs no account and sends nothing to anyone else.'),
+    fields: [
+      {
+        key: 'captcha_provider',
+        label: t('Captcha'),
+        help: t('hCaptcha, Turnstile and reCAPTCHA (v2 checkbox) need the keys of a site registered with them'),
+        kind: 'select',
+        options: [
+          { value: '', label: t('Off') },
+          { value: 'altcha', label: 'ALTCHA' },
+          { value: 'hcaptcha', label: 'hCaptcha' },
+          { value: 'turnstile', label: 'Cloudflare Turnstile' },
+          { value: 'recaptcha', label: 'Google reCAPTCHA' },
+        ],
+      },
+      {
+        key: 'captcha_site_key',
+        label: t('Site key'),
+        help: t('The public key the widget is shown with'),
+        kind: 'text',
+        optional: true,
+        maxLength: 200,
+        pattern: /^[A-Za-z0-9._-]+$/,
+        patternHint: t('Letters, digits, ".", "-" and "_" only'),
+        dependsOn: ['captcha_provider'],
+        dependsOnValues: ['hcaptcha', 'turnstile', 'recaptcha'],
+      },
+      { key: 'captcha_secret_key', label: t('Secret key'), help: t('Stored encrypted and never shown again'), kind: 'secret', dependsOn: ['captcha_provider'], dependsOnValues: ['hcaptcha', 'turnstile', 'recaptcha'] },
+    ],
+    note: (values) =>
+      !values.captcha_provider || values.captcha_provider === 'altcha' || (values.captcha_site_key && values.captcha_secret_key_set)
+        ? null
+        : t('Enter the site key and the secret key. Until then no captcha is asked for.'),
   },
   {
     title: t('Storage'),
@@ -287,7 +326,8 @@ export function ServerSettings() {
       </Typography>
       {feedback}
       {GROUPS.map((group) => {
-        const note = group.note?.(data.values);
+        // Whether secrets are stored is known separately: the values never carry them.
+        const note = group.note?.({ ...data.values, ...Object.fromEntries(Object.entries(data.secrets_set ?? {}).map(([key, set]) => [`${key}_set`, set])) });
         return (
         <Card key={group.title} variant="outlined" sx={{ mb: 2 }}>
           <CardContent sx={{ pb: '8px !important' }}>
@@ -300,7 +340,10 @@ export function ServerSettings() {
           {note && <Alert severity="warning" sx={{ mt: 1 }}>{note}</Alert>}
           <ScrollTable size="small" aria-label={group.title} sx={{ mt: 1, '& tr:last-of-type td': { borderBottom: 0 } }}>
             <TableBody>
-              {group.fields.filter((field) => (field.dependsOn ?? []).every((key) => Boolean(data.values[key]))).map((field) => {
+              {group.fields
+                .filter((field) => (field.dependsOn ?? []).every((key) => Boolean(data.values[key])))
+                .filter((field) => !field.dependsOnValues || field.dependsOnValues.includes(String(data.values[field.dependsOn![0]])))
+                .map((field) => {
                 const value = data.values[field.key];
                 const overridden = data.overridden.includes(field.key);
                 const draft = drafts[field.key];
@@ -317,6 +360,20 @@ export function ServerSettings() {
                           control={<Switch checked={Boolean(value)} onChange={(e) => void save(field.key, e.target.checked)} inputProps={{ 'aria-label': field.label }} />}
                           label={value ? t('On') : t('Off')}
                         />
+                      ) : field.kind === 'select' ? (
+                        <TextField
+                          select
+                          value={String(value ?? '')}
+                          onChange={(e) => void save(field.key, e.target.value)}
+                          sx={{ width: 340 }}
+                          slotProps={{ select: { inputProps: { 'aria-label': field.label } } }}
+                        >
+                          {field.options!.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </TextField>
                       ) : (
                         <Stack direction="row" spacing={1} alignItems="flex-start">
                           <TextField

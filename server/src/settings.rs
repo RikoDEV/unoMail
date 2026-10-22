@@ -168,6 +168,17 @@ pub struct Runtime {
     /// Failures from a network after which it is reported for guessing passwords.
     #[serde(default = "login_report_after")]
     pub login_report_after: u32,
+
+    // Captcha on the web sign-in page.
+    /// `""` (off), `hcaptcha`, `turnstile`, `recaptcha` or `altcha`.
+    #[serde(default)]
+    pub captcha_provider: String,
+    /// The public key the widget is shown with (not used by ALTCHA).
+    #[serde(default)]
+    pub captcha_site_key: String,
+    /// The provider's secret for checking answers, stored sealed (not used by ALTCHA).
+    #[serde(default)]
+    pub captcha_secret_key: String,
 }
 
 fn login_window_mins() -> i64 {
@@ -223,7 +234,7 @@ fn spam_subject_prefix() -> String {
 }
 
 /// A secret the settings API never shows: it is replaced by this marker when listed.
-pub const SECRET_KEYS: [&str; 1] = ["default_route_password"];
+pub const SECRET_KEYS: [&str; 2] = ["default_route_password", "captcha_secret_key"];
 
 fn yes() -> bool {
     true
@@ -291,6 +302,9 @@ impl Runtime {
             login_max_lock_hours: login_max_lock_hours(),
             login_tarpit_after: login_tarpit_after(),
             login_report_after: login_report_after(),
+            captcha_provider: String::new(),
+            captcha_site_key: String::new(),
+            captcha_secret_key: String::new(),
         }
     }
 
@@ -302,6 +316,13 @@ impl Runtime {
     /// Whether to sign in to the default route: switched on and with a user name.
     pub fn route_signs_in(&self) -> bool {
         self.default_route_auth && !self.default_route_username.is_empty()
+    }
+
+    /// The captcha the sign-in page asks for: switched on and, for the hosted providers, with
+    /// both keys entered.
+    pub fn captcha(&self) -> Option<crate::captcha::Provider> {
+        let provider = crate::captcha::Provider::parse(&self.captcha_provider)?;
+        (!provider.hosted() || (!self.captcha_site_key.is_empty() && !self.captcha_secret_key.is_empty())).then_some(provider)
     }
 
     pub fn login_limits(&self) -> crate::auth::LoginLimits {
@@ -390,6 +411,12 @@ impl Runtime {
         if !(1..=10_000).contains(&self.login_tarpit_after) || !(1..=10_000).contains(&self.login_report_after) {
             return Err("the slow-down and report thresholds must be between 1 and 10000".into());
         }
+        if !self.captcha_provider.is_empty() && crate::captcha::Provider::parse(&self.captcha_provider).is_none() {
+            return Err("the captcha must be one of hcaptcha, turnstile, recaptcha or altcha".into());
+        }
+        if self.captcha_site_key.len() > 200 || !self.captcha_site_key.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b)) {
+            return Err("invalid captcha site key".into());
+        }
         Ok(())
     }
 
@@ -464,6 +491,12 @@ mod tests {
         .unwrap();
         assert!(old.spam_check_inbound && old.privacy_hide_client_ip && old.strict_from_check && old.log_retention_days == 90 && !old.quarantine_misbehaving);
 
+        // A hosted captcha is used only once both keys are entered; ALTCHA needs none.
+        assert!(base.with_overrides(json!({ "captcha_provider": "turnstile", "captcha_site_key": "0x4AAA" }).as_object().unwrap()).unwrap().captcha().is_none());
+        let both = json!({ "captcha_provider": "turnstile", "captcha_site_key": "0x4AAA", "captcha_secret_key": "sealed" });
+        assert!(base.with_overrides(both.as_object().unwrap()).unwrap().captcha().is_some());
+        assert!(base.with_overrides(json!({ "captcha_provider": "altcha" }).as_object().unwrap()).unwrap().captcha().is_some());
+
         for bad in [
             json!({ "max_recipients": 0 }),
             json!({ "max_recipients": "many" }),
@@ -487,6 +520,8 @@ mod tests {
             json!({ "login_max_failures_per_ip": 0 }),
             json!({ "login_max_lock_hours": 0 }),
             json!({ "login_window_mins": 120, "login_max_lock_hours": 1 }),
+            json!({ "captcha_provider": "geetest" }),
+            json!({ "captcha_site_key": "<script>" }),
         ] {
             assert!(base.with_overrides(bad.as_object().unwrap()).is_err(), "{bad}");
         }

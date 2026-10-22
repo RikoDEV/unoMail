@@ -2051,5 +2051,17 @@
   "After you unsubscribe, it can take senders a few days to stop sending you mail.": "Après votre désabonnement, les expéditeurs peuvent mettre quelques jours à arrêter de vous écrire.",
   "No subscriptions in your recent mail.": "Aucun abonnement dans vos e-mails récents.",
   "Unsubscribe from {{sender}}": "Se désabonner de {{sender}}",
-  "Loading": "Chargement"
+  "Loading": "Chargement",
+  "The verification could not be loaded. Reload the page to try again.": "La vérification n'a pas pu être chargée. Rechargez la page pour réessayer.",
+  "Verified that you are not a robot": "Vérifié : vous n'êtes pas un robot",
+  "Checking that you are not a robot…": "Vérification que vous n'êtes pas un robot…",
+  "Complete the verification and try again.": "Terminez la vérification et réessayez.",
+  "Sign-in captcha": "Captcha de connexion",
+  "Ask for a captcha on the web sign-in page before the password is checked. ALTCHA is a proof of work solved by the browser: it needs no account and sends nothing to anyone else.": "Demander un captcha sur la page de connexion avant de vérifier le mot de passe. ALTCHA est une preuve de travail résolue par le navigateur : aucun compte n'est nécessaire et rien n'est envoyé à des tiers.",
+  "Captcha": "Captcha",
+  "hCaptcha, Turnstile and reCAPTCHA (v2 checkbox) need the keys of a site registered with them": "hCaptcha, Turnstile et reCAPTCHA (case à cocher v2) nécessitent les clés d'un site enregistré chez eux",
+  "Site key": "Clé du site",
+  "The public key the widget is shown with": "La clé publique avec laquelle le widget est affiché",
+  "Secret key": "Clé secrète",
+  "Enter the site key and the secret key. Until then no captcha is asked for.": "Saisissez la clé du site et la clé secrète. D'ici là, aucun captcha n'est demandé."
 }
