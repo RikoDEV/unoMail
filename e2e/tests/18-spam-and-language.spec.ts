@@ -42,7 +42,7 @@ test.describe('spam reports and interface language', () => {
 
     // In Junk the reader offers "Not spam" instead; it moves the message back and is learned.
     await page.goto('/mail');
-    await folders(page).getByRole('button', { name: /^Junk/ }).click();
+    await folders(page).getByRole('link', { name: /^Junk/ }).click();
     await rows(page).filter({ hasText: 'You won a million' }).click();
     const reader = page.getByRole('region', { name: 'Conversation' });
     await expect(reader.getByRole('button', { name: 'Report spam' })).toHaveCount(0);
@@ -69,8 +69,8 @@ test.describe('spam reports and interface language', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'pl');
     await page.goto('/mail');
     const foldery = page.getByRole('navigation', { name: 'Foldery' });
-    await expect(foldery.getByRole('button', { name: /^Odebrane/ })).toBeVisible();
-    await expect(foldery.getByRole('button', { name: /^Wysłane/ })).toBeVisible();
+    await expect(foldery.getByRole('link', { name: /^Odebrane/ })).toBeVisible();
+    await expect(foldery.getByRole('link', { name: /^Wysłane/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Napisz' })).toBeVisible();
 
     // Another device (a fresh browser) picks the language up from the account after signing in.

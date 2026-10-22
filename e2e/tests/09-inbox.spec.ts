@@ -109,9 +109,9 @@ test.describe('inbox tools', () => {
     await smtpDeliver('dev@lists.test', CAROL, mail('Dev list <dev@lists.test>', '[dev] Release plan', 'List-Id: <dev.lists.test>\nList-Post: <mailto:dev@lists.test>\n'));
     await login(page, CAROL, USER_PASSWORD);
     const tabs = page.getByRole('tablist', { name: 'Inbox categories' });
-    await expect(tabs.getByRole('tab')).toHaveText([/General/, /Offers/, /Communities/, /Notifications/, /Forums/]);
+    await expect(tabs.getByRole('tab')).toHaveText([/Primary/, /Offers/, /Communities/, /Notifications/, /Forums/]);
 
-    // General holds personal mail only; each other tab shows its own, with an unread count.
+    // Primary holds personal mail only; each other tab shows its own, with an unread count.
     await expect(rows(page)).toHaveCount(2);
     await expect(row(page, 'Autumn sale')).toHaveCount(0);
     await expect(tabs.getByRole('tab', { name: /Offers/ })).toContainText('1');
@@ -129,11 +129,11 @@ test.describe('inbox tools', () => {
     await tabs.getByRole('tab', { name: /Notifications/ }).click();
     await row(page, 'Your statement is ready').click();
     await conversation(page).getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: 'General', exact: true }).click();
-    await expect(page.getByText('Moved to General.')).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Primary', exact: true }).click();
+    await expect(page.getByText('Moved to Primary.')).toBeVisible();
     await page.getByRole('button', { name: 'Back to list' }).click();
     await expect(page.getByText('Nothing here yet.')).toBeVisible();
-    await tabs.getByRole('tab', { name: /General/ }).click();
+    await tabs.getByRole('tab', { name: /Primary/ }).click();
     await expect(row(page, 'Your statement is ready')).toBeVisible();
     await row(page, 'Your statement is ready').dragTo(tabs.getByRole('tab', { name: /Notifications/ }));
     await expect(page.getByText('Moved to Notifications')).toBeVisible();
@@ -165,7 +165,7 @@ test.describe('inbox tools', () => {
     await page.getByRole('button', { name: 'Back to list' }).click();
 
     // Personal mail has no unsubscribe button.
-    await page.getByRole('tab', { name: /General/ }).click();
+    await page.getByRole('tab', { name: /Primary/ }).click();
     await row(page, 'You will love this').click();
     await expect(conversation(page).getByRole('button', { name: 'Unsubscribe' })).toHaveCount(0);
 
