@@ -9,8 +9,6 @@
 //!   it to its recipients (and to the sender, so that Sent stays readable), and decrypts mail
 //!   encrypted to the user when it is read.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use cbc::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use cms::{
@@ -31,7 +29,7 @@ use serde::Serialize;
 use sha2::Digest;
 use x509_cert::{Certificate, spki::AlgorithmIdentifierOwned};
 
-use crate::{app::App, security::authn::find_header_end};
+use crate::{app::App, security::authn::find_header_end, util::now};
 
 const ID_DATA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.1");
 const ID_SIGNED_DATA: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2");
@@ -48,10 +46,6 @@ const AES192_CBC: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.10
 const AES256_CBC: ObjectIdentifier = ObjectIdentifier::new_unwrap("2.16.840.1.101.3.4.1.42");
 const ECDSA_SHA256: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.2");
 const ECDSA_SHA384: ObjectIdentifier = ObjectIdentifier::new_unwrap("1.2.840.10045.4.3.3");
-
-fn now() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
-}
 
 // --- Certificates ------------------------------------------------------------------------------
 

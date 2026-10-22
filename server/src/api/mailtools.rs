@@ -363,7 +363,7 @@ async fn unsubscribe_message(state: &AppState, session: &Session, id: i64) -> Js
         let url = reqwest::Url::parse(url).map_err(|_| ApiError::bad("the unsubscribe address is invalid"))?;
         // The same rules as for remote images: public hosts only, the checked address is the
         // one connected to, and no redirects are followed for a state-changing request.
-        let (host, addr) = super::mailboxes::public_target(&state, &url, &[443, 8443]).await?;
+        let (host, addr) = super::mailboxes::public_target(state, &url, &[443, 8443]).await?;
         let client = reqwest::Client::builder()
             .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
             .resolve(&host, addr)
@@ -373,7 +373,7 @@ async fn unsubscribe_message(state: &AppState, session: &Session, id: i64) -> Js
             .map_err(anyhow::Error::from)?;
         let response = client.post(url).header("content-type", "application/x-www-form-urlencoded").header("user-agent", "unoMail").body("List-Unsubscribe=One-Click").send().await;
         let done = response.as_ref().is_ok_and(|r| r.status().is_success() || r.status().is_redirection());
-        session.audit(&state, "mail.unsubscribed", &message.from_addr, if done { "one-click" } else { "one-click failed" }).await;
+        session.audit(state, "mail.unsubscribed", &message.from_addr, if done { "one-click" } else { "one-click failed" }).await;
         if done {
             return Ok(Json(json!({ "method": "one-click" })));
         }
@@ -387,9 +387,9 @@ async fn unsubscribe_message(state: &AppState, session: &Session, id: i64) -> Js
             body.replace('\n', "\r\n")
         );
         let submission = Submission { account: &session.account, sender: &sender, recipients: std::slice::from_ref(&target), raw: raw.as_bytes(), delegate: None, ip: session.ip };
-        return match submit::submit(&state, submission).await {
+        return match submit::submit(state, submission).await {
             Outcome::Accepted(_) => {
-                session.audit(&state, "mail.unsubscribed", &message.from_addr, "mail").await;
+                session.audit(state, "mail.unsubscribed", &message.from_addr, "mail").await;
                 Ok(Json(json!({ "method": "mail", "to": target.to_string() })))
             }
             Outcome::Rejected(reply) | Outcome::Deferred(reply) => Err(ApiError::bad(format!("the unsubscribe request could not be sent: {}", reply.splitn(3, ' ').nth(2).unwrap_or(&reply)))),
