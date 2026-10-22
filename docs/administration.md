@@ -123,18 +123,19 @@ are excluded. Requests allow up to 60,000 body characters, take at most 90 secon
 are limited to ten per minute per account, with eight simultaneous provider requests
 server-wide. Results are displayed in the reader without being stored in the mailbox.
 
-### Purchase-card extraction
+### Summary-card extraction
 
-Under **Models → Purchase card extraction**, choose a model for extracting purchase facts
+Under **Models → Summary card extraction**, choose a model for extracting order, booking and bill facts
 from ordinary emails. **Allow automatic AI extraction** permits background processing only
 for users who also enable it in Settings → Inbox. Both automatic-processing switches are
 off by default. With a model selected, users can also explicitly request extraction from
-an eligible purchase message without enabling automatic processing.
+an eligible message without enabling automatic processing.
 
-JSON-LD `Order` and `ParcelDelivery` data is read locally from the original email before
-HTML sanitization, and takes precedence over AI extraction. Local extraction works without
-any configured model. This first release supports purchase cards; event, bill, travel,
-inbox “Happening soon” and search cards are follow-up phases.
+JSON-LD (schema.org) data is read locally from the original email before HTML sanitization,
+and takes precedence over AI extraction: `Order` and `ParcelDelivery`; `FlightReservation`,
+`TrainReservation`, `BusReservation`, `LodgingReservation`, `RentalCarReservation`,
+`FoodEstablishmentReservation` and `EventReservation`; and `Invoice`. Local extraction works
+without any configured model. Inbox “Happening soon” and search cards are follow-up phases.
 
 The worker processes a durable queue outside the delivery transaction. It allows up to
 5,000 pending jobs, retries extraction failures up to three times, and defers provider
@@ -142,8 +143,11 @@ rate limits without consuming those retries. AI calls share the existing per-acc
 and global provider limits. Existing mail can be processed in bounded batches of up to
 200 recent messages from the user's inbox settings.
 
-Facts are scoped to the receiving account. Related messages match by sender domain,
-merchant name and order number, with separate shipment tracking details. Each source
+Facts are scoped to the receiving account. Related messages match by sender domain and the
+card's party and number: merchant and order number (with separate shipment tracking
+details), provider and confirmation number (plus flight, train or bus number and travel
+day, so each leg is its own card), or biller, reference and due date. AI-extracted facts
+are kept only when the quoted evidence and each field appear verbatim in the message. Each source
 retains its extraction method and evidence. Deleted, Trash and Junk source messages
 no longer contribute facts or links. Status reflects the messages received, without
 contacting a carrier or merchant for live tracking updates.

@@ -51,8 +51,8 @@ test('structured purchase cards consolidate messages, retain dismissal and follo
     await card.getByRole('button', { name: 'Dismiss', exact: true }).click();
     await expect(card).toHaveCount(0);
     await user.reload();
-    await expect(user.getByRole('button', { name: 'Show purchase card', exact: true })).toBeVisible();
-    await user.getByRole('button', { name: 'Show purchase card', exact: true }).click();
+    await expect(user.getByRole('button', { name: 'Show summary card', exact: true })).toBeVisible();
+    await user.getByRole('button', { name: 'Show summary card', exact: true }).click();
     await expect(card).toBeVisible();
     await importMail(user, 'Purchase delivered P42', markup({ ...shippingData, deliveryStatus: { eventType: 'Delivered' } }), true, 3);
     await expect.poll(async () => (await cards(user, order)).cards[0]?.purchase.status).toBe('delivered');
@@ -60,10 +60,10 @@ test('structured purchase cards consolidate messages, retain dismissal and follo
     await expect(card.getByText('Delivered', { exact: true }).first()).toBeVisible();
     const readerUrl = user.url();
     await user.goto('/settings?tab=inbox');
-    await user.getByLabel('Show purchase cards', { exact: true }).uncheck();
+    await user.getByLabel('Show summary cards', { exact: true }).uncheck();
     await expect.poll(async () => (await (await user.request.get('/api/me/preferences')).json()).summary_cards).toBe(false);
     await user.goto(readerUrl);
-    await expect(user.getByRole('region', { name: 'Purchase cards', exact: true })).toHaveCount(0);
+    await expect(user.getByRole('region', { name: 'Summary cards', exact: true })).toHaveCount(0);
     expect((await page.request.get(`/api/me/summary-cards?email_id=${order}`)).status()).toBe(404);
     const id = (await cards(user, order)).cards[0]?.id;
     // Disabled users receive no stored card payload.
@@ -96,7 +96,7 @@ test('AI extraction is explicit or requires both automatic-processing switches',
     expect(modelResponse.ok()).toBe(true);
     modelId = (await modelResponse.json()).id;
     await openAdmin(page, 'Models');
-    const settings = page.getByRole('region', { name: 'Purchase card extraction', exact: true });
+    const settings = page.getByRole('region', { name: 'Summary card extraction', exact: true });
     await settings.getByLabel('Extraction model', { exact: true }).click();
     await page.getByRole('option', { name: 'Purchase extractor', exact: true }).click();
     await settings.getByLabel('Allow automatic AI extraction', { exact: true }).check();
@@ -112,14 +112,14 @@ test('AI extraction is explicit or requires both automatic-processing switches',
     expect(requests).toHaveLength(0); // User has not opted in.
     await user.reload();
     await user.getByTestId('email-row').filter({ hasText: 'Order AI42' }).click();
-    await user.getByRole('button', { name: 'Extract purchase card with AI', exact: true }).click();
+    await user.getByRole('button', { name: 'Extract summary card with AI', exact: true }).click();
     const card = user.getByRole('article', { name: 'Purchase from Shop', exact: true });
     await expect(card).toBeVisible();
     expect(requests).toHaveLength(1);
     await expect(card.getByRole('link', { name: 'View order', exact: true })).toHaveCount(0); // Invented URL is rejected.
     await expect(card.getByRole('link', { name: 'Track package', exact: true })).toHaveAttribute('href', 'https://carrier.test/ai');
     await user.goto('/settings?tab=inbox');
-    await user.getByLabel('Automatically extract purchases with AI', { exact: true }).check();
+    await user.getByLabel('Automatically extract summary cards with AI', { exact: true }).check();
     await expect.poll(async () => (await (await user.request.get('/api/me/preferences')).json()).summary_cards_ai).toBe(true);
     const second = await importMail(user, 'Order AI43', message('AI43'));
     await expect.poll(async () => (await cards(user, second)).cards.length).toBe(1);

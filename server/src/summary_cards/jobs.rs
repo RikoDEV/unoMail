@@ -6,7 +6,8 @@ use regex::Regex;
 use crate::{app::AppState, error::ApiError, util::now};
 use super::{config, extract, persist, preferences};
 
-static PURCHASE_WORDS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(order|purchase|shipment|shipping|delivery|tracking|zamów|przesył|bestell|liefer|commande|livraison|objedn|zásilk|spedizione|pedido)").unwrap());
+// Words that suggest an order, a booking or a bill, in the interface languages and a few more.
+static PURCHASE_WORDS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(order|purchase|shipment|shipping|delivery|tracking|zamów|przesył|bestell|liefer|commande|livraison|objedn|zásilk|spedizione|pedido|reservation|booking|itinerary|boarding|flight|check-in|ticket|invoice|bill|payment due|rezerwac|lot\b|bilet|faktur|rachun|buchung|flug|rechnung|réservation|billet|facture|rezervac|letenk|vstupenk|reserva|factura)").unwrap());
 
 pub fn candidate(text: &str) -> bool { PURCHASE_WORDS.is_match(text) }
 

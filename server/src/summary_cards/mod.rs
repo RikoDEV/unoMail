@@ -1,4 +1,4 @@
-//! Persisted, account-scoped purchase cards. Facts retain their source message; user state
+//! Persisted, account-scoped summary cards: purchases, reservations and bills. Facts retain their source message; user state
 //! is separate. Aggregation reads only surviving, non-junk sources, so deletion cannot leave
 //! behind facts or action links from a message the account no longer holds.
 
@@ -88,47 +88,164 @@ impl Purchase {
     }
 }
 
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReservationKind { #[default] Flight, Lodging, Train, Bus, RentalCar, Restaurant, Event }
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReservationStatus { #[default] Confirmed, Pending, Cancelled }
+
+/// A booking: a flight, train or bus leg, a hotel stay, a rental car, a table or an event ticket.
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Reservation {
+    pub kind: ReservationKind,
+    /// Who holds the booking: the airline, hotel, rental company, restaurant or ticket seller.
+    pub provider: String,
+    pub reservation_number: String,
+    pub status: ReservationStatus,
+    /// The hotel, restaurant, event or car booked, when it differs from the provider.
+    pub name: Option<String>,
+    /// Flight, train or bus number; tells the legs of one booking apart.
+    pub segment: Option<String>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub location: Option<String>,
+    /// YYYY-MM-DD, RFC 3339, or a local date-time without zone (YYYY-MM-DDTHH:MM[:SS]).
+    pub start: Option<String>,
+    pub end: Option<String>,
+    pub url: Option<String>,
+}
+
+impl Reservation {
+    pub fn merge(&mut self, next: Self) {
+        // A cancellation is final; a later routine confirmation must not revive the booking.
+        let rank = |s: &ReservationStatus| match s { ReservationStatus::Pending => 0, ReservationStatus::Confirmed => 1, ReservationStatus::Cancelled => 2 };
+        if rank(&next.status) >= rank(&self.status) { self.status = next.status; }
+        for (mine, theirs) in [(&mut self.name, next.name), (&mut self.from, next.from), (&mut self.to, next.to), (&mut self.location, next.location),
+            (&mut self.start, next.start), (&mut self.end, next.end), (&mut self.url, next.url)] {
+            if theirs.is_some() { *mine = theirs; }
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BillStatus { #[default] Due, Overdue, Paid }
+
+/// A bill or invoice awaiting, or confirming, payment.
+#[derive(Debug, Default, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct Bill {
+    pub biller: String,
+    /// Invoice, statement or account number.
+    pub reference: String,
+    pub amount: Option<Money>,
+    pub due_date: Option<String>,
+    pub status: BillStatus,
+    pub url: Option<String>,
+}
+
+impl Bill {
+    pub fn merge(&mut self, next: Self) {
+        let rank = |s: &BillStatus| match s { BillStatus::Due => 0, BillStatus::Overdue => 1, BillStatus::Paid => 2 };
+        if rank(&next.status) >= rank(&self.status) { self.status = next.status; }
+        if next.amount.is_some() { self.amount = next.amount; }
+        if next.due_date.is_some() { self.due_date = next.due_date; }
+        if next.url.is_some() { self.url = next.url; }
+    }
+}
+
+/// One card's facts as read from one message.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Card { Purchase(Purchase), Reservation(Reservation), Bill(Bill) }
+
+impl Card {
+    pub fn kind(&self) -> &'static str {
+        match self { Card::Purchase(_) => "purchase", Card::Reservation(_) => "reservation", Card::Bill(_) => "bill" }
+    }
+    /// What identifies the card across messages from one sender domain.
+    fn identity(&self) -> String {
+        match self {
+            // Unchanged from purchase-only cards, so existing cards keep reconciling.
+            Card::Purchase(p) => format!("{}\n{}", p.merchant.to_lowercase(), p.order_number),
+            // Legs of one booking share its number; the segment and travel day tell them apart.
+            Card::Reservation(r) => {
+                let day = if r.segment.is_some() { r.start.as_deref().map(|s| &s[..s.len().min(10)]).unwrap_or_default() } else { "" };
+                format!("reservation\n{:?}\n{}\n{}\n{}\n{day}", r.kind, r.provider.to_lowercase(), r.reservation_number, r.segment.as_deref().unwrap_or_default())
+            }
+            Card::Bill(b) => format!("bill\n{}\n{}\n{}", b.biller.to_lowercase(), b.reference, b.due_date.as_deref().unwrap_or_default()),
+        }
+    }
+    fn details(&self) -> Result<String, ApiError> {
+        let text = match self { Card::Purchase(p) => serde_json::to_string(p), Card::Reservation(r) => serde_json::to_string(r), Card::Bill(b) => serde_json::to_string(b) };
+        Ok(text.map_err(anyhow::Error::from)?)
+    }
+    fn parse(kind: &str, details: &str) -> Result<Self, ApiError> {
+        let card = match kind {
+            "reservation" => serde_json::from_str(details).map(Card::Reservation),
+            "bill" => serde_json::from_str(details).map(Card::Bill),
+            _ => serde_json::from_str(details).map(Card::Purchase),
+        };
+        Ok(card.map_err(anyhow::Error::from)?)
+    }
+    fn merge(&mut self, next: Self) {
+        match (self, next) {
+            (Card::Purchase(a), Card::Purchase(b)) => a.merge(b),
+            (Card::Reservation(a), Card::Reservation(b)) => a.merge(b),
+            (Card::Bill(a), Card::Bill(b)) => a.merge(b),
+            _ => {}
+        }
+    }
+}
+
 /// Store source facts atomically, idempotent across retries and process restarts.
-pub async fn persist(state: &AppState, account: i64, message: i64, sender: &str, purchases: Vec<extract::Extracted>, method: &str) -> Result<(), ApiError> {
+pub async fn persist(state: &AppState, account: i64, message: i64, sender: &str, cards: Vec<extract::Extracted>, method: &str) -> Result<(), ApiError> {
     let domain = sender.rsplit_once('@').map(|(_, d)| d.to_ascii_lowercase()).ok_or_else(|| ApiError::bad("message has no sender domain"))?;
     let mut tx = state.db.begin().await?;
-    for extracted in purchases {
-        let purchase = extracted.purchase;
-        // Never reconcile unrelated merchants, even if they reuse an order number or a thread.
-        let key = crate::util::sha256_hex(format!("{domain}\n{}\n{}", purchase.merchant.to_lowercase(), purchase.order_number).as_bytes());
-        let id: i64 = sqlx::query_scalar("INSERT INTO purchase_cards (account_id, entity_key, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(account_id, entity_key) DO UPDATE SET updated_at = excluded.updated_at RETURNING id")
-            .bind(account).bind(key).bind(now()).bind(now()).fetch_one(&mut *tx).await?;
-        // Multiple JSON-LD records for the same order in one email are combined before saving.
+    for extracted in cards {
+        let card = extracted.card;
+        // Never reconcile unrelated senders, even if they reuse an order number or a thread.
+        let key = crate::util::sha256_hex(format!("{domain}\n{}", card.identity()).as_bytes());
+        let id: i64 = sqlx::query_scalar("INSERT INTO purchase_cards (account_id, entity_key, kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(account_id, entity_key) DO UPDATE SET updated_at = excluded.updated_at RETURNING id")
+            .bind(account).bind(key).bind(card.kind()).bind(now()).bind(now()).fetch_one(&mut *tx).await?;
+        // Multiple JSON-LD records for the same card in one email are combined before saving.
         let known: Option<String> = sqlx::query_scalar("SELECT details FROM purchase_card_sources WHERE card_id = ? AND message_id = ?").bind(id).bind(message).fetch_optional(&mut *tx).await?;
-        let purchase = if let Some(known) = known { let mut p: Purchase = serde_json::from_str(&known).map_err(anyhow::Error::from)?; p.merge(purchase); p } else { purchase };
+        let card = if let Some(known) = known { let mut c = Card::parse(card.kind(), &known)?; c.merge(card); c } else { card };
         sqlx::query("INSERT INTO purchase_card_sources (card_id, message_id, details, method, evidence) SELECT ?, id, ?, ?, ? FROM messages WHERE id = ? AND account_id = ? ON CONFLICT(card_id, message_id) DO UPDATE SET details = excluded.details, method = excluded.method, evidence = excluded.evidence")
-            .bind(id).bind(serde_json::to_string(&purchase).map_err(anyhow::Error::from)?).bind(method).bind(extracted.evidence).bind(message).bind(account).execute(&mut *tx).await?;
+            .bind(id).bind(card.details()?).bind(method).bind(extracted.evidence).bind(message).bind(account).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(())
 }
 
 pub async fn cards_for(state: &AppState, account: i64, message: i64) -> Result<Vec<Value>, ApiError> {
-    let ids: Vec<(i64, bool)> = sqlx::query_as("SELECT c.id, c.dismissed FROM purchase_cards c JOIN purchase_card_sources s ON s.card_id = c.id WHERE c.account_id = ? AND s.message_id = ? ORDER BY c.id LIMIT 10")
+    let ids: Vec<(i64, bool, String)> = sqlx::query_as("SELECT c.id, c.dismissed, c.kind FROM purchase_cards c JOIN purchase_card_sources s ON s.card_id = c.id WHERE c.account_id = ? AND s.message_id = ? ORDER BY c.id LIMIT 10")
         .bind(account).bind(message).fetch_all(&state.db).await?;
     let mut result = Vec::new();
-    for (id, dismissed) in ids {
+    for (id, dismissed, kind) in ids {
         let mut sources: Vec<(String, String, i64, i64, String)> = sqlx::query_as("SELECT s.details, s.method, m.id, m.thread_id, m.subject FROM purchase_card_sources s JOIN messages m ON m.id = s.message_id JOIN mailboxes b ON b.id = m.mailbox_id WHERE s.card_id = ? AND m.account_id = ? AND m.deleted = 0 AND m.draft = 0 AND COALESCE(b.role, '') NOT IN ('junk', 'trash') ORDER BY CASE WHEN m.sent_date > 0 THEN m.sent_date ELSE m.internal_date END DESC, m.id DESC LIMIT 100")
             .bind(id).bind(account).fetch_all(&state.db).await?;
         sources.reverse();
-        let mut purchase: Option<Purchase> = None;
+        let mut merged: Option<Card> = None;
         let mut evidence = Vec::new();
         for (details, method, message, thread, subject) in sources {
-            let next: Purchase = serde_json::from_str(&details).map_err(anyhow::Error::from)?;
-            if let Some(p) = &mut purchase { p.merge(next); } else { purchase = Some(next); }
+            let next = Card::parse(&kind, &details)?;
+            if let Some(c) = &mut merged { c.merge(next); } else { merged = Some(next); }
             evidence.push(json!({ "email_id": format!("m{message}"), "thread_id": format!("t{thread}"), "subject": subject, "method": method }));
         }
-        if let Some(mut purchase) = purchase {
-            // One delivered parcel does not imply that every shipment of this order arrived.
-            if purchase.shipments.len() > 1 && purchase.status == Status::Delivered && purchase.shipments.iter().any(|s| s.status != Status::Delivered) {
-                purchase.status = Status::Shipped;
+        match merged {
+            Some(Card::Purchase(mut purchase)) => {
+                // One delivered parcel does not imply that every shipment of this order arrived.
+                if purchase.shipments.len() > 1 && purchase.status == Status::Delivered && purchase.shipments.iter().any(|s| s.status != Status::Delivered) {
+                    purchase.status = Status::Shipped;
+                }
+                result.push(json!({ "id": id, "kind": "purchase", "dismissed": dismissed, "purchase": purchase, "sources": evidence }));
             }
-            result.push(json!({ "id": id, "kind": "purchase", "dismissed": dismissed, "purchase": purchase, "sources": evidence }));
+            Some(Card::Reservation(reservation)) => result.push(json!({ "id": id, "kind": "reservation", "dismissed": dismissed, "reservation": reservation, "sources": evidence })),
+            Some(Card::Bill(bill)) => result.push(json!({ "id": id, "kind": "bill", "dismissed": dismissed, "bill": bill, "sources": evidence })),
+            None => {}
         }
     }
     Ok(result)
@@ -148,5 +265,17 @@ mod tests {
         assert_eq!(order.status, Status::Delivered);
         assert_eq!(order.shipments.len(), 2);
         assert_eq!(order.shipments[0].status, Status::Delivered);
+    }
+    #[test]
+    fn cancellations_and_payments_are_final() {
+        let mut flight = Reservation { provider: "Air".into(), reservation_number: "XYZ".into(), start: Some("2027-03-04T08:00:00+01:00".into()), ..Default::default() };
+        flight.merge(Reservation { status: ReservationStatus::Cancelled, ..Default::default() });
+        flight.merge(Reservation { status: ReservationStatus::Confirmed, ..Default::default() });
+        assert_eq!(flight.status, ReservationStatus::Cancelled);
+        assert_eq!(flight.start.as_deref(), Some("2027-03-04T08:00:00+01:00"));
+        let mut bill = Bill { biller: "Power".into(), reference: "INV-1".into(), status: BillStatus::Paid, ..Default::default() };
+        bill.merge(Bill { status: BillStatus::Due, due_date: Some("2027-01-31".into()), ..Default::default() });
+        assert_eq!(bill.status, BillStatus::Paid);
+        assert_eq!(bill.due_date.as_deref(), Some("2027-01-31"));
     }
 }

@@ -79,3 +79,25 @@ async fn processing_respects_preferences_and_skips_encrypted_mail() {
     assert!(summary_cards::cards_for(&env.app, alice.id, encrypted).await.unwrap().is_empty());
     assert_eq!(api.get("/api/models/summary-cards").await.status, 403);
 }
+
+#[tokio::test]
+async fn reservations_and_bills_reconcile_per_leg_and_keep_cancellations() {
+    let env = TestEnv::start().await;
+    env.domain("example.test").await;
+    let alice = env.account("alice@example.test").await;
+    let leg = |number: &str, day: &str, status: &str| json!({"@type":"FlightReservation","reservationNumber":"RXJ34P","reservationStatus":status,
+        "reservationFor":{"@type":"Flight","flightNumber":number,"airline":{"name":"United","iataCode":"UA"},"departureTime":format!("2027-03-{day}T20:15:00-08:00")}});
+    // One email confirms both legs of a return trip; a later one cancels the outbound leg only.
+    let both = append(&env, &alice, "booking@united.test", json!({"@graph":[leg("110", "04", "ReservationConfirmed"), leg("111", "09", "ReservationConfirmed")]}), 1).await;
+    append(&env, &alice, "booking@united.test", leg("110", "04", "ReservationCancelled"), 2).await;
+    let bill = append(&env, &alice, "billing@power.test", json!({"@type":"Invoice","accountId":"1234","paymentDueDate":"2027-01-30","provider":{"name":"Power Co"},"totalPaymentDue":{"price":"70.00","priceCurrency":"USD"}}), 3).await;
+    drain(&env).await;
+    let cards = summary_cards::cards_for(&env.app, alice.id, both).await.unwrap();
+    assert_eq!(cards.len(), 2);
+    let status = |segment: &str| cards.iter().find(|c| c["reservation"]["segment"] == segment).unwrap()["reservation"]["status"].clone();
+    assert_eq!(status("UA 110"), "cancelled");
+    assert_eq!(status("UA 111"), "confirmed");
+    assert!(cards.iter().all(|c| c["kind"] == "reservation"));
+    let bills = summary_cards::cards_for(&env.app, alice.id, bill).await.unwrap();
+    assert_eq!((bills[0]["kind"].as_str(), bills[0]["bill"]["amount"]["amount"].as_str()), (Some("bill"), Some("70.00")));
+}

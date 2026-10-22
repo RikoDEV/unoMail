@@ -41,7 +41,8 @@ and built-in spam and virus filtering. Written in Rust and React.
 - Disposable masked addresses with automatic reply identities, expiration and scoped integration tokens
 - On-demand AI summaries and translations with administrator-configured models
 - Context-aware AI reply suggestions that open editable, auto-saved reply drafts
-- Purchase cards with order totals, shipment tracking and updates from related emails
+- Summary cards for orders and shipments, flights, trains, buses, hotels, car rentals,
+  restaurant tables, event tickets and bills, updated from related emails
 - Calendar with invitations, sharing, reminders and tasks; address book with groups and vCard import/export
 - Shared and global folders with per-right access control
 - Sender details and BIMI logos, warnings for deceptive links, blocked remote images,

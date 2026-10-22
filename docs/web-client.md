@@ -26,14 +26,21 @@ Besides reading and writing mail, the web client offers:
   threading, quoted text, signatures and draft autosave are preserved. The ordinary Send
   button sends the reply after review. Opening an email makes no suggestion request.
   Settings → Inbox → **Offer AI reply suggestions** controls the feature.
-- **Purchase cards.** Order and shipping emails can show a compact card above the message:
-  merchant, order number, items, total, delivery estimates and tracking links when known.
-  Cards consolidate updates from related messages, including ones in separate conversations.
-  **Related messages** opens their source emails. **Dismiss** hides an order's card across
-  its related messages; **Show purchase card** restores it. Open cards refresh periodically
-  to pick up new delivery updates. Links open the original merchant or carrier page.
+- **Summary cards.** Order, shipping, booking and bill emails can show a compact card above
+  the message:
+  - *Purchases*: merchant, order number, items, total, delivery estimates and tracking links.
+  - *Reservations*: flights, trains and buses (number, route, departure and arrival),
+    hotel stays, car rentals, restaurant tables and event tickets (what was booked, where
+    and when), with the confirmation number and status; a cancellation stays final.
+  - *Bills*: biller, reference, amount, due date and whether it is paid.
+
+  Cards consolidate updates from related messages, including ones in separate conversations;
+  each leg of a multi-flight booking gets its own card. **Related messages** opens their
+  source emails. **Dismiss** hides a card across its related messages; **Show summary card**
+  restores it. Open cards refresh periodically to pick up new updates. Links open the
+  original merchant, carrier, travel or billing page.
   Settings → Inbox controls card visibility and optional automatic AI extraction.
-  Structured email data is processed locally without AI. Ordinary purchase emails can be
+  Structured email data is processed locally without AI. Ordinary order, booking and bill emails can be
   processed with the administrator's configured model, either on explicit request or when
   both the administrator and user enable automatic extraction. **Process recent mail**
   queues up to 200 messages using those settings. Encrypted messages are excluded.

@@ -39,8 +39,8 @@ function ExtractionSettings({ models }: { models: Model[] }) {
   const { run, feedback } = useAction();
   const value = draft ?? settings.data;
   if (!value) return settings.error ? <Alert severity="error">{settings.error}</Alert> : null;
-  return <Box component="section" aria-label={t('Purchase card extraction')} sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-    <Typography variant="h6" sx={{ mb: 1 }}>{t('Purchase card extraction')}</Typography>
+  return <Box component="section" aria-label={t('Summary card extraction')} sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+    <Typography variant="h6" sx={{ mb: 1 }}>{t('Summary card extraction')}</Typography>
     {feedback}
     <Stack spacing={1.5} alignItems="flex-start">
       {/* MUI renders an empty-string select value as nothing selected, so local-only uses a sentinel. */}
