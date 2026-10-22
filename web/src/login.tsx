@@ -9,7 +9,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { autofillAvailable, forgetUnknownPasskey, type PasskeyAnswer, passkeysAvailable, type RequestOptions, signWithPasskey, wasDismissed } from './webauthn';
 
 import { currentLanguage, LANGUAGES, setLanguage, t } from './i18n';
-import { Copyright, useTitle } from './shell';
+import { Copyright, Logo, useTitle } from './shell';
 /** The second step of a sign-in: a code from the authenticator app, a passkey, or a recovery code. */
 function SecondStep({ challenge, onDone, onCancel }: { challenge: SecondFactorChallenge; onDone: (data: { account: Account; csrf_token: string }) => void; onCancel: () => void }) {
   const [mode, setMode] = useState<'totp' | 'recovery'>(challenge.methods.totp ? 'totp' : 'recovery');
@@ -257,9 +257,12 @@ export function Login({ adding = false }: { adding?: boolean }) {
           ) : (
           <Stack component="form" spacing={2.5} onSubmit={submit}>
             <Box>
-              <Typography variant="h4" component="h1" color="primary" fontWeight={600}>
-                {t('unoMail')}
-              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 0.5 }}>
+                <Logo size={44} />
+                <Typography variant="h4" component="h1" color="primary" fontWeight={600}>
+                  {t('unoMail')}
+                </Typography>
+              </Stack>
               <Typography color="text.secondary">{adding ? t('Add another account') : t('Sign in to your mailbox')}</Typography>
             </Box>
             {error && <Alert severity="error">{error}</Alert>}

@@ -1,6 +1,6 @@
 <div align="center">
 
-# unoMail
+<img src="docs/logo-horizontal.svg" width="300" height="64" alt="unoMail" />
 
 **A complete, self-hosted mail server in a single container.**
 

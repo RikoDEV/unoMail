@@ -205,6 +205,23 @@ function LanguageMenu() {
   );
 }
 
+/**
+ * The unoMail mark: an envelope whose flap folds into a soft "u", with a single dot for "uno".
+ * Drawn in the theme's colours so it follows the chosen seed and the dark mode.
+ */
+export function Logo({ size = 32, sx }: { size?: number; sx?: SxProps<Theme> }) {
+  return (
+    <Box component="svg" viewBox="0 0 64 64" aria-hidden width={size} height={size} sx={{ flexShrink: 0, display: 'block', ...sx }}>
+      <Box component="rect" width={64} height={64} rx={18} sx={{ fill: (theme) => theme.palette.primary.main }} />
+      <Box component="g" sx={{ fill: 'none', stroke: (theme) => theme.palette.primary.contrastText, strokeWidth: 4.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
+        <rect x={12} y={18} width={40} height={28} rx={7} />
+        <path d="M14 22 26.5 33.5a8 8 0 0 0 11 0L50 22" />
+      </Box>
+      <Box component="circle" cx={49} cy={17} r={7} strokeWidth={3} sx={{ fill: (theme) => theme.palette.secondary.light, stroke: (theme) => theme.palette.primary.main }} />
+    </Box>
+  );
+}
+
 export function TopBar({ title, children, leading, onHome }: { title: string; children?: ReactNode; leading?: ReactNode; onHome?: () => void }) {
   return (
     <Stack component="header" direction="row" alignItems="center" spacing={{ xs: 1, sm: 2 }} sx={{ px: { xs: 1, sm: 2 }, height: 64, flexShrink: 0 }}>
@@ -219,9 +236,10 @@ export function TopBar({ title, children, leading, onHome }: { title: string; ch
         color="primary"
         fontWeight={600}
         noWrap
-        sx={{ display: { xs: children ? 'none' : 'block', sm: 'block' }, minWidth: { sm: 150 }, flexShrink: children ? 0 : 1, textDecoration: 'none', borderRadius: 1, '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}
+        sx={{ display: { xs: children ? 'none' : 'flex', sm: 'flex' }, alignItems: 'center', gap: 1.25, minWidth: { sm: 150 }, flexShrink: children ? 0 : 1, textDecoration: 'none', borderRadius: 1, '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}
       >
-        {title}
+        <Logo size={32} />
+        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</Box>
       </Typography>
       <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
       <LanguageMenu />
