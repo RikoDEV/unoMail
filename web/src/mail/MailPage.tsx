@@ -32,7 +32,7 @@ import {
 import { SWIPE } from '../swipe';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { del, post, errorText, formatBytes } from '../api';
 import { useAuth } from '../app';
 import { setPluginNotifier, usePlugins } from '../plugins';
@@ -141,8 +141,11 @@ export default function MailPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => setDrawerOpen(false), [params['*'], compact]);
   const mini = !sidebar && !compact;
-  /** In the icon strip an entry has no visible text: name it for tooltips and screen readers. */
-  const named = (name: string) => (mini ? { title: name, 'aria-label': name } : {});
+  /** In the icon strip an entry has no visible text: name it for screen readers and show it in a tooltip. */
+  const named = (name: string) => (mini ? { 'aria-label': name } : {});
+  const tip = (name: string, item: ReactElement) => (mini ? <Tooltip key={item.key} title={name} placement="right">{item}</Tooltip> : item);
+  /** Sidebar entries are real links, so they can be middle-clicked into a new tab. */
+  const linkTo = (to: string) => ({ component: RouterLink, to, onClick: () => setSearch('') });
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [labelDetails, setLabelDetails] = useState<LabelDetail[]>([]);
@@ -972,17 +975,17 @@ export default function MailPage() {
             </Fab>
             <List dense disablePadding aria-label={t('Folder list')}>
               {scheduledCount > 0 && (
-                <ListItemButton selected={label === '$scheduled'} onClick={() => { setSearch(''); navigate(`/mail/label:${encodeURIComponent('$scheduled')}`); }} sx={{ mb: 0.25 }} {...named(t('Scheduled'))}>
+                tip(t('Scheduled'), <ListItemButton selected={label === '$scheduled'} {...linkTo(`/mail/label:${encodeURIComponent('$scheduled')}`)} sx={{ mb: 0.25 }} {...named(t('Scheduled'))}>
                   <ListItemIcon sx={{ minWidth: 40 }}><ScheduleSend /></ListItemIcon>
                   <ListItemText primary={t('Scheduled')} />
                   <Badge badgeContent={scheduledCount} color="secondary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} />
-                </ListItemButton>
+                </ListItemButton>)
               )}
-              {ownMailboxes.map((m) => (
+              {ownMailboxes.map((m) => tip(folderName(m),
                 <ListItemButton
                   key={m.id}
                   selected={mailbox?.id === m.id}
-                  onClick={() => { setSearch(''); navigate(`/mail/${m.role ?? m.id}`); }}
+                  {...linkTo(`/mail/${m.role ?? m.id}`)}
                   sx={{ mb: 0.25, ...dropStyle(m.id) }}
                   data-testid="folder"
                   {...named(folderName(m))}
@@ -991,21 +994,21 @@ export default function MailPage() {
                   <ListItemIcon sx={{ minWidth: 40 }}>{ICONS[m.role ?? ''] ?? (m.sharedWith ? <FolderShared /> : <Folder />)}</ListItemIcon>
                   <ListItemText primary={folderName(m)} primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }} />
                   {m.unreadEmails > 0 && m.role !== 'drafts' ? <Badge badgeContent={m.unreadEmails} color="primary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} /> : <FolderCount count={m.totalEmails} />}
-                  <IconButton size="small" aria-label={t('Folder actions {{value}}', { value: folderName(m) })} onClick={(e) => { e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
+                  <IconButton size="small" aria-label={t('Folder actions {{value}}', { value: folderName(m) })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
                     <MoreVert fontSize="inherit" />
                   </IconButton>
-                </ListItemButton>
+                </ListItemButton>,
               ))}
-              <ListItemButton
+              {tip(t('All mail'), <ListItemButton
                 selected={allMail}
-                onClick={() => { setSearch(''); navigate('/mail/all'); }}
+                {...linkTo('/mail/all')}
                 sx={{ mb: 0.25 }}
                 data-testid="folder-all"
                 {...named(t('All mail'))}
               >
                 <ListItemIcon sx={{ minWidth: 40 }}><AllInbox /></ListItemIcon>
                 <ListItemText primary={t('All mail')} primaryTypographyProps={{ noWrap: true }} />
-              </ListItemButton>
+              </ListItemButton>)}
               <ListItemButton className="mini-hide" onClick={() => setNewFolder('')}>
                 <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
                 <ListItemText primary={t('New folder')} />
@@ -1017,11 +1020,11 @@ export default function MailPage() {
                   {t('Shared with me')}
                 </Typography>
                 <List dense disablePadding aria-label={t('Shared folders')}>
-                  {sharedMailboxes.map((m) => (
+                  {sharedMailboxes.map((m) => tip(`${m.name.split('/').slice(2).join('/') || m.name} (${m.shareOwner ?? 'shared'})`,
                     <ListItemButton
                       key={m.id}
                       selected={mailbox?.id === m.id}
-                      onClick={() => { setSearch(''); navigate(`/mail/${m.id}`); }}
+                      {...linkTo(`/mail/${m.id}`)}
                       sx={{ mb: 0.25, ...dropStyle(m.id) }}
                       {...named(`${m.name.split('/').slice(2).join('/') || m.name} (${m.shareOwner ?? 'shared'})`)}
                       {...(m.myRights?.mayAddItems ? dropProps(m.id, { mailbox: m }) : {})}
@@ -1034,10 +1037,10 @@ export default function MailPage() {
                         secondaryTypographyProps={{ noWrap: true }}
                       />
                       <FolderCount count={m.totalEmails} />
-                      <IconButton size="small" aria-label={t('Folder actions {{name}}', { name: m.name })} onClick={(e) => { e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
+                      <IconButton size="small" aria-label={t('Folder actions {{name}}', { name: m.name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
                         <MoreVert fontSize="inherit" />
                       </IconButton>
-                    </ListItemButton>
+                    </ListItemButton>,
                   ))}
                 </List>
               </>
@@ -1046,27 +1049,27 @@ export default function MailPage() {
               {t('Labels')}
             </Typography>
             <List dense disablePadding aria-label={t('Labels')}>
-              {labels.map((name) => (
+              {labels.map((name) => tip(t('Label {{name}}', { name }),
                 <ListItemButton
                   key={name}
                   selected={label === name}
-                  onClick={() => { setSearch(''); navigate(`/mail/label:${encodeURIComponent(name)}`); }}
+                  {...linkTo(`/mail/label:${encodeURIComponent(name)}`)}
                   sx={{ mb: 0.25, ...dropStyle(`label:${name}`) }}
                   {...named(t('Label {{name}}', { name }))}
                   {...dropProps(`label:${name}`, { label: name })}
                 >
                   <ListItemIcon sx={{ minWidth: 40 }}><LabelIcon sx={{ color: labelColor(name) || undefined }} /></ListItemIcon>
                   <ListItemText primary={name} primaryTypographyProps={{ noWrap: true }} />
-                  <IconButton size="small" aria-label={t('Colour of label {{name}}', { name })} onClick={(e) => { e.stopPropagation(); setLabelDialog({ name, color: labelColor(name), existing: true }); }}>
+                  <IconButton size="small" aria-label={t('Colour of label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setLabelDialog({ name, color: labelColor(name), existing: true }); }}>
                     <Palette fontSize="inherit" />
                   </IconButton>
-                  <IconButton size="small" aria-label={t('Rename label {{name}}', { name })} onClick={(e) => { e.stopPropagation(); void renameLabel(name); }}>
+                  <IconButton size="small" aria-label={t('Rename label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void renameLabel(name); }}>
                     <Edit fontSize="inherit" />
                   </IconButton>
-                  <IconButton size="small" aria-label={t('Delete label {{name}}', { name })} onClick={(e) => { e.stopPropagation(); void deleteLabel(name); }}>
+                  <IconButton size="small" aria-label={t('Delete label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void deleteLabel(name); }}>
                     <Delete fontSize="inherit" />
                   </IconButton>
-                </ListItemButton>
+                </ListItemButton>,
               ))}
               <ListItemButton className="mini-hide" onClick={() => setLabelDialog({ name: '', color: '', existing: false })}>
                 <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
@@ -1074,19 +1077,19 @@ export default function MailPage() {
               </ListItemButton>
             </List>
             <List dense disablePadding sx={{ mt: 1 }} aria-label={t('More')}>
-              <ListItemButton onClick={() => navigate('/calendar')} {...named(t('Calendar'))}>
+              {tip(t('Calendar'), <ListItemButton component={RouterLink} to="/calendar" {...named(t('Calendar'))}>
                 <ListItemIcon sx={{ minWidth: 40 }}><CalendarMonth /></ListItemIcon>
                 <ListItemText primary={t('Calendar')} />
-              </ListItemButton>
-              <ListItemButton onClick={() => navigate('/contacts')} {...named(t('Contacts'))}>
+              </ListItemButton>)}
+              {tip(t('Contacts'), <ListItemButton component={RouterLink} to="/contacts" {...named(t('Contacts'))}>
                 <ListItemIcon sx={{ minWidth: 40 }}><Contacts /></ListItemIcon>
                 <ListItemText primary={t('Contacts')} />
-              </ListItemButton>
-              {plugins.sidebarLinks.map((link) => (
+              </ListItemButton>)}
+              {plugins.sidebarLinks.map((link) => tip(link.label,
                 <ListItemButton key={link.id} component="a" href={link.href} target="_blank" rel="noopener noreferrer" {...named(link.label)}>
                   <ListItemIcon sx={{ minWidth: 40 }}><Extension /></ListItemIcon>
                   <ListItemText primary={link.label} />
-                </ListItemButton>
+                </ListItemButton>,
               ))}
             </List>
             {account && (
