@@ -363,14 +363,7 @@ async fn unsubscribe_message(state: &AppState, session: &Session, id: i64) -> Js
         let url = reqwest::Url::parse(url).map_err(|_| ApiError::bad("the unsubscribe address is invalid"))?;
         // The same rules as for remote images: public hosts only, the checked address is the
         // one connected to, and no redirects are followed for a state-changing request.
-        let (host, addr) = super::mailboxes::public_target(state, &url, &[443, 8443]).await?;
-        let client = reqwest::Client::builder()
-            .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
-            .resolve(&host, addr)
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(std::time::Duration::from_secs(15))
-            .build()
-            .map_err(anyhow::Error::from)?;
+        let client = crate::outbound::to_public(state, &url, &[443, 8443], std::time::Duration::from_secs(15)).await?;
         let response = client.post(url).header("content-type", "application/x-www-form-urlencoded").header("user-agent", "unoMail").body("List-Unsubscribe=One-Click").send().await;
         let done = response.as_ref().is_ok_and(|r| r.status().is_success() || r.status().is_redirection());
         session.audit(state, "mail.unsubscribed", &message.from_addr, if done { "one-click" } else { "one-click failed" }).await;

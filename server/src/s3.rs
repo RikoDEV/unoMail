@@ -120,8 +120,7 @@ fn amz_now() -> String {
 
 impl S3 {
     pub fn new(cfg: S3Config) -> anyhow::Result<Self> {
-        let http = reqwest::Client::builder()
-            .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
+        let http = crate::outbound::builder()
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(300))
             .build()?;

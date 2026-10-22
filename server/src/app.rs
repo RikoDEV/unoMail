@@ -231,19 +231,12 @@ impl App {
         let secrets = Arc::new(crate::secretbox::SecretBox::load(&cfg.data_dir)?);
         crate::secretbox::seal_plaintext(&db, &secrets).await?;
         let tls = TlsManager::load(db.clone(), secrets.clone(), &cfg.hostname).await?;
-        let http = reqwest::Client::builder()
-            .use_preconfigured_tls(
-                rustls::ClientConfig::builder_with_provider(crate::tls::provider())
-                    .with_safe_default_protocol_versions()?
-                    .with_root_certificates(rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() })
-                    .with_no_client_auth(),
-            )
+        let http = crate::outbound::builder()
             .timeout(std::time::Duration::from_secs(15))
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
         let filter_client = |socket: &Option<std::path::PathBuf>| -> anyhow::Result<reqwest::Client> {
-            let builder = reqwest::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none())
-                .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone());
+            let builder = crate::outbound::builder().no_proxy().timeout(std::time::Duration::from_secs(30)).redirect(reqwest::redirect::Policy::none());
             #[cfg(unix)]
             let builder = match socket { Some(path) => builder.unix_socket(path.clone()), None => builder };
             #[cfg(not(unix))]

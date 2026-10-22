@@ -147,8 +147,7 @@ pub async fn remove(State(state): State<AppState>, session: Session, Path(id): P
 
 /// No provider error bodies are returned: they can echo credentials or message content.
 async fn complete(model: &Model, key: &str, instruction: &str, text: &str) -> Result<String, ApiError> {
-    let client = reqwest::Client::builder()
-        .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
+    let client = crate::outbound::builder()
         .redirect(reqwest::redirect::Policy::none()).no_proxy()
         .timeout(Duration::from_secs(90)).connect_timeout(Duration::from_secs(10))
         .build().map_err(anyhow::Error::from)?;

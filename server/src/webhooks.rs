@@ -65,13 +65,7 @@ async fn post(http: &reqwest::Client, target: Option<(String, SocketAddr)>, hook
     let http = match target {
         None => http,
         Some((host, addr)) => {
-            let client = reqwest::Client::builder()
-                .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
-                .resolve(&host, addr)
-                .redirect(reqwest::redirect::Policy::none())
-                .timeout(std::time::Duration::from_secs(15))
-                .build();
-            match client {
+            match crate::outbound::pinned(&host, addr, std::time::Duration::from_secs(15)) {
                 Ok(client) => {
                     pinned = client;
                     &pinned

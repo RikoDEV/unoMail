@@ -216,7 +216,7 @@ pub fn from_env() -> Option<OtlpLayer> {
 }
 
 async fn export(mut receiver: mpsc::Receiver<SpanRecord>, url: String, headers: Vec<(String, String)>, service: String, host: String) {
-    let client = match reqwest::Client::builder().use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone()).timeout(Duration::from_secs(10)).build() {
+    let client = match crate::outbound::builder().timeout(Duration::from_secs(10)).build() {
         Ok(client) => client,
         Err(err) => {
             eprintln!("trace export disabled: {err}");

@@ -1,7 +1,7 @@
 //! Folder-level operations of the web client: exporting and importing messages, sharing a
 //! folder with other users, and fetching remote images on the reader's behalf.
 
-use std::net::SocketAddr;
+use std::time::Duration;
 
 use axum::{
     Json,
@@ -19,7 +19,7 @@ use super::{JsonResult, Session};
 use crate::{
     app::AppState,
     error::ApiError,
-    security::reputation::is_private,
+    outbound,
     sharing::{self, AclError},
     store::{Flags, Mailbox},
 };
@@ -211,27 +211,6 @@ pub(crate) fn sniff_image(data: &[u8]) -> Option<&'static str> {
     }
 }
 
-/// Resolves the host of `url` and returns the address to connect to, refusing anything that is
-/// not a public web server.
-pub(crate) async fn public_target(state: &crate::app::App, url: &reqwest::Url, ports: &[u16]) -> Result<(String, SocketAddr), ApiError> {
-    let refuse = || ApiError::bad("this address cannot be reached");
-    if !matches!(url.scheme(), "http" | "https") || !url.username().is_empty() || url.password().is_some() {
-        return Err(refuse());
-    }
-    let host = url.host_str().ok_or_else(refuse)?.trim_matches(['[', ']']).to_owned();
-    let port = url.port_or_known_default().ok_or_else(refuse)?;
-    let lenient = state.cfg.allow_private_destinations;
-    if !lenient && !ports.contains(&port) {
-        return Err(refuse());
-    }
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host.as_str(), port)).await.map_err(|_| refuse())?.collect();
-    // Every address must be public: the server must not become a way to reach internal hosts.
-    if addrs.is_empty() || (!lenient && addrs.iter().any(|a| is_private(a.ip()))) {
-        return Err(refuse());
-    }
-    Ok((host, addrs[0]))
-}
-
 /// Downloads a small public resource for the server's own use (a logo, a certificate),
 /// following a few redirects. Every hop is checked like any other outbound request, and the
 /// connection goes to exactly the address that was checked.
@@ -246,14 +225,7 @@ pub(crate) async fn fetch_public_strict(state: &crate::app::App, url: reqwest::U
 
 async fn fetch_public_with(state: &crate::app::App, mut url: reqwest::Url, ports: &[u16], limit: usize, accept: &str, redirects: usize) -> Result<Vec<u8>, ApiError> {
     for _ in 0..=redirects {
-        let (host, addr) = public_target(state, &url, ports).await?;
-        let client = reqwest::Client::builder()
-            .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
-            .resolve(&host, addr)
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(std::time::Duration::from_secs(8))
-            .build()
-            .map_err(anyhow::Error::from)?;
+        let client = outbound::to_public(state, &url, ports, Duration::from_secs(8)).await?;
         let mut response = client.get(url.clone()).header(header::USER_AGENT, "unoMail").header(header::ACCEPT, accept).send().await.map_err(|_| ApiError::NotFound)?;
         if response.status().is_redirection() {
             let location = response.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).ok_or(ApiError::NotFound)?;
@@ -281,15 +253,7 @@ pub async fn image_proxy(State(state): State<AppState>, _session: Session, Query
     let invalid = || ApiError::bad("this image address cannot be loaded");
     let mut url = reqwest::Url::parse(query.url.trim()).map_err(|_| invalid())?;
     for _ in 0..=MAX_REDIRECTS {
-        let (host, addr) = public_target(&state, &url, &IMAGE_PORTS).await?;
-        // The connection goes to exactly the address that was checked.
-        let client = reqwest::Client::builder()
-            .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
-            .resolve(&host, addr)
-            .redirect(reqwest::redirect::Policy::none())
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(anyhow::Error::from)?;
+        let client = outbound::to_public(&state, &url, &IMAGE_PORTS, Duration::from_secs(10)).await?;
         let mut response = client.get(url.clone()).header(header::USER_AGENT, "unoMail image proxy").header(header::ACCEPT, "image/*").send().await.map_err(|_| ApiError::NotFound)?;
         if response.status().is_redirection() {
             let location = response.headers().get(header::LOCATION).and_then(|v| v.to_str().ok()).ok_or_else(invalid)?;

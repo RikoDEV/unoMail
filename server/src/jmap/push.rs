@@ -151,13 +151,7 @@ impl Subscription {
 /// Sends one push message. A gone subscription (404, 410) is reported as `Ok(false)`.
 async fn deliver(app: &App, subscription: &Subscription, payload: &Value) -> anyhow::Result<bool> {
     let url = reqwest::Url::parse(&subscription.url)?;
-    let (host, addr) = crate::api::mailboxes::public_target(app, &url, &[443]).await.map_err(|e| anyhow::anyhow!("{e}"))?;
-    let client = reqwest::Client::builder()
-        .use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone())
-        .resolve(&host, addr)
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(15))
-        .build()?;
+    let client = crate::outbound::to_public(app, &url, &[443], Duration::from_secs(15)).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     let body = payload.to_string().into_bytes();
     let mut request = client.post(url.clone()).header("ttl", "86400").header("urgency", "normal");
     request = match (unb64url(&subscription.p256dh), unb64url(&subscription.auth)) {

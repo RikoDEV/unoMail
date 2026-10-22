@@ -549,8 +549,7 @@ pub async fn send_reports(app: &App) {
 
 async fn post_report(app: &App, address: &str, body: Vec<u8>) -> anyhow::Result<()> {
     let url = reqwest::Url::parse(address)?;
-    let (host, addr) = crate::api::mailboxes::public_target(app, &url, &[443]).await.map_err(|e| anyhow::anyhow!("{e}"))?;
-    let client = reqwest::Client::builder().use_preconfigured_tls((*crate::smtp::client::tls_config(true)).clone()).resolve(&host, addr).redirect(reqwest::redirect::Policy::none()).timeout(std::time::Duration::from_secs(20)).build()?;
+    let client = crate::outbound::to_public(app, &url, &[443], std::time::Duration::from_secs(20)).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     let response = client.post(url).header("content-type", "application/tlsrpt+gzip").body(body).send().await?;
     anyhow::ensure!(response.status().is_success(), "the report address answered {}", response.status());
     Ok(())
