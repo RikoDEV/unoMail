@@ -2,10 +2,10 @@ import Add from '@mui/icons-material/Add';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
 import { del, formatTime, get, patch, post } from './api';
-import { ConfirmDialog, useAction, useFormAction, useLoad } from './admin/common';
+import { ConfirmDialog, DialogButtons, useAction, useFormAction, useLoad } from './admin/common';
 import { t } from './i18n';
 
 interface Mask { id: number; email: string; description: string; for_domain: string; integration_url: string; enabled: boolean; status: 'active' | 'disabled' | 'expired'; created_at: number; expires_at: number | null; created_by: string }
@@ -37,7 +37,7 @@ function MaskDialog({ current, domains, base, onClose, onSaved }: { current: Mas
       </>}
       <TextField label={t('Integration URL')} type="url" value={url} onChange={(e) => setUrl(e.target.value)} helperText={t('Optional HTTPS link to the entry using this address.')} />
     </Stack></DialogContent>
-    <DialogActions><Button onClick={onClose} disabled={form.busy}>{t('Cancel')}</Button><Button type="submit" variant="contained" disabled={form.busy}>{t('Save')}</Button></DialogActions>
+    <DialogButtons onCancel={onClose} cancelDisabled={form.busy} submit disabled={form.busy} />
   </Box></Dialog>;
 }
 

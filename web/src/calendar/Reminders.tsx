@@ -33,7 +33,7 @@ function markFired(key: string, at: number) {
   writeLocal(FIRED_KEY, JSON.stringify({ ...kept, [key]: at }));
 }
 
-export function describeReminder(reminder: Pick<Reminder, 'start' | 'all_day' | 'location'>, now = Date.now() / 1000): string {
+function describeReminder(reminder: Pick<Reminder, 'start' | 'all_day' | 'location'>, now = Date.now() / 1000): string {
   const minutes = Math.round((reminder.start - now) / 60);
   const when = reminder.all_day ? t('Starts today') : minutes <= 0 ? t('Starts now') : minutes < 60 ? t('Starts in {{count}} minutes', { count: minutes }) : t('Starts at {{time}}', { time: formatTime(reminder.start) });
   return reminder.location ? `${when} · ${reminder.location}` : when;

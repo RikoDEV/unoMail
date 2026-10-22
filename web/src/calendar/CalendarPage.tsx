@@ -472,13 +472,13 @@ export default function CalendarPage() {
         <Box component="nav" aria-label={t('Calendars')} sx={{ width: 260, flexShrink: 0, px: 1, pt: compact ? 1 : 0, overflow: 'auto' }}>
           {compact && (
             <List dense disablePadding>
-              <ListItemButton onClick={() => navigate('/mail')} sx={{ borderRadius: 2 }}>
+              <ListItemButton onClick={() => navigate('/mail')}>
                 <ListItemIcon sx={{ minWidth: 36 }}><Mail fontSize="small" /></ListItemIcon>
                 <ListItemText primary={t('Back to mail')} />
               </ListItemButton>
             </List>
           )}
-          <Button variant="contained" startIcon={<Add />} onClick={() => { setDrawerOpen(false); createNow(); }} sx={{ m: 1, borderRadius: 4, px: 3, py: 1.25 }} disabled={writable.length === 0}>{t('New event')}</Button>
+          <Fab variant="extended" onClick={() => { setDrawerOpen(false); createNow(); }} sx={{ m: 1, mb: 2, alignSelf: 'flex-start' }} disabled={writable.length === 0}><Add />{t('New event')}</Fab>
           <Typography variant="overline" color="text.secondary" sx={{ px: 2, display: 'block', mt: 1 }}>{t('Calendars')}</Typography>
           <List dense disablePadding>
             {calendars.map((calendar) => {
@@ -493,7 +493,7 @@ export default function CalendarPage() {
                     </IconButton>
                   }
                 >
-                  <ListItemButton onClick={() => setHidden((current) => (current.includes(calendar.id) ? current.filter((id) => id !== calendar.id) : [...current, calendar.id]))} sx={{ borderRadius: 2 }}>
+                  <ListItemButton onClick={() => setHidden((current) => (current.includes(calendar.id) ? current.filter((id) => id !== calendar.id) : [...current, calendar.id]))}>
                     <ListItemIcon sx={{ minWidth: 36 }}>
                       <Checkbox edge="start" size="small" tabIndex={-1} disableRipple checked={!hidden.includes(calendar.id)} inputProps={{ 'aria-label': t('Show {{name}}', { name: calendar.name }) }} sx={{ color, '&.Mui-checked': { color }, p: 0.5 }} />
                     </ListItemIcon>
@@ -502,11 +502,11 @@ export default function CalendarPage() {
                 </ListItem>
               );
             })}
-            <ListItemButton onClick={() => setCalendarDialog({ calendar: null })} sx={{ borderRadius: 2 }}>
+            <ListItemButton onClick={() => setCalendarDialog({ calendar: null })}>
               <ListItemIcon sx={{ minWidth: 36 }}><Add fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('New calendar')} />
             </ListItemButton>
-            <ListItemButton onClick={() => setConnect(true)} sx={{ borderRadius: 2 }} disabled={!listing}>
+            <ListItemButton onClick={() => setConnect(true)} disabled={!listing}>
               <ListItemIcon sx={{ minWidth: 36 }}><Sync fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('Sync with other apps')} secondary={t('CalDAV')} />
             </ListItemButton>

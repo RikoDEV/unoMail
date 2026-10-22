@@ -27,7 +27,7 @@ const storedChoice = () => readLocal(STORAGE_KEY);
 const supported = (code: string | null | undefined): code is string => Boolean(code && LANGUAGES.some((language) => language.code === code));
 
 /** The language chosen on this device, or the browser's preferred supported language. */
-export function preferredLanguage(): string {
+function preferredLanguage(): string {
   const chosen = storedChoice();
   if (supported(chosen)) return chosen;
   const wanted = typeof navigator === 'undefined' ? [] : navigator.languages?.length ? navigator.languages : [navigator.language];

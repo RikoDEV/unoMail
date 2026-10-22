@@ -7,11 +7,11 @@
 // shows a day's exact numbers, and a table of the same data is one click away.
 
 import { Box, Card, CardContent, Stack, Table, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 
 import { get } from '../api';
 import { t, uiLocale } from '../i18n';
-import { useLoad } from './common';
+import { useElementWidth, useLoad } from './common';
 
 export interface DailyStats {
   /** `YYYY-MM-DD`, UTC. */
@@ -89,17 +89,8 @@ export function DailyStatsChart() {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
-  const holder = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(800);
+  const [holder, width] = useElementWidth(800);
   const titleId = useId();
-
-  useEffect(() => {
-    const element = holder.current;
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(280, Math.floor(entry.contentRect.width))));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
   const rows = data?.days ?? [];
   const shown = SERIES.filter((series) => !hidden.has(series.id));

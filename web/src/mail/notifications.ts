@@ -15,7 +15,7 @@ const storageKey = (account: string) => `unomail.pushSubscription.${account}`;
 const pageKey = (account: string) => `unomail.pageNotifications.${account}`;
 
 /** Web Push: notifications also when unoMail is closed. */
-export function pushSupported(): boolean {
+function pushSupported(): boolean {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';
 }
 
@@ -114,7 +114,7 @@ export interface NewestUnread {
 }
 
 /** The newest unread message in the inbox (also what the service worker asks for). */
-export const newestUnread = () => get<NewestUnread>('/api/me/newest-unread');
+const newestUnread = () => get<NewestUnread>('/api/me/newest-unread');
 
 /**
  * Notifications shown by the open tab, for accounts without Web Push: after each change it

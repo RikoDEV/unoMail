@@ -9,14 +9,14 @@ import HelpOutline from '@mui/icons-material/HelpOutline';
 import Refresh from '@mui/icons-material/Refresh';
 import WarningAmber from '@mui/icons-material/WarningAmber';
 import {
-  Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody,
+  Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody,
   TableCell, TableHead, TableRow, TextField, Tooltip, Typography, Link,
 } from '@mui/material';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { del, formatBytes, get, patch, post, put } from '../api';
 import { useAuth } from '../app';
-import { ConfirmDialog, PageHeader, routeBy, StatusChip, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
+import { ConfirmDialog, DialogButtons, PageHeader, routeBy, ScrollTable, StatusChip, useAction, useFormAction, useLoad, validators } from './common';
 
 import { t } from '../i18n';
 interface Domain {
@@ -148,12 +148,7 @@ export function Domains() {
             sx={{ mt: 1 }}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setName(null)}>{t('Cancel')}</Button>
-          <Button variant="contained" disabled={!name || Boolean(nameError) || adding.busy} onClick={() => void create()}>
-            {t('Create')}
-          </Button>
-        </DialogActions>
+        <DialogButtons onCancel={() => setName(null)} onConfirm={() => void create()} disabled={!name || Boolean(nameError) || adding.busy} label={t('Create')} />
       </Dialog>
       <ConfirmDialog
         open={Boolean(removing)}

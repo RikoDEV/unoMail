@@ -15,7 +15,7 @@ import Report from '@mui/icons-material/Report';
 import ReportOff from '@mui/icons-material/ReportOff';
 import Snooze from '@mui/icons-material/Snooze';
 import {
-  Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, ListItemText, Menu, MenuItem, Paper, Stack, TextField, Tooltip,
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogContent, DialogTitle, IconButton, ListItemText, Menu, MenuItem, Paper, Stack, TextField, Tooltip,
   Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -44,6 +44,7 @@ import { type Decrypted, decryptArmored, fetchKeys, isUnlocked, localPrivateKey,
 import { buildFrameDocument, sanitizeEmail, sanitizeEmailHtml, textToHtml } from './sanitize';
 
 import { t, uiLocale } from '../i18n';
+import { DialogButtons } from '../admin/common';
 export type ReaderAction = 'reply' | 'replyAll' | 'forward';
 
 /** Bodies of messages decrypted in this session, so replies can quote them. */
@@ -586,12 +587,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
           <DialogContent>
             <TextField type="datetime-local" label={t('Bring back at')} value={snoozeAt ?? ''} onChange={(e) => setSnoozeAt(e.target.value)} sx={{ mt: 1 }} slotProps={{ inputLabel: { shrink: true } }} />
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setSnoozeAt(null)}>{t('Cancel')}</Button>
-            <Button variant="contained" disabled={!snoozeAt || new Date(snoozeAt).getTime() <= Date.now()} onClick={() => { const at = new Date(snoozeAt ?? ''); setSnoozeAt(null); onSnooze(at); }}>
-              {t('Snooze')}
-            </Button>
-          </DialogActions>
+          <DialogButtons onCancel={() => setSnoozeAt(null)} onConfirm={() => { const at = new Date(snoozeAt ?? ''); setSnoozeAt(null); onSnooze(at); }} disabled={!snoozeAt || new Date(snoozeAt).getTime() <= Date.now()} label={t('Snooze')} />
         </Dialog>
         <Tooltip title={t('Labels')}><IconButton aria-label={t('Labels')} onClick={(e) => setLabelAnchor(e.currentTarget)}><Label /></IconButton></Tooltip>
         <Menu anchorEl={labelAnchor} open={Boolean(labelAnchor)} onClose={() => setLabelAnchor(null)} slotProps={{ paper: { sx: { minWidth: 240 } } }}>

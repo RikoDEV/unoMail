@@ -11,6 +11,7 @@ import { api, del, formatTime, get, post, put, errorText } from './api';
 import { createPasskey, keepOnlyAcceptedPasskeys, passkeysAvailable, type CreationOptions, wasDismissed } from './webauthn';
 
 import { t } from './i18n';
+import { DialogButtons } from './admin/common';
 interface Overview {
   enabled: boolean;
   totp: boolean;
@@ -146,10 +147,7 @@ function TotpSetup({ onDone, onClose }: { onDone: (codes: string[] | null) => vo
           <TextField label={t('Your password')} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && code.trim() && password && void confirm()} />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void confirm()} disabled={!setup || !code.trim() || !password}>{t('Turn on')}</Button>
-      </DialogActions>
+      <DialogButtons onCancel={onClose} onConfirm={() => void confirm()} disabled={!setup || !code.trim() || !password} label={t('Turn on')} />
     </Dialog>
   );
 }
@@ -416,10 +414,7 @@ export function AppPasswordsCard() {
               <TextField label={t('Your password')} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Stack>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setCreating(false)}>{t('Cancel')}</Button>
-            <Button variant="contained" onClick={() => void create()} disabled={!name.trim() || scopes.length === 0 || !password}>{t('Create')}</Button>
-          </DialogActions>
+          <DialogButtons onCancel={() => setCreating(false)} onConfirm={() => void create()} disabled={!name.trim() || scopes.length === 0 || !password} label={t('Create')} />
         </Dialog>
       )}
       {created && (

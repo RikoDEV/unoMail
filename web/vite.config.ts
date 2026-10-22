@@ -15,5 +15,11 @@ export default defineConfig({
     },
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 1200 },
-  test: { environment: 'jsdom', include: ['src/**/*.test.ts'], setupFiles: ['src/test-setup.ts'] },
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts'],
+    setupFiles: ['src/test-setup.ts'],
+    // Material's colour library: its ES modules import files without extensions, which only a bundler resolves.
+    server: { deps: { inline: ['@material/material-color-utilities'] } },
+  },
 });

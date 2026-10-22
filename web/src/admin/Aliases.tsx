@@ -1,10 +1,10 @@
 import Add from '@mui/icons-material/Add';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip } from '@mui/material';
+import { Alert, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { del, get, patch, post } from '../api';
-import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, UsageBar, validators, ScrollTable } from './common';
+import { ConfirmDialog, DialogButtons, PageHeader, routeBy, ScrollTable, UsageBar, useAction, useFormAction, useLoad, validators } from './common';
 
 import { t } from '../i18n';
 interface Alias {
@@ -139,12 +139,7 @@ export function Aliases() {
             </Stack>
           </DialogContent>
         )}
-        <DialogActions>
-          <Button onClick={() => setForm(null)}>{t('Cancel')}</Button>
-          <Button variant="contained" disabled={!valid || saving.busy} onClick={() => void save()}>
-            {t('Save')}
-          </Button>
-        </DialogActions>
+        <DialogButtons onCancel={() => setForm(null)} onConfirm={() => void save()} disabled={!valid || saving.busy} />
       </Dialog>
       <ConfirmDialog
         open={Boolean(removing)}

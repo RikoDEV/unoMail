@@ -19,6 +19,7 @@ import {
 } from './dates';
 
 import { t, uiLocale } from '../i18n';
+import { DialogButtons } from '../admin/common';
 export interface Listing {
   calendars: Calendar[];
   caldav: { server: string; home: string; username: string };
@@ -221,10 +222,7 @@ export function EventDialog({ editing, calendars, onClose }: { editing: Editing;
           {editing.id !== undefined && !single && repeat !== 'none' && <Typography variant="caption" color="text.secondary">{t('Changes apply to every occurrence of this repeating event.')}</Typography>}
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={busy || !form.summary.trim()}>{t('Save')}</Button>
-      </DialogActions>
+      <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={busy || !form.summary.trim()} />
     </Dialog>
   );
 }
@@ -267,10 +265,7 @@ export function CalendarDialog({ calendar, onClose }: { calendar: Calendar | nul
           </Stack>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={!name.trim()}>{t('Save')}</Button>
-      </DialogActions>
+      <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={!name.trim()} />
     </Dialog>
   );
 }
@@ -347,15 +342,12 @@ export function ShareCalendarDialog({ calendar, onClose }: { calendar: Calendar;
           ))}
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={!shares}>{t('Save')}</Button>
-      </DialogActions>
+      <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={!shares} />
     </Dialog>
   );
 }
 
-export function CopyField({ label, value }: { label: string; value: string }) {
+function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <TextField

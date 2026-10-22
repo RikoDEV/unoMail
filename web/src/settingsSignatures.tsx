@@ -8,7 +8,7 @@ import FormatUnderlined from '@mui/icons-material/FormatUnderlined';
 import Image from '@mui/icons-material/Image';
 import InsertLink from '@mui/icons-material/InsertLink';
 import {
-  Alert, Box, Button, Card, CardContent, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead,
+  Alert, Box, Card, CardContent, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead,
   TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -18,7 +18,8 @@ import { chooseSignatures, deleteSignature, type Signature, type SignatureChoice
 import { htmlToText } from './mail/jmapClient';
 import { sanitizeEmailHtml } from './mail/sanitize';
 import { updatePrefs, usePrefs } from './prefs';
-import { ListCard, RowActions } from './settingsWebmail';
+import { ListCard, RowActions } from './settingsParts';
+import { DialogButtons } from './admin/common';
 
 /** Images are kept inside the signature; a logo should be small. */
 const MAX_IMAGE_BYTES = 100 * 1024;
@@ -134,12 +135,7 @@ function SignatureDialog({ signature, onClose }: { signature: Signature | null; 
           <SignatureEditor initial={signature?.html ?? ''} onChange={setHtml} />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={!name.trim()}>
-          {t('Save signature')}
-        </Button>
-      </DialogActions>
+      <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={!name.trim()} label={t('Save signature')} />
     </Dialog>
   );
 }

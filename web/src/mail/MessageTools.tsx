@@ -18,12 +18,12 @@ import { t } from '../i18n';
 const MAX_ORIGINAL_BYTES = 2 * 1024 * 1024;
 
 /** Tells the mail page that messages changed and its lists should be reloaded. */
-export function requestRefresh() {
+function requestRefresh() {
   window.dispatchEvent(new Event('unomail:refresh'));
 }
 
 /** The header block of a raw message, with folded lines joined. */
-export function parseHeaders(raw: string): [string, string][] {
+function parseHeaders(raw: string): [string, string][] {
   const end = raw.search(/\r?\n\r?\n/);
   const block = end === -1 ? raw : raw.slice(0, end);
   const headers: [string, string][] = [];
@@ -42,7 +42,7 @@ export function parseHeaders(raw: string): [string, string][] {
  * from the Authentication-Results headers: anyone can write those, so the first one may
  * well be the sender's own.
  */
-export function authenticationResults(security: Security | null | undefined): { check: string; result: string }[] {
+function authenticationResults(security: Security | null | undefined): { check: string; result: string }[] {
   if (!security) return [];
   return (['spf', 'dkim', 'dmarc'] as const).flatMap((check) => (security[check] ? [{ check: check.toUpperCase(), result: security[check].toLowerCase() }] : []));
 }

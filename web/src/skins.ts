@@ -1,8 +1,14 @@
 // Skins: named sets of design tokens that are turned into a Material UI theme. A skin is plain
 // data (colours, corner radius, density, font), never CSS or code, so administrators can
 // install custom ones without being able to inject anything into the page.
+//
+// The theme follows Material 3 Expressive: a tonal colour scheme generated from the accent
+// (the 2025 colour spec), spring motion, and shapes that morph when pressed or selected. The
+// numbers below are the Material 3 tokens (as published with Jetpack Compose).
 
-import { createTheme, lighten, type Theme } from '@mui/material';
+import { argbFromHex, hexFromArgb, Hct, SchemeTonalSpot } from '@material/material-color-utilities';
+import { alpha, createTheme, type Theme, type ThemeOptions } from '@mui/material';
+import '@fontsource-variable/roboto-flex';
 
 import { t } from './i18n';
 export interface Skin {
@@ -21,6 +27,42 @@ export interface Skin {
   font?: 'roboto' | 'system' | 'serif' | 'mono';
 }
 
+/** The Material 3 colour roles that Material UI's palette has no place for. */
+export interface M3Colors {
+  surface: string;
+  surfaceDim: string;
+  surfaceBright: string;
+  surfaceContainerLowest: string;
+  surfaceContainerLow: string;
+  surfaceContainer: string;
+  surfaceContainerHigh: string;
+  surfaceContainerHighest: string;
+  onSurface: string;
+  onSurfaceVariant: string;
+  inverseSurface: string;
+  inverseOnSurface: string;
+  outline: string;
+  outlineVariant: string;
+  primaryContainer: string;
+  onPrimaryContainer: string;
+  secondaryContainer: string;
+  onSecondaryContainer: string;
+  tertiary: string;
+  tertiaryContainer: string;
+  onTertiaryContainer: string;
+  errorContainer: string;
+  onErrorContainer: string;
+}
+
+declare module '@mui/material/styles' {
+  interface Palette {
+    m3: M3Colors;
+  }
+  interface PaletteOptions {
+    m3?: M3Colors;
+  }
+}
+
 export const BUILT_IN_SKINS: Skin[] = [
   { id: 'material', name: t('Material You') },
   { id: 'classic', name: t('Classic'), primary: '#1a5fb4', radius: 4, font: 'system', density: 'compact' },
@@ -31,7 +73,7 @@ export const BUILT_IN_SKINS: Skin[] = [
 ];
 
 const FONTS: Record<NonNullable<Skin['font']>, string> = {
-  roboto: '"Roboto Flex", Roboto, system-ui, -apple-system, "Segoe UI", sans-serif',
+  roboto: '"Roboto Flex Variable", "Roboto Flex", Roboto, system-ui, -apple-system, "Segoe UI", sans-serif',
   system: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   serif: 'Georgia, "Times New Roman", serif',
   mono: 'ui-monospace, "Cascadia Mono", Consolas, monospace',
@@ -61,42 +103,352 @@ export function skinIsDark(skin: Skin, userPrefersDark: boolean): boolean {
   return skin.mode === 'dark' || (skin.mode !== 'light' && userPrefersDark);
 }
 
+/**
+ * A Material 3 spring as a CSS easing: the motion of a unit mass from 0 to 1, sampled into
+ * `linear()` points, and the time it takes to settle. `damping` below 1 overshoots.
+ */
+export function spring(damping: number, stiffness: number): { easing: string; duration: number } {
+  const w0 = Math.sqrt(stiffness);
+  const wd = w0 * Math.sqrt(Math.max(0, 1 - damping * damping));
+  const at = (time: number) =>
+    damping < 1
+      ? 1 - Math.exp(-damping * w0 * time) * (Math.cos(wd * time) + ((damping * w0) / wd) * Math.sin(wd * time))
+      : 1 - Math.exp(-w0 * time) * (1 + w0 * time);
+  // Settled once the envelope is within 0.2% of the target.
+  const duration = Math.log(500 * (damping < 1 ? 1 : 3)) / (damping * w0);
+  const steps = 40;
+  const points = Array.from({ length: steps + 1 }, (_, i) => +at((duration * i) / steps).toFixed(3));
+  points[steps] = 1;
+  return { easing: `linear(${points.join(', ')})`, duration: Math.round(duration * 1000) };
+}
+
+/** Material 3 Expressive motion scheme (damping ratio, stiffness). */
+const MOTION = {
+  fastSpatial: spring(0.6, 800),
+  defaultSpatial: spring(0.8, 380),
+  slowSpatial: spring(0.8, 200),
+  fastEffects: spring(1, 3800),
+  defaultEffects: spring(1, 1600),
+};
+const SPATIAL = `${MOTION.fastSpatial.duration}ms ${MOTION.fastSpatial.easing}`;
+const EFFECTS = `${MOTION.fastEffects.duration}ms ${MOTION.fastEffects.easing}`;
+
+/** Material 3 corner tokens. */
+const CORNER = { extraSmall: 4, small: 8, medium: 12, large: 16, largeIncreased: 20, extraLarge: 28, extraLargeIncreased: 32 };
+
+/** The tonal colour scheme for an accent colour (Material's "tonal spot", 2025 spec). */
+export function colorScheme(seed: string, dark: boolean): M3Colors & { primary: string; onPrimary: string; secondary: string; onSecondary: string; error: string } {
+  const scheme = new SchemeTonalSpot(Hct.fromInt(argbFromHex(seed)), dark, 0, '2025');
+  const hex = (argb: number) => hexFromArgb(argb);
+  return {
+    primary: hex(scheme.primary),
+    onPrimary: hex(scheme.onPrimary),
+    secondary: hex(scheme.secondary),
+    onSecondary: hex(scheme.onSecondary),
+    error: hex(scheme.error),
+    surface: hex(scheme.surface),
+    surfaceDim: hex(scheme.surfaceDim),
+    surfaceBright: hex(scheme.surfaceBright),
+    surfaceContainerLowest: hex(scheme.surfaceContainerLowest),
+    surfaceContainerLow: hex(scheme.surfaceContainerLow),
+    surfaceContainer: hex(scheme.surfaceContainer),
+    surfaceContainerHigh: hex(scheme.surfaceContainerHigh),
+    surfaceContainerHighest: hex(scheme.surfaceContainerHighest),
+    onSurface: hex(scheme.onSurface),
+    onSurfaceVariant: hex(scheme.onSurfaceVariant),
+    inverseSurface: hex(scheme.inverseSurface),
+    inverseOnSurface: hex(scheme.inverseOnSurface),
+    outline: hex(scheme.outline),
+    outlineVariant: hex(scheme.outlineVariant),
+    primaryContainer: hex(scheme.primaryContainer),
+    onPrimaryContainer: hex(scheme.onPrimaryContainer),
+    secondaryContainer: hex(scheme.secondaryContainer),
+    onSecondaryContainer: hex(scheme.onSecondaryContainer),
+    tertiary: hex(scheme.tertiary),
+    tertiaryContainer: hex(scheme.tertiaryContainer),
+    onTertiaryContainer: hex(scheme.onTertiaryContainer),
+    errorContainer: hex(scheme.errorContainer),
+    onErrorContainer: hex(scheme.onErrorContainer),
+  };
+}
+
+type Components = ThemeOptions['components'];
+
 /** Builds the theme for a skin. `seed` is the user's accent colour, used when the skin has none. */
 export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): Theme {
   const dark = skinIsDark(skin, userPrefersDark);
   const radius = skin.radius ?? 16;
   const compact = skin.density === 'compact';
-  // Rounded "pill" shapes only make sense with generous corners.
-  const pill = radius >= 12 ? 999 : radius;
-  const defaults = dark ? { default: '#141218', paper: '#1d1b20' } : { default: '#f7f2fa', paper: '#fffbfe' };
-  // An accent chosen for light surfaces is too dark to read on dark ones: on a dark theme the
-  // user's accent colour is used in a lighter tone (as Material's dark schemes do). A skin that
-  // names its own primary colour is taken at its word.
-  const accent = skin.primary ?? (dark ? lighten(seed, 0.55) : seed);
-  return createTheme({
+  // Expressive shapes and springs need generous corners; skins with tight corners (Classic,
+  // High contrast) keep a square, calm look but still get the tonal colours.
+  const expressive = radius >= 12;
+  const c = colorScheme(skin.primary ?? seed, dark);
+  // A skin that names its own colours is taken at its word.
+  const m3: M3Colors = {
+    ...c,
+    ...(skin.background ? { surfaceContainer: skin.background, surfaceContainerLow: skin.background, surfaceDim: skin.background } : {}),
+    ...(skin.paper ? { surface: skin.paper, surfaceContainerLowest: skin.paper, surfaceContainerHigh: skin.paper, surfaceContainerHighest: skin.paper } : {}),
+    ...(skin.text ? { onSurface: skin.text, onSurfaceVariant: skin.text } : {}),
+  };
+  const options: ThemeOptions = {
     palette: {
       mode: dark ? 'dark' : 'light',
-      primary: { main: accent },
-      ...(skin.secondary ? { secondary: { main: skin.secondary } } : {}),
-      background: { default: skin.background ?? defaults.default, paper: skin.paper ?? defaults.paper },
-      // Secondary text slightly brighter than the default on dark surfaces, for legibility.
-      ...(skin.text ? { text: { primary: skin.text } } : dark ? { text: { primary: '#ece6f0', secondary: '#cac4d0' } } : {}),
-      ...(dark ? { divider: 'rgba(255,255,255,0.16)' } : {}),
+      primary: { main: skin.primary ?? c.primary, contrastText: skin.primary ? undefined : c.onPrimary },
+      secondary: skin.secondary ? { main: skin.secondary } : { main: c.secondary, contrastText: c.onSecondary },
+      error: { main: c.error },
+      // Pages sit on the surface container; the panes and cards on them are the surface.
+      background: { default: skin.background ?? c.surfaceContainer, paper: skin.paper ?? c.surface },
+      text: { primary: m3.onSurface, secondary: m3.onSurfaceVariant },
+      divider: m3.outlineVariant,
+      m3,
     },
     shape: { borderRadius: radius },
     spacing: compact ? 6 : 8,
-    typography: { fontFamily: FONTS[skin.font ?? 'roboto'], fontSize: compact ? 13 : 14, button: { textTransform: 'none', fontWeight: 500 } },
-    components: {
-      MuiButton: { styleOverrides: { root: { borderRadius: pill } }, defaultProps: compact ? { size: 'small' } : {} },
-      MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
-      MuiCard: { defaultProps: { elevation: 0 }, styleOverrides: { root: { borderRadius: Math.min(radius * 1.5, 24) } } },
-      MuiDialog: { styleOverrides: { paper: { borderRadius: Math.min(radius * 1.75, 28) } } },
-      MuiListItemButton: { styleOverrides: { root: { borderRadius: pill } } },
-      MuiTextField: { defaultProps: { size: 'small' } },
-      MuiTableCell: { styleOverrides: { head: { fontWeight: 600 } } },
-      MuiSwitch: { styleOverrides: m3Switch(dark) },
+    transitions: expressive
+      ? {
+          // Spatial movement (drawers, collapses) uses the non-bouncing effects springs; the
+          // bouncy spatial spring is kept for shapes, which may overshoot without harm.
+          easing: { easeInOut: MOTION.defaultEffects.easing, easeOut: MOTION.defaultEffects.easing, easeIn: 'cubic-bezier(0.3, 0, 0.8, 0.15)', sharp: MOTION.fastEffects.easing },
+          duration: { shortest: 150, shorter: 200, short: 250, standard: 300, complex: 400, enteringScreen: 400, leavingScreen: 200 },
+        }
+      : {},
+    typography: {
+      fontFamily: FONTS[skin.font ?? 'roboto'],
+      fontSize: compact ? 13 : 14,
+      // Material 3 type scale, with the "emphasized" weights for headlines and titles.
+      h1: { fontSize: '3.5625rem', lineHeight: 64 / 57, fontWeight: 400, letterSpacing: '-0.016em' },
+      h2: { fontSize: '2.8125rem', lineHeight: 52 / 45, fontWeight: 400, letterSpacing: 0 },
+      h3: { fontSize: '2.25rem', lineHeight: 44 / 36, fontWeight: 400, letterSpacing: 0 },
+      h4: { fontSize: '1.75rem', lineHeight: 36 / 28, fontWeight: expressive ? 500 : 400, letterSpacing: 0 },
+      h5: { fontSize: '1.5rem', lineHeight: 32 / 24, fontWeight: expressive ? 500 : 400, letterSpacing: 0 },
+      h6: { fontSize: '1.375rem', lineHeight: 28 / 22, fontWeight: expressive ? 500 : 400, letterSpacing: 0 },
+      subtitle1: { fontSize: '1rem', lineHeight: 1.5, fontWeight: expressive ? 600 : 500, letterSpacing: '0.009em' },
+      subtitle2: { fontSize: '0.875rem', lineHeight: 20 / 14, fontWeight: expressive ? 600 : 500, letterSpacing: '0.007em' },
+      button: { textTransform: 'none', fontWeight: 500, letterSpacing: '0.007em' },
+      overline: { textTransform: 'none', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.04em', lineHeight: 16 / 12 },
+      caption: { letterSpacing: '0.03em' },
     },
-  });
+  };
+  // The component styles need the finished palette, so the theme is built twice.
+  return createTheme({ ...options, components: components(createTheme(options), { radius, compact, expressive }) });
+}
+
+/** Material 3 (Expressive) component styles. */
+function components(theme: Theme, { radius, compact, expressive }: { radius: number; compact: boolean; expressive: boolean }): Components {
+  const m3 = theme.palette.m3;
+  // Corners scale down with the skin's own radius; at the default (16) they are the tokens.
+  const corner = (token: number) => (expressive ? token : Math.min(token, radius));
+  const full = expressive ? 999 : radius;
+  // Shape changes spring; colours change with the quick, non-bouncing spring.
+  const shapeMotion = expressive ? { transition: `border-radius ${SPATIAL}, background-color ${EFFECTS}, color ${EFFECTS}, box-shadow ${EFFECTS}, border-color ${EFFECTS}` } : {};
+  const state = (color: string, opacity: number) => alpha(color, opacity);
+  /** Button heights and the pressed corner, per size (Material 3 extra small, small, medium). */
+  const buttonSizes = {
+    small: { height: 32, px: 12, pressed: corner(CORNER.small), fontSize: '0.8125rem' },
+    medium: { height: 40, px: 16, pressed: corner(CORNER.small), fontSize: '0.875rem' },
+    large: { height: 56, px: 24, pressed: corner(CORNER.medium), fontSize: '1rem' },
+  };
+  return {
+    MuiCssBaseline: { styleOverrides: { body: { fontVariationSettings: '"wdth" 100' } } },
+    MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
+    MuiButton: {
+      defaultProps: { disableElevation: true, ...(compact ? { size: 'small' as const } : {}) },
+      styleOverrides: {
+        root: ({ ownerState }) => {
+          const size = buttonSizes[ownerState.size ?? 'medium'];
+          return {
+            minHeight: size.height,
+            paddingInline: size.px,
+            fontSize: size.fontSize,
+            borderRadius: full,
+            ...shapeMotion,
+            ...(expressive ? { '&:active': { borderRadius: size.pressed } } : {}),
+          };
+        },
+        outlined: { borderColor: m3.outlineVariant, '&:hover': { borderColor: m3.outline } },
+        startIcon: { marginRight: 8 },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          ...shapeMotion,
+          ...(expressive ? { '&:active': { borderRadius: CORNER.small } } : {}),
+        },
+      },
+    },
+    MuiFab: {
+      defaultProps: { color: 'primary' },
+      styleOverrides: {
+        // Material 3 FAB: 56dp, the large corner, primary container colours and level 3 shadow.
+        root: {
+          height: 56,
+          minHeight: 56,
+          borderRadius: corner(CORNER.large),
+          boxShadow: theme.shadows[3],
+          textTransform: 'none',
+          fontWeight: 600,
+          fontSize: '0.9375rem',
+          ...shapeMotion,
+          '&:hover': { boxShadow: theme.shadows[4] },
+          '&:active': { boxShadow: theme.shadows[3], ...(expressive ? { borderRadius: corner(CORNER.medium) } : {}) },
+        },
+        primary: { backgroundColor: m3.primaryContainer, color: m3.onPrimaryContainer, '&:hover': { backgroundColor: `color-mix(in srgb, ${m3.onPrimaryContainer} 8%, ${m3.primaryContainer})` } },
+        sizeSmall: { width: 40, height: 40, minHeight: 40, borderRadius: corner(CORNER.medium) },
+        extended: { height: 56, paddingInline: 20, gap: 12, borderRadius: corner(CORNER.large), '& .MuiSvgIcon-root': { marginRight: 0 } },
+      },
+    },
+    // Connected button group: 2dp apart, round outer ends, small inner corners that tighten
+    // when pressed; the selected button becomes fully round.
+    MuiToggleButtonGroup: {
+      styleOverrides: {
+        root: { gap: 2, borderRadius: 0 },
+        grouped: {
+          border: 0,
+          margin: 0,
+          '&.MuiToggleButtonGroup-middleButton, &.MuiToggleButtonGroup-lastButton': { marginLeft: 0, borderLeft: 0 },
+        },
+        firstButton: { borderRadius: `${full}px ${corner(CORNER.small)}px ${corner(CORNER.small)}px ${full}px` },
+        middleButton: { borderRadius: corner(CORNER.small) },
+        lastButton: { borderRadius: `${corner(CORNER.small)}px ${full}px ${full}px ${corner(CORNER.small)}px` },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: ({ ownerState }) => ({
+          textTransform: 'none',
+          fontWeight: 500,
+          gap: 6,
+          border: 0,
+          minHeight: ownerState.size === 'small' ? 32 : ownerState.size === 'large' ? 56 : 40,
+          paddingBlock: 0,
+          paddingInline: ownerState.size === 'small' ? 12 : 16,
+          color: m3.onSecondaryContainer,
+          backgroundColor: m3.secondaryContainer,
+          ...shapeMotion,
+          '&:hover': { backgroundColor: `color-mix(in srgb, ${m3.onSecondaryContainer} 8%, ${m3.secondaryContainer})` },
+          '&:active': { borderRadius: `${corner(CORNER.extraSmall)}px` },
+          '&.Mui-selected, &.Mui-selected:hover': { color: theme.palette.primary.contrastText, backgroundColor: theme.palette.primary.main, borderRadius: full },
+          '&.Mui-disabled': { border: 0, backgroundColor: state(m3.onSurface, 0.1) },
+        }),
+      },
+    },
+    // Split button: the two halves 2dp apart, inner corners small, the menu half round when open.
+    MuiButtonGroup: {
+      defaultProps: { disableElevation: true },
+      styleOverrides: {
+        root: { gap: 2, borderRadius: 0, boxShadow: 'none' },
+        grouped: { minWidth: 0, borderColor: 'transparent !important', ...shapeMotion },
+        firstButton: { borderRadius: `${full}px ${corner(CORNER.extraSmall)}px ${corner(CORNER.extraSmall)}px ${full}px`, '&:active': { borderRadius: `${full}px ${corner(CORNER.small)}px ${corner(CORNER.small)}px ${full}px` } },
+        middleButton: { borderRadius: corner(CORNER.extraSmall) },
+        lastButton: { borderRadius: `${corner(CORNER.extraSmall)}px ${full}px ${full}px ${corner(CORNER.extraSmall)}px`, '&:active, &[aria-expanded="true"]': { borderRadius: full } },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: { borderRadius: corner(CORNER.small), fontWeight: 500, ...shapeMotion },
+        outlined: { borderColor: m3.outlineVariant },
+        filled: ({ ownerState }) => (ownerState.color === 'default' || !ownerState.color ? { backgroundColor: m3.secondaryContainer, color: m3.onSecondaryContainer } : {}),
+      },
+    },
+    MuiCard: {
+      defaultProps: { elevation: 0 },
+      styleOverrides: {
+        root: ({ ownerState }) => ({
+          borderRadius: corner(CORNER.extraLarge - 4),
+          ...(ownerState.variant === 'outlined' ? { borderColor: m3.outlineVariant } : { backgroundColor: m3.surfaceContainerLow }),
+        }),
+      },
+    },
+    MuiDialog: {
+      styleOverrides: { paper: { borderRadius: corner(CORNER.extraLarge), backgroundColor: m3.surfaceContainerHigh } },
+    },
+    MuiDialogTitle: { styleOverrides: { root: { fontSize: '1.5rem', lineHeight: 32 / 24, fontWeight: expressive ? 500 : 400, paddingTop: 24 } } },
+    MuiDialogActions: { styleOverrides: { root: { padding: '16px 24px 20px', gap: 8 } } },
+    MuiDrawer: { styleOverrides: { paper: { borderRadius: expressive ? `0 ${CORNER.large}px ${CORNER.large}px 0` : 0 } } },
+    // Expressive menus: a rounded surface container, items with their own rounded shape, the
+    // chosen item in the tertiary container colour.
+    MuiPopover: { styleOverrides: { paper: { borderRadius: corner(CORNER.large), backgroundColor: m3.surfaceContainer, boxShadow: theme.shadows[3] } } },
+    MuiMenu: { styleOverrides: { list: { padding: 4 } } },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          borderRadius: corner(CORNER.medium),
+          minHeight: 44,
+          marginBlock: 1,
+          ...shapeMotion,
+          '&.Mui-selected, &.Mui-selected:hover': { backgroundColor: m3.tertiaryContainer, color: m3.onTertiaryContainer, borderRadius: corner(CORNER.large) },
+          '& + .MuiDivider-root': { marginBlock: 4 },
+        },
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: { borderRadius: CORNER.extraSmall, backgroundColor: m3.inverseSurface, color: m3.inverseOnSurface, fontSize: '0.75rem', fontWeight: 400, padding: '4px 8px' },
+        arrow: { color: m3.inverseSurface },
+      },
+    },
+    MuiSnackbarContent: { styleOverrides: { root: { borderRadius: corner(CORNER.extraSmall), backgroundColor: m3.inverseSurface, color: m3.inverseOnSurface } } },
+    MuiAlert: { styleOverrides: { root: { borderRadius: corner(CORNER.medium) } } },
+    MuiTabs: { styleOverrides: { indicator: { height: 3, borderRadius: '3px 3px 0 0' } } },
+    MuiTab: { styleOverrides: { root: { textTransform: 'none', fontWeight: 500, '&.Mui-selected': { fontWeight: 600 } } } },
+    // Navigation items and lists: full pill, the selected one in the secondary container.
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: full,
+          ...shapeMotion,
+          '&.Mui-selected, &.active': {
+            backgroundColor: m3.secondaryContainer,
+            color: m3.onSecondaryContainer,
+            fontWeight: 600,
+            '& .MuiListItemIcon-root': { color: m3.onSecondaryContainer },
+            '& .MuiListItemText-primary': { fontWeight: 600 },
+          },
+          '&.Mui-selected:hover, &.active:hover': { backgroundColor: `color-mix(in srgb, ${m3.onSecondaryContainer} 8%, ${m3.secondaryContainer})` },
+        },
+      },
+    },
+    MuiListItemIcon: { styleOverrides: { root: { color: m3.onSurfaceVariant } } },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: { borderRadius: corner(CORNER.extraSmall) + (expressive ? 4 : 0) },
+        notchedOutline: { borderColor: m3.outline },
+      },
+    },
+    MuiTextField: { defaultProps: { size: 'small' } },
+    MuiTableCell: { styleOverrides: { root: { borderColor: m3.outlineVariant }, head: { fontWeight: 600, color: m3.onSurfaceVariant } } },
+    MuiDivider: { styleOverrides: { root: { borderColor: m3.outlineVariant } } },
+    MuiBadge: { styleOverrides: { badge: { fontWeight: 600 } } },
+    // Expressive progress indicators: a rounded bar on a rounded track, a gap between them.
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: { height: 4, borderRadius: 2, backgroundColor: m3.secondaryContainer },
+        bar: { borderRadius: 2 },
+      },
+    },
+    MuiCircularProgress: { styleOverrides: { circle: { strokeLinecap: 'round' } } },
+    MuiSlider: expressive
+      ? {
+          // Expressive slider: a thick track and a slim upright handle with a gap around it.
+          styleOverrides: {
+            root: { height: 16 },
+            rail: { borderRadius: 8, opacity: 1, backgroundColor: m3.secondaryContainer },
+            track: { borderRadius: 8, border: 0 },
+            thumb: {
+              width: 4,
+              height: 44,
+              borderRadius: 2,
+              boxShadow: `0 0 0 6px ${theme.palette.background.paper}`,
+              '&::before': { boxShadow: 'none' },
+              '&:hover, &.Mui-focusVisible, &.Mui-active': { boxShadow: `0 0 0 6px ${theme.palette.background.paper}`, width: 2 },
+            },
+          },
+        }
+      : {},
+    MuiCheckbox: { styleOverrides: { root: { borderRadius: full } } },
+    MuiSwitch: { styleOverrides: m3Switch(m3) },
+  };
 }
 
 /**
@@ -104,10 +456,7 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
  * with a 2px outline when off and filled with the colour when on; the thumb grows from 12 to
  * 18px when switched on (22 while pressed). The small size keeps the proportions at 36×20.
  */
-function m3Switch(dark: boolean): NonNullable<NonNullable<NonNullable<Parameters<typeof createTheme>[0]>['components']>['MuiSwitch']>['styleOverrides'] {
-  // Material 3 outline and surface-container-highest tones.
-  const outline = dark ? '#938f99' : '#79747e';
-  const surface = dark ? '#36343b' : '#e6e0e9';
+function m3Switch(m3: M3Colors): NonNullable<NonNullable<Components>['MuiSwitch']>['styleOverrides'] {
   const sizes = {
     medium: { width: 44, height: 24, off: 12, on: 18, pressed: 22 },
     small: { width: 36, height: 20, off: 10, on: 14, pressed: 18 },
@@ -127,7 +476,8 @@ function m3Switch(dark: boolean): NonNullable<NonNullable<NonNullable<Parameters
         left: 0,
         width: s.height,
         height: s.height,
-        color: outline,
+        color: m3.outline,
+        transition: `transform ${SPATIAL}`,
         '&:hover': { backgroundColor: theme.palette.action.hover },
         '& .MuiSwitch-thumb': { width: s.off, height: s.off },
         '&:active .MuiSwitch-thumb': { width: s.pressed, height: s.pressed },
@@ -138,17 +488,17 @@ function m3Switch(dark: boolean): NonNullable<NonNullable<NonNullable<Parameters
           '&:active .MuiSwitch-thumb': { width: s.pressed, height: s.pressed },
           '& + .MuiSwitch-track': { backgroundColor: tone.main, borderColor: tone.main, opacity: 1 },
         },
-        '&.Mui-disabled': { color: outline, opacity: 0.38 },
+        '&.Mui-disabled': { color: m3.outline, opacity: 0.38 },
         '&.Mui-disabled + .MuiSwitch-track': { opacity: 0.12 },
         '&.Mui-focusVisible .MuiSwitch-thumb': { outline: `2px solid ${tone.main}`, outlineOffset: 2 },
       };
     },
-    thumb: { boxShadow: 'none', backgroundColor: 'currentColor', transition: 'width 150ms, height 150ms' },
+    thumb: { boxShadow: 'none', backgroundColor: 'currentColor', transition: `width ${SPATIAL}, height ${SPATIAL}` },
     track: ({ ownerState }) => ({
       borderRadius: size(ownerState).height / 2,
       opacity: 1,
-      backgroundColor: surface,
-      border: `2px solid ${outline}`,
+      backgroundColor: m3.surfaceContainerHighest,
+      border: `2px solid ${m3.outline}`,
       boxSizing: 'border-box',
     }),
   };

@@ -128,7 +128,7 @@ export function shareLevel(rights: string): string {
   return 'read';
 }
 
-export const mailboxNumber = (jmapId: string) => jmapId.replace(/^b/, '');
+const mailboxNumber = (jmapId: string) => jmapId.replace(/^b/, '');
 export const getAcl = (mailboxId: string) => get<AclEntry[]>(`/api/me/mailboxes/${mailboxNumber(mailboxId)}/acl`);
 export const setAcl = (mailboxId: string, identifier: string, rights: string) => put<AclEntry[]>(`/api/me/mailboxes/${mailboxNumber(mailboxId)}/acl`, { identifier, rights });
 export const exportUrl = (mailboxId: string) => `/api/me/mailboxes/${mailboxNumber(mailboxId)}/export`;

@@ -1,10 +1,10 @@
 // Configuration of the Rspamd spam filter: thresholds, rule scores and recent verdicts.
 
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Stack, TableBody, TableCell, TableHead, TablePagination, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, IconButton, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { formatTime, get, put } from '../api';
-import { PageHeader, routeBy, useAction, useFormAction, useLoad, ScrollTable } from './common';
+import { DialogButtons, PageHeader, routeBy, ScrollTable, useAction, useFormAction, useLoad, usePaged } from './common';
 
 import { t } from '../i18n';
 interface RuleInfo {
@@ -83,13 +83,10 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
   const { feedback, notify } = useAction();
   const saving = useFormAction(routeBy<'score'>([[/score|between/i, 'score']]));
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [editing, setEditing] = useState<{ rule: RuleInfo; value: string } | null>(null);
   const rules = useMemo(() => (overview.groups ?? []).flatMap((group) => group.rules.map((rule) => ({ ...rule, group: group.group }))), [overview.groups]);
   const matching = useMemo(() => matchingRules(rules, query), [rules, query]);
-  const currentPage = Math.min(page, Math.max(0, Math.ceil(matching.length / rowsPerPage) - 1));
-  const visibleRules = matching.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+  const { visible: visibleRules, pager, firstPage } = usePaged(matching, t('Rules per page:'));
   const score = editing ? Number(editing.value) : 0;
   const scoreValid = editing !== null && editing.value.trim() !== '' && Number.isFinite(score) && Math.abs(score) <= 1000;
   return (
@@ -99,7 +96,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
           <Typography variant="h6" sx={{ flex: 1 }}>
             {t('Rule scores')}
           </Typography>
-          <TextField label={t('Search rules')} value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} sx={{ minWidth: 260 }} />
+          <TextField label={t('Search rules')} value={query} onChange={(e) => { setQuery(e.target.value); firstPage(); }} sx={{ minWidth: 260 }} />
         </Stack>
         {feedback}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -138,16 +135,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
             ))}
           </TableBody>
         </ScrollTable>
-        <TablePagination
-          component="div"
-          count={matching.length}
-          page={currentPage}
-          onPageChange={(_event, nextPage) => setPage(nextPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }}
-          rowsPerPageOptions={[25, 50, 100]}
-          labelRowsPerPage={t('Rules per page:')}
-        />
+        {pager}
         {editing && (
           <Dialog open onClose={() => setEditing(null)} fullWidth maxWidth="xs">
             <DialogTitle sx={{ wordBreak: 'break-all' }}>{editing.rule.symbol}</DialogTitle>
@@ -167,24 +155,20 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
                 slotProps={{ htmlInput: { inputMode: 'decimal' } }}
               />
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setEditing(null)}>{t('Cancel')}</Button>
-              <Button
-                variant="contained"
-                disabled={!scoreValid || saving.busy}
-                onClick={async () => {
-                  const name = editing.rule.symbol;
-                  // The dialog stays open until the filter accepted the score, to show why it did not.
-                  if (await saving.run(() => put('/api/spam-filter/rules', { name, value: score }))) {
-                    setEditing(null);
-                    notify(t('Score saved'));
-                    await onSaved();
-                  }
-                }}
-              >
-                {t('Save score')}
-              </Button>
-            </DialogActions>
+            <DialogButtons
+              onCancel={() => setEditing(null)}
+              disabled={!scoreValid || saving.busy}
+              label={t('Save score')}
+              onConfirm={async () => {
+                const name = editing.rule.symbol;
+                // The dialog stays open until the filter accepted the score, to show why it did not.
+                if (await saving.run(() => put('/api/spam-filter/rules', { name, value: score }))) {
+                  setEditing(null);
+                  notify(t('Score saved'));
+                  await onSaved();
+                }
+              }}
+            />
           </Dialog>
         )}
       </CardContent>

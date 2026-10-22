@@ -7,8 +7,9 @@ import Inventory2 from '@mui/icons-material/Inventory2';
 import ReceiptLong from '@mui/icons-material/ReceiptLong';
 import Restaurant from '@mui/icons-material/Restaurant';
 import Train from '@mui/icons-material/Train';
+import type { SvgIconComponent } from '@mui/icons-material';
 import { Alert, Box, Button, CircularProgress, Collapse, Link, Stack, Typography } from '@mui/material';
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { ApiError, errorText, get, patch, post } from '../api';
 import { t, uiLocale } from '../i18n';
@@ -20,14 +21,14 @@ const STATUSES: Record<Status, string> = {
   delivered: t('Delivered'), cancelled: t('Cancelled'), returned: t('Returned'), refunded: t('Refunded'),
 };
 type ReservationKind = 'flight' | 'lodging' | 'train' | 'bus' | 'rental_car' | 'restaurant' | 'event';
-const KINDS: Record<ReservationKind, { label: string; icon: ReactElement }> = {
-  flight: { label: t('Flight'), icon: <Flight color="action" sx={{ mt: 0.25 }} /> },
-  lodging: { label: t('Hotel stay'), icon: <Hotel color="action" sx={{ mt: 0.25 }} /> },
-  train: { label: t('Train'), icon: <Train color="action" sx={{ mt: 0.25 }} /> },
-  bus: { label: t('Bus'), icon: <DirectionsBus color="action" sx={{ mt: 0.25 }} /> },
-  rental_car: { label: t('Car rental'), icon: <DirectionsCar color="action" sx={{ mt: 0.25 }} /> },
-  restaurant: { label: t('Table reservation'), icon: <Restaurant color="action" sx={{ mt: 0.25 }} /> },
-  event: { label: t('Event'), icon: <ConfirmationNumber color="action" sx={{ mt: 0.25 }} /> },
+const KINDS: Record<ReservationKind, { label: string; Icon: SvgIconComponent }> = {
+  flight: { label: t('Flight'), Icon: Flight },
+  lodging: { label: t('Hotel stay'), Icon: Hotel },
+  train: { label: t('Train'), Icon: Train },
+  bus: { label: t('Bus'), Icon: DirectionsBus },
+  rental_car: { label: t('Car rental'), Icon: DirectionsCar },
+  restaurant: { label: t('Table reservation'), Icon: Restaurant },
+  event: { label: t('Event'), Icon: ConfirmationNumber },
 };
 const RESERVATION_STATUSES: Record<string, string> = { confirmed: t('Confirmed'), pending: t('Pending'), cancelled: t('Cancelled') };
 const BILL_STATUSES: Record<string, string> = { due: t('Payment due'), overdue: t('Overdue'), paid: t('Paid') };
@@ -69,11 +70,12 @@ function moneyLabel(total: Money) {
 const external = { component: 'a', target: '_blank', rel: 'noopener noreferrer', referrerPolicy: 'no-referrer' } as const;
 
 /** The frame every card shares: icon, heading, dismissal and the messages it was built from. */
-function CardFrame({ card, icon, label, title, status, subtitle, actions, children, onDismiss }: {
-  card: Card; icon: ReactElement; label: string; title: string; status: string; subtitle: string;
+function CardFrame({ card, Icon, label, title, status, subtitle, actions, children, onDismiss }: {
+  card: Card; Icon: SvgIconComponent; label: string; title: string; status: string; subtitle: string;
   actions?: ReactNode; children?: ReactNode; onDismiss: (id: number, dismissed: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const icon = <Icon color="action" sx={{ mt: 0.25 }} />;
   if (card.dismissed) return <Button size="small" startIcon={icon} onClick={() => onDismiss(card.id, false)}>{t('Show summary card')}</Button>;
   return (
     <Box component="article" aria-label={label} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
@@ -103,7 +105,7 @@ function CardFrame({ card, icon, label, title, status, subtitle, actions, childr
 
 function PurchaseCard({ card, p, onDismiss }: { card: Card; p: Purchase; onDismiss: (id: number, dismissed: boolean) => void }) {
   return (
-    <CardFrame card={card} onDismiss={onDismiss} icon={<Inventory2 color="action" sx={{ mt: 0.25 }} />} label={t('Purchase from {{merchant}}', { merchant: p.merchant })}
+    <CardFrame card={card} onDismiss={onDismiss} Icon={Inventory2} label={t('Purchase from {{merchant}}', { merchant: p.merchant })}
       title={p.merchant} status={STATUSES[p.status] ?? p.status} subtitle={`${t('Order {{number}}', { number: p.order_number })}${p.total ? ` · ${moneyLabel(p.total)}` : ''}`}
       actions={p.order_url && <Button size="small" {...external} href={p.order_url}>{t('View order')}</Button>}>
       {p.items.length > 0 && <Typography variant="body2" sx={{ mt: 1, overflowWrap: 'anywhere' }}>{p.items.join(' · ')}</Typography>}
@@ -130,7 +132,7 @@ function ReservationCard({ card, r, onDismiss }: { card: Card; r: Reservation; o
   const title = [kind.label, booked].filter(Boolean).join(' · ');
   const period = r.start ? (r.end ? `${whenLabel(r.start)} – ${whenLabel(r.end)}` : whenLabel(r.start)) : null;
   return (
-    <CardFrame card={card} onDismiss={onDismiss} icon={kind.icon} label={t('{{kind}} reservation with {{provider}}', { kind: kind.label, provider: r.provider })}
+    <CardFrame card={card} onDismiss={onDismiss} Icon={kind.Icon} label={t('{{kind}} reservation with {{provider}}', { kind: kind.label, provider: r.provider })}
       title={title} status={RESERVATION_STATUSES[r.status] ?? r.status}
       subtitle={`${r.provider} · ${t('Confirmation {{number}}', { number: r.reservation_number })}`}
       actions={r.url && <Button size="small" {...external} href={r.url}>{t('Manage reservation')}</Button>}>
@@ -148,7 +150,7 @@ function ReservationCard({ card, r, onDismiss }: { card: Card; r: Reservation; o
 function BillCard({ card, b, onDismiss }: { card: Card; b: Bill; onDismiss: (id: number, dismissed: boolean) => void }) {
   const status = [b.amount ? moneyLabel(b.amount) : null, BILL_STATUSES[b.status] ?? b.status].filter(Boolean).join(' · ');
   return (
-    <CardFrame card={card} onDismiss={onDismiss} icon={<ReceiptLong color="action" sx={{ mt: 0.25 }} />} label={t('Bill from {{biller}}', { biller: b.biller })}
+    <CardFrame card={card} onDismiss={onDismiss} Icon={ReceiptLong} label={t('Bill from {{biller}}', { biller: b.biller })}
       title={b.biller} status={status}
       subtitle={`${t('Reference {{number}}', { number: b.reference })}${b.due_date && b.status !== 'paid' ? ` · ${t('Due {{date}}', { date: dateLabel(b.due_date) })}` : ''}`}
       actions={b.url && <Button size="small" {...external} href={b.url}>{b.status === 'paid' ? t('View bill') : t('Pay bill')}</Button>} />

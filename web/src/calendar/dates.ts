@@ -101,7 +101,7 @@ export function dayKey(date: Date): string {
 }
 
 /** `YYYY-MM-DDTHH:MM` in local time: the value of a datetime-local input. */
-export function localInput(date: Date): string {
+function localInput(date: Date): string {
   return `${dayKey(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 

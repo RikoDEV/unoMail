@@ -3,7 +3,7 @@
 
 import { t } from './i18n';
 
-export function fromB64url(text: string): ArrayBuffer {
+function fromB64url(text: string): ArrayBuffer {
   const base64 = text.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(text.length / 4) * 4, '=');
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -11,7 +11,7 @@ export function fromB64url(text: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export function toB64url(buffer: ArrayBuffer | Uint8Array): string {
+function toB64url(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);

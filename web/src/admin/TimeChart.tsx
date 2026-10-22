@@ -6,8 +6,8 @@
 // stacked layers (parts of one whole), named in a legend.
 
 import { Box, Card, CardContent, TableBody, TableCell, TableHead, TableRow, Typography, useTheme } from '@mui/material';
-import { ScrollTable } from './common';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ScrollTable, useElementWidth } from './common';
+import { useId, useMemo, useState } from 'react';
 
 import { t, uiLocale } from '../i18n';
 export interface ChartPoint {
@@ -51,21 +51,12 @@ function timeLabel(seconds: number, spanSeconds: number): string {
 
 export function TimeChart({ title, headline, hint, points, max, format, series }: Props) {
   const theme = useTheme();
-  const holder = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(480);
+  const [holder, width] = useElementWidth(480);
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
   const titleId = useId();
   // The lighter shade keeps the line readable on dark surfaces.
   const color = theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main;
-
-  useEffect(() => {
-    const element = holder.current;
-    if (!element) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(280, Math.floor(entry.contentRect.width))));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
   const plot = { width: width - MARGIN.left - MARGIN.right, height: HEIGHT - MARGIN.top - MARGIN.bottom };
   const top = Math.max(max, ...points.map((p) => p.v), 1);

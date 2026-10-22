@@ -1,4 +1,5 @@
 import AdminPanelSettings from '@mui/icons-material/AdminPanelSettings';
+import MenuIcon from '@mui/icons-material/Menu';
 import PersonAdd from '@mui/icons-material/PersonAdd';
 import CalendarMonth from '@mui/icons-material/CalendarMonth';
 import DarkMode from '@mui/icons-material/DarkMode';
@@ -9,14 +10,15 @@ import Logout from '@mui/icons-material/Logout';
 import Mail from '@mui/icons-material/Mail';
 import Settings from '@mui/icons-material/Settings';
 import SettingsBrightness from '@mui/icons-material/SettingsBrightness';
-import { alpha, Avatar, Link, type SxProps, type Theme, Badge, Box, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, ToggleButton, ToggleButtonGroup, Tooltip, Typography } from '@mui/material';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Avatar, Link, type SxProps, type Theme, Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, SwipeableDrawer, ToggleButton, ToggleButtonGroup, Tooltip, Typography, useMediaQuery } from '@mui/material';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAppearance, useAuth } from './app';
 import { pendingCount } from './mail/outbox';
 
 import { chosenLanguage, LANGUAGES, setLanguage, t } from './i18n';
 import { updatePrefs } from './prefs';
+import { SWIPE } from './swipe';
 /** Account menu shown in the top-right corner of every page. */
 /** A round picture for an account: its first letter, in a colour of its own. */
 function AccountAvatar({ email, size }: { email: string; size: number }) {
@@ -25,7 +27,7 @@ function AccountAvatar({ email, size }: { email: string; size: number }) {
   return <Avatar sx={{ width: size, height: size, fontSize: size * 0.45, bgcolor: `hsl(${hue} 45% 45%)`, color: '#fff' }}>{email[0].toUpperCase()}</Avatar>;
 }
 
-export function AccountMenu() {
+function AccountMenu() {
   const { account, accounts, refreshAccounts, switchAccount, logout } = useAuth();
   const { mode, setMode } = useAppearance();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -119,13 +121,6 @@ export function AccountMenu() {
             value={mode}
             onChange={(_, value) => value && setMode(value)}
             aria-label={t('Colour mode')}
-            sx={{
-              '& .MuiToggleButtonGroup-grouped': { textTransform: 'none', gap: 0.75, py: 0.5, borderColor: 'divider', color: 'text.secondary', fontWeight: 500 },
-              '& .MuiToggleButtonGroup-firstButton': { borderRadius: '999px 0 0 999px' },
-              '& .MuiToggleButtonGroup-lastButton': { borderRadius: '0 999px 999px 0' },
-              '& .MuiToggleButton-root.Mui-selected': { color: 'primary.main', bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12) },
-              '& .MuiToggleButton-root.Mui-selected:hover': { bgcolor: (theme) => alpha(theme.palette.primary.main, 0.18) },
-            }}
           >
             <ToggleButton value="light"><LightMode sx={{ fontSize: 18 }} />{t('Light')}</ToggleButton>
             <ToggleButton value="system"><SettingsBrightness sx={{ fontSize: 18 }} />{t('System')}</ToggleButton>
@@ -232,5 +227,78 @@ export function TopBar({ title, children, leading, onHome }: { title: string; ch
       <LanguageMenu />
       <AccountMenu />
     </Stack>
+  );
+}
+
+export interface SideNavItem {
+  key: string;
+  label: string;
+  icon: ReactElement;
+  selected?: boolean;
+  /** A link (the item is then a router link, marked active by the router) or a click handler. */
+  to?: string;
+  onClick?: () => void;
+}
+
+/**
+ * A page with the top bar, a list of sections on the left (a drawer on small screens) and
+ * the open section on a pane beside it. Used by the settings and the administration.
+ */
+export function SideNavPage({ title, navLabel, heading, placement, items, linkComponent, children }: {
+  title: string;
+  navLabel: string;
+  heading?: string;
+  placement: 'settings' | 'admin';
+  items: SideNavItem[];
+  /** The router's link component for items with `to` (NavLink marks the active one). */
+  linkComponent?: React.ElementType;
+  children: ReactNode;
+}) {
+  const compact = useMediaQuery((theme: Theme) => theme.breakpoints.down('md'));
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const nav = (
+    <Box component="nav" aria-label={navLabel} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined }}>
+      {heading && (
+        <Typography variant="h6" component="h1" sx={{ px: 2, pt: compact ? 1 : 0, pb: 1 }}>
+          {heading}
+        </Typography>
+      )}
+      <List dense disablePadding={Boolean(heading)} onClick={() => setDrawerOpen(false)}>
+        {items.map((item) => (
+          <ListItemButton
+            key={item.key}
+            selected={item.selected}
+            aria-current={item.selected ? 'page' : undefined}
+            onClick={item.onClick}
+            {...(item.to ? { component: linkComponent ?? RouterLink, to: item.to } : {})}
+            sx={{ mb: 0.25 }}
+          >
+            <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
+            <ListItemText primary={item.label} />
+          </ListItemButton>
+        ))}
+      </List>
+      <Copyright placement={placement} sx={{ mt: 'auto', px: 2, pt: 3, pb: 2, flexShrink: 0 }} />
+    </Box>
+  );
+  return (
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+      <TopBar
+        title={title}
+        leading={compact && <Tooltip title={t('Menu')}><IconButton aria-label={navLabel} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton></Tooltip>}
+      />
+      <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {compact ? (
+          <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
+            {nav}
+          </SwipeableDrawer>
+        ) : (
+          nav
+        )}
+        <Paper elevation={0} component="main" sx={{ flex: 1, minWidth: 0, overflow: 'auto', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, p: { xs: 2, sm: 3 } }}>
+          {children}
+        </Paper>
+      </Box>
+    </Box>
   );
 }

@@ -83,7 +83,7 @@ function shift(color: Rgb, background: Rgb, direction: 'lighter' | 'darker'): Rg
 }
 
 /** A readable replacement for `color` on `background`, or null when it reads already. */
-export function readable(color: Rgb, background: Rgb): Rgb | null {
+function readable(color: Rgb, background: Rgb): Rgb | null {
   if (contrast(color, background) >= MIN_CONTRAST) return null;
   // On a mid-tone background light text may read as well as dark; take the better one.
   const light = lighten(color, background);

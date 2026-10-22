@@ -1,4 +1,4 @@
-export const MAX_PREVIEW_BYTES = 50 * 1024 * 1024;
+const MAX_PREVIEW_BYTES = 50 * 1024 * 1024;
 
 /** Bound the allocation while reading, not after response.blob() has buffered it. */
 export async function readPreview(response: Response, limit = MAX_PREVIEW_BYTES): Promise<Blob> {

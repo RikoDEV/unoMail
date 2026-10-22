@@ -1,85 +1,51 @@
-import Add from '@mui/icons-material/Add';
-import AllInbox from '@mui/icons-material/AllInbox';
-import Archive from '@mui/icons-material/Archive';
-import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
-import Delete from '@mui/icons-material/Delete';
-import Drafts from '@mui/icons-material/Drafts';
 import Edit from '@mui/icons-material/Edit';
-import CalendarMonth from '@mui/icons-material/CalendarMonth';
-import Contacts from '@mui/icons-material/Contacts';
-import Extension from '@mui/icons-material/Extension';
-import ForumOutlined from '@mui/icons-material/ForumOutlined';
-import InfoOutlined from '@mui/icons-material/InfoOutlined';
-import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
-import PeopleOutlined from '@mui/icons-material/PeopleOutlined';
-import Folder from '@mui/icons-material/Folder';
-import FolderShared from '@mui/icons-material/FolderShared';
-import Inbox from '@mui/icons-material/Inbox';
-import LabelIcon from '@mui/icons-material/Label';
-import MarkEmailRead from '@mui/icons-material/MarkEmailRead';
-import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
-import DriveFileMove from '@mui/icons-material/DriveFileMove';
-import Palette from '@mui/icons-material/Palette';
 import MenuIcon from '@mui/icons-material/Menu';
-import MoreVert from '@mui/icons-material/MoreVert';
-import Refresh from '@mui/icons-material/Refresh';
-import Report from '@mui/icons-material/Report';
-import ReportOff from '@mui/icons-material/ReportOff';
-import ScheduleSend from '@mui/icons-material/ScheduleSend';
 import Search from '@mui/icons-material/Search';
-import Snooze from '@mui/icons-material/Snooze';
 import Tune from '@mui/icons-material/Tune';
-import SendIcon from '@mui/icons-material/Send';
-import UnsubscribeIcon from '@mui/icons-material/Unsubscribe';
 import {
-  Alert, Badge, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, LinearProgress, List,
-  ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Snackbar, Stack, Tab, Tabs, TextField, Tooltip, Typography, useMediaQuery, useTheme,
+  Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, LinearProgress, List,
+  Menu, MenuItem, Paper, Snackbar, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { SWIPE } from '../swipe';
 import { Subscriptions } from './Subscriptions';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { del, post, errorText, formatBytes } from '../api';
+import { del, post, errorText } from '../api';
 import { useAuth } from '../app';
 import { setPluginNotifier, usePlugins } from '../plugins';
 import { usePrefs } from '../prefs';
-import { Copyright, TopBar, useTitle } from '../shell';
+import { TopBar, useTitle } from '../shell';
 import { cachedList, cachedMailboxes, cachedThread, cacheList, cacheMailboxes, cacheThread, openCache } from './cache';
 import { Composer, type SentInfo } from './Composer';
-import { CATEGORIES, type CategoryLatest, type CategoryName, categoryCounts, categoryLatest, exportUrl, importMessages, LABEL_COLORS, type LabelDetail, listLabelDetails, saveLabel } from './extra';
+import { CATEGORIES, type CategoryLatest, type CategoryName, categoryCounts, categoryLatest, exportUrl, importMessages, type LabelDetail, listLabelDetails, saveLabel } from './extra';
 import { flushOutbox, openOutbox, pendingCount, performOrQueue, queuedPendingFiles } from './outbox';
 import { sweepPendingFiles } from './pendingFiles';
 import {
   folderName,
-  accountId as fetchAccountId, cancelSubmission, createMailbox, destroyMailbox, type Draft, type EmailFull, type EmailSummary, formatAddress, getThread,
+  accountId as fetchAccountId, cancelSubmission, createMailbox, destroyMailbox, type Draft, type EmailFull, type EmailSummary, getThread,
   listMailboxes, listScheduled, type Mailbox, normalizeLabel, queryAllIds, queryEmails, resetSession, setCategory, setKeyword, snooze,
 } from './jmapClient';
-import { emailHtml, Reader, type ReaderAction } from './Reader';
+import { Reader } from './Reader';
 import { ShareDialog } from './ShareDialog';
-import { escapeHtml, textToHtml } from './sanitize';
 import { AdvancedSearch } from './AdvancedSearch';
+import { type BulkAction, ListToolbar } from './ListToolbar';
+import { LabelDialog } from './LabelDialog';
+import { CategoryTabs } from './CategoryTabs';
+import { type LabelDialogState, MailSidebar } from './MailSidebar';
 import { EmailRow, type RowHandlers } from './EmailRow';
 import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
 import { AttachmentPreview, type PreviewFile } from './Preview';
 import { parseMailto } from './mailto';
 import { pageNotifier } from './notifications';
+import { draftFor, EMPTY_DRAFT } from './replyDraft';
 
-const CATEGORY_ICONS: Record<CategoryName, ReactElement> = {
-  general: <Inbox />,
-  offers: <LocalOfferOutlined />,
-  communities: <PeopleOutlined />,
-  notifications: <InfoOutlined />,
-  forums: <ForumOutlined />,
-};
 import { parseQuery, withScope } from './searchQuery';
 
 import { t, uiLocale } from '../i18n';
 import { readLocal, writeLocal } from '../storage';
+import { DialogButtons } from '../admin/common';
 const PAGE_SIZE = 50;
-const ICONS: Record<string, ReactElement> = { inbox: <Inbox />, drafts: <Drafts />, sent: <SendIcon />, archive: <Archive />, junk: <Report />, trash: <Delete />, snoozed: <Snooze /> };
-const EMPTY_DRAFT: Draft = { to: '', cc: '', bcc: '', subject: '', html: '', attachments: [] };
-
 
 /** A label name from the address bar; a broken encoding is shown as typed rather than crashing the page. */
 function decodeLabel(value: string): string {
@@ -88,39 +54,6 @@ function decodeLabel(value: string): string {
   } catch {
     return value;
   }
-}
-
-function prefixed(subject: string, prefix: string): string {
-  return subject.toLowerCase().startsWith(prefix.toLowerCase()) ? subject : `${prefix} ${subject}`;
-}
-
-/** Builds the initial draft for a reply or forward of `email`. */
-function draftFor(action: ReaderAction, email: EmailFull, ownAddress: string, accountId: string, suggestedText?: string): Draft {
-  const sender = email.replyTo?.length ? email.replyTo : (email.from ?? []);
-  // The translation is plain text from our own files; the values are escaped before they go in.
-  const attribution = escapeHtml(t('On {{date}}, {{sender}} wrote:', { date: new Date(email.receivedAt).toLocaleString(uiLocale()), sender: (email.from ?? []).map(formatAddress).join(', ') }));
-  const quoted = `<p><br></p><p>${attribution}</p><blockquote>${emailHtml(email, accountId)}</blockquote>`;
-  const references = [...(email.references ?? []), ...(email.messageId ?? [])];
-  if (action === 'forward') {
-    return { ...EMPTY_DRAFT, subject: prefixed(email.subject, 'Fwd:'), html: quoted, answer: true };
-  }
-  const owned = new Set([ownAddress, ...(email.ownedAddresses ?? []), ...(email.maskedAddresses ?? [])].map((a) => a.toLowerCase()));
-  const others = action === 'replyAll' ? [...(email.to ?? []), ...(email.cc ?? [])].filter((a) => !owned.has(a.email.toLowerCase())) : [];
-  const mask = email.maskedAddresses?.[0];
-  return {
-    ...EMPTY_DRAFT,
-    // Answer from the identity the message was addressed to, if the user has one for it.
-    fromHint: mask ? [mask] : [...(email.to ?? []), ...(email.cc ?? [])].map((a) => a.email),
-    from: mask ? { name: null, email: mask } : undefined,
-    to: sender.map(formatAddress).join(', '),
-    cc: others.map(formatAddress).join(', '),
-    subject: prefixed(email.subject, 'Re:'),
-    html: suggestedText ? `<div class="unomail-reply-text">${textToHtml(suggestedText)}</div>${quoted}` : quoted,
-    saveOnOpen: Boolean(suggestedText),
-    answer: true,
-    inReplyTo: email.messageId ?? undefined,
-    references: references.length ? references : undefined,
-  };
 }
 
 export default function MailPage() {
@@ -156,15 +89,12 @@ export default function MailPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   useEffect(() => setDrawerOpen(false), [params['*'], compact]);
   const mini = !sidebar && !compact;
-  /** In the icon strip an entry has no visible text: name it for screen readers and show it in a tooltip. */
-  const named = (name: string) => (mini ? { 'aria-label': name } : {});
-  const tip = (name: string, item: ReactElement) => (mini ? <Tooltip key={item.key} title={name} placement="right">{item}</Tooltip> : item);
   /** Sidebar entries are real links, so they can be middle-clicked into a new tab. */
   const linkTo = (to: string) => ({ component: RouterLink, to, onClick: () => setSearch('') });
   const [newFolder, setNewFolder] = useState<string | null>(null);
   const [labels, setLabels] = useState<string[]>([]);
   const [labelDetails, setLabelDetails] = useState<LabelDetail[]>([]);
-  const [labelDialog, setLabelDialog] = useState<{ name: string; color: string; existing: boolean } | null>(null);
+  const [labelDialog, setLabelDialog] = useState<LabelDialogState | null>(null);
   const prefs = usePrefs();
   // Inbox categories (General, Offers, ...) and their unread counts.
   const [category, setCategoryTab] = useState<CategoryName>('general');
@@ -177,9 +107,6 @@ export default function MailPage() {
   // Selection in the list: ids of the listed conversations, or everything in the folder.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [allInFolder, setAllInFolder] = useState(false);
-  const [bulkMenu, setBulkMenu] = useState<{ anchor: HTMLElement; kind: 'move' | 'label' } | null>(null);
-  const [selectMenu, setSelectMenu] = useState<HTMLElement | null>(null);
-  const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
   const [rowMenu, setRowMenu] = useState<RowMenuTarget | null>(null);
   const [threadVersion, setThreadVersion] = useState(0);
   const [offline, setOffline] = useState(false);
@@ -549,8 +476,7 @@ export default function MailPage() {
   }
 
   /** Applies one action to everything that is selected. */
-  async function bulk(action: 'archive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'move' | 'label', argument?: string, all = allInFolder) {
-    setBulkMenu(null);
+  async function bulk(action: BulkAction, argument?: string, all = allInFolder) {
     const count = all ? total : selected.size;
     try {
       const ids = await selectionIds(all);
@@ -952,10 +878,10 @@ export default function MailPage() {
             // Enter searches at once, without waiting for the pause in typing.
             setServerSearch(search.trim());
           }}
-          sx={{ display: 'flex', alignItems: 'center', pl: 2, pr: 0.5, borderRadius: 999, maxWidth: 720, bgcolor: 'action.hover' }}
+          sx={{ display: 'flex', alignItems: 'center', pl: 2, pr: 0.5, borderRadius: 999, maxWidth: 720, bgcolor: 'm3.surfaceContainerHigh', transition: (theme) => theme.transitions.create(['background-color', 'box-shadow']), '&:focus-within': { bgcolor: 'background.paper', boxShadow: 2 } }}
         >
           <Search color="action" />
-          <InputBase inputRef={searchInput} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search mail')} inputProps={{ 'aria-label': t('Search mail') }} sx={{ ml: 1, flex: 1, height: 44 }} />
+          <InputBase inputRef={searchInput} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search mail')} inputProps={{ 'aria-label': t('Search mail') }} sx={{ ml: 1.5, flex: 1, height: 48 }} />
           <Tooltip title={t('Show search options')}>
             <IconButton aria-label={t('Show search options')} aria-haspopup="dialog" aria-expanded={Boolean(searchPanel)} onClick={() => setSearchPanel(searchBox.current)}>
               <Tune />
@@ -976,234 +902,47 @@ export default function MailPage() {
       </TopBar>
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {wrapNav(
-          <Box
-            component="nav"
-            aria-label={t('Folders')}
-            data-mini={mini}
-            sx={{
-              width: mini ? 72 : compact ? 280 : 240, flexShrink: 0, px: 1, pt: compact ? 2 : 0, overflowY: 'auto', overflowX: 'hidden', transition: 'width 150ms',
-              // A column, so that the copyright line can sit at the bottom.
-              display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined,
-              // The strip keeps the icons of everything that can be opened and drops the rest.
-              ...(mini && {
-                '& .MuiListItemText-root, & .MuiTypography-overline, & .MuiListItemButton-root .MuiIconButton-root, & .mini-hide': { display: 'none' },
-                '& .MuiListItemButton-root': { justifyContent: 'center', px: 0, borderRadius: 6 },
-                '& .MuiListItemIcon-root': { minWidth: 0 },
-                '& .MuiBadge-root': { position: 'absolute', top: 10, right: 12, mr: 0 },
-              }),
-            }}
-          >
-            <Fab variant={mini ? 'circular' : 'extended'} color="primary" aria-label={t('Compose')} onClick={() => { setDrawerOpen(false); compose(); }} sx={{ m: mini ? 0 : 1, mb: 2, boxShadow: 1, flexShrink: 0, alignSelf: mini ? 'center' : 'flex-start' }}>
-              <Edit sx={{ mr: mini ? 0 : 1 }} />
-              {!mini && t('Compose')}
-            </Fab>
-            <List dense disablePadding aria-label={t('Folder list')}>
-              {scheduledCount > 0 && (
-                tip(t('Scheduled'), <ListItemButton selected={label === '$scheduled'} {...linkTo(`/mail/label:${encodeURIComponent('$scheduled')}`)} sx={{ mb: 0.25 }} {...named(t('Scheduled'))}>
-                  <ListItemIcon sx={{ minWidth: 40 }}><ScheduleSend /></ListItemIcon>
-                  <ListItemText primary={t('Scheduled')} />
-                  <Badge badgeContent={scheduledCount} color="secondary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} />
-                </ListItemButton>)
-              )}
-              {ownMailboxes.map((m) => tip(folderName(m),
-                <ListItemButton
-                  key={m.id}
-                  selected={mailbox?.id === m.id}
-                  {...linkTo(`/mail/${m.role ?? m.id}`)}
-                  sx={{ mb: 0.25, ...dropStyle(m.id) }}
-                  data-testid="folder"
-                  {...named(folderName(m))}
-                  {...dropProps(m.id, { mailbox: m })}
-                >
-                  <ListItemIcon sx={{ minWidth: 40 }}>{ICONS[m.role ?? ''] ?? (m.sharedWith ? <FolderShared /> : <Folder />)}</ListItemIcon>
-                  <ListItemText primary={folderName(m)} primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }} />
-                  {m.unreadEmails > 0 && m.role !== 'drafts' ? <Badge badgeContent={m.unreadEmails} color="primary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} /> : <FolderCount count={m.totalEmails} />}
-                  <IconButton size="small" aria-label={t('Folder actions {{value}}', { value: folderName(m) })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
-                    <MoreVert fontSize="inherit" />
-                  </IconButton>
-                </ListItemButton>,
-              ))}
-              {tip(t('All mail'), <ListItemButton
-                selected={allMail}
-                {...linkTo('/mail/all')}
-                sx={{ mb: 0.25 }}
-                data-testid="folder-all"
-                {...named(t('All mail'))}
-              >
-                <ListItemIcon sx={{ minWidth: 40 }}><AllInbox /></ListItemIcon>
-                <ListItemText primary={t('All mail')} primaryTypographyProps={{ noWrap: true }} />
-              </ListItemButton>)}
-              {tip(t('Manage subscriptions'), <ListItemButton selected={subscriptionsPage} {...linkTo('/mail/subscriptions')} sx={{ mb: 0.25 }} {...named(t('Manage subscriptions'))}>
-                <ListItemIcon sx={{ minWidth: 40 }}><UnsubscribeIcon /></ListItemIcon>
-                <ListItemText primary={t('Manage subscriptions')} primaryTypographyProps={{ noWrap: true }} />
-              </ListItemButton>)}
-              <ListItemButton className="mini-hide" onClick={() => setNewFolder('')}>
-                <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
-                <ListItemText primary={t('New folder')} />
-              </ListItemButton>
-            </List>
-            {sharedMailboxes.length > 0 && (
-              <>
-                <Typography variant="overline" color="text.secondary" sx={{ px: 2, mt: 1, display: 'block' }}>
-                  {t('Shared with me')}
-                </Typography>
-                <List dense disablePadding aria-label={t('Shared folders')}>
-                  {sharedMailboxes.map((m) => tip(`${m.name.split('/').slice(2).join('/') || m.name} (${m.shareOwner ?? 'shared'})`,
-                    <ListItemButton
-                      key={m.id}
-                      selected={mailbox?.id === m.id}
-                      {...linkTo(`/mail/${m.id}`)}
-                      sx={{ mb: 0.25, ...dropStyle(m.id) }}
-                      {...named(`${m.name.split('/').slice(2).join('/') || m.name} (${m.shareOwner ?? 'shared'})`)}
-                      {...(m.myRights?.mayAddItems ? dropProps(m.id, { mailbox: m }) : {})}
-                    >
-                      <ListItemIcon sx={{ minWidth: 40 }}><FolderShared /></ListItemIcon>
-                      <ListItemText
-                        primary={m.name.split('/').slice(2).join('/') || m.name}
-                        secondary={m.shareOwner}
-                        primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }}
-                        secondaryTypographyProps={{ noWrap: true }}
-                      />
-                      <FolderCount count={m.totalEmails} />
-                      <IconButton size="small" aria-label={t('Folder actions {{name}}', { name: m.name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFolderMenu({ anchor: e.currentTarget, mailbox: m }); }}>
-                        <MoreVert fontSize="inherit" />
-                      </IconButton>
-                    </ListItemButton>,
-                  ))}
-                </List>
-              </>
-            )}
-            <Typography variant="overline" color="text.secondary" sx={{ px: 2, mt: 1, display: 'block' }}>
-              {t('Labels')}
-            </Typography>
-            <List dense disablePadding aria-label={t('Labels')}>
-              {labels.map((name) => tip(t('Label {{name}}', { name }),
-                <ListItemButton
-                  key={name}
-                  selected={label === name}
-                  {...linkTo(`/mail/label:${encodeURIComponent(name)}`)}
-                  sx={{ mb: 0.25, ...dropStyle(`label:${name}`) }}
-                  {...named(t('Label {{name}}', { name }))}
-                  {...dropProps(`label:${name}`, { label: name })}
-                >
-                  <ListItemIcon sx={{ minWidth: 40 }}><LabelIcon sx={{ color: labelColor(name) || undefined }} /></ListItemIcon>
-                  <ListItemText primary={name} primaryTypographyProps={{ noWrap: true }} />
-                  <IconButton size="small" aria-label={t('Colour of label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setLabelDialog({ name, color: labelColor(name), existing: true }); }}>
-                    <Palette fontSize="inherit" />
-                  </IconButton>
-                  <IconButton size="small" aria-label={t('Rename label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void renameLabel(name); }}>
-                    <Edit fontSize="inherit" />
-                  </IconButton>
-                  <IconButton size="small" aria-label={t('Delete label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); void deleteLabel(name); }}>
-                    <Delete fontSize="inherit" />
-                  </IconButton>
-                </ListItemButton>,
-              ))}
-              <ListItemButton className="mini-hide" onClick={() => setLabelDialog({ name: '', color: '', existing: false })}>
-                <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
-                <ListItemText primary={t('New label')} />
-              </ListItemButton>
-            </List>
-            <List dense disablePadding sx={{ mt: 1 }} aria-label={t('More')}>
-              {tip(t('Calendar'), <ListItemButton component={RouterLink} to="/calendar" {...named(t('Calendar'))}>
-                <ListItemIcon sx={{ minWidth: 40 }}><CalendarMonth /></ListItemIcon>
-                <ListItemText primary={t('Calendar')} />
-              </ListItemButton>)}
-              {tip(t('Contacts'), <ListItemButton component={RouterLink} to="/contacts" {...named(t('Contacts'))}>
-                <ListItemIcon sx={{ minWidth: 40 }}><Contacts /></ListItemIcon>
-                <ListItemText primary={t('Contacts')} />
-              </ListItemButton>)}
-              {plugins.sidebarLinks.map((link) => tip(link.label,
-                <ListItemButton key={link.id} component="a" href={link.href} target="_blank" rel="noopener noreferrer" {...named(link.label)}>
-                  <ListItemIcon sx={{ minWidth: 40 }}><Extension /></ListItemIcon>
-                  <ListItemText primary={link.label} />
-                </ListItemButton>,
-              ))}
-            </List>
-            {account && (
-              <Box className="mini-hide" sx={{ mt: 'auto', px: 2, pt: 3, flexShrink: 0 }}>
-                <Typography variant="caption" color="text.secondary" component="div">
-                  {t('{{used}} of {{quota}}', { used: formatBytes(account.used_bytes), quota: account.quota_bytes ? formatBytes(account.quota_bytes) : t('unlimited') })}
-                </Typography>
-                {account.quota_bytes > 0 && (
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(100, (account.used_bytes / account.quota_bytes) * 100)}
-                    aria-label={t('Storage')}
-                    sx={{ mt: 0.5, height: 4, borderRadius: 1 }}
-                  />
-                )}
-              </Box>
-            )}
-            <Copyright placement="sidebar" className="mini-hide" sx={{ mt: account ? 0 : 'auto', px: 2, pt: account ? 1 : 3, pb: 2, flexShrink: 0 }} />
-          </Box>,
+          <MailSidebar
+            mini={mini}
+            compact={compact}
+            scheduledCount={scheduledCount}
+            label={label}
+            mailbox={mailbox}
+            ownMailboxes={ownMailboxes}
+            sharedMailboxes={sharedMailboxes}
+            allMail={allMail}
+            subscriptionsPage={subscriptionsPage}
+            labels={labels}
+            labelColor={labelColor}
+            sidebarLinks={plugins.sidebarLinks}
+            account={account}
+            linkTo={linkTo}
+            dropProps={dropProps}
+            dropStyle={dropStyle}
+            onCompose={() => { setDrawerOpen(false); compose(); }}
+            onFolderMenu={(anchor, mailbox) => setFolderMenu({ anchor, mailbox })}
+            onNewFolder={() => setNewFolder('')}
+            onLabelDialog={setLabelDialog}
+            onRenameLabel={(name) => void renameLabel(name)}
+            onDeleteLabel={(name) => void deleteLabel(name)}
+          />,
         )}
         {subscriptionsPage ? <Subscriptions /> : (
-        <Paper elevation={0} sx={{ width: { xs: '100%', md: threadId ? 400 : '100%' }, flexShrink: { md: threadId ? 0 : 1 }, flex: threadId ? undefined : 1, display: { xs: threadId ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, overflow: 'hidden', minWidth: 0 }}>
-          <Stack direction="row" alignItems="center" sx={{ pl: 0.5, pr: 2, py: 0.5, minHeight: 48 }}>
-            <Typography component="h1" sx={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
-              {serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : (mailbox ? folderName(mailbox) : '')}
-            </Typography>
-            <Checkbox
-              size="small"
-              inputProps={{ 'aria-label': t('Select all conversations') }}
-              checked={visible.length > 0 && visible.every((e) => selected.has(e.id))}
-              indeterminate={selected.size > 0 && !visible.every((e) => selected.has(e.id))}
-              disabled={visible.length === 0}
-              onChange={(e) => {
-                setAllInFolder(false);
-                setSelected(e.target.checked ? new Set(visible.map((email) => email.id)) : new Set());
-              }}
-              sx={{ mr: -1 }}
-            />
-            <IconButton size="small" aria-label={t('Select')} aria-haspopup="menu" disabled={visible.length === 0} onClick={(e) => setSelectMenu(e.currentTarget)} sx={{ width: 20, borderRadius: 1 }}>
-              <ArrowDropDown fontSize="small" />
-            </IconButton>
-            {selected.size > 0 ? (
-              <Stack direction="row" alignItems="center" sx={{ flex: 1, minWidth: 0 }} role="toolbar" aria-label={t('Actions for the selection')}>
-                <Tooltip title={t('Archive')}><IconButton aria-label={t('Archive selected')} onClick={() => void bulk('archive')}><Archive /></IconButton></Tooltip>
-                {mailbox?.role === 'junk' ? (
-                  <Tooltip title={t('Not spam')}><IconButton aria-label={t('Mark selected as not spam')} onClick={() => void bulk('inbox')}><ReportOff /></IconButton></Tooltip>
-                ) : (
-                  <Tooltip title={t('Report spam')}><IconButton aria-label={t('Report selected as spam')} onClick={() => void bulk('junk')}><Report /></IconButton></Tooltip>
-                )}
-                <Tooltip title={t('Delete')}><IconButton aria-label={t('Delete selected')} onClick={() => void bulk('trash')}><Delete /></IconButton></Tooltip>
-                <Tooltip title={t('Mark as read')}><IconButton aria-label={t('Mark selected as read')} onClick={() => void bulk('read')}><MarkEmailRead /></IconButton></Tooltip>
-                <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark selected as unread')} onClick={() => void bulk('unread')}><MarkEmailUnread /></IconButton></Tooltip>
-                <Tooltip title={t('Move to')}><IconButton aria-label={t('Move selected to a folder')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'move' })}><DriveFileMove /></IconButton></Tooltip>
-                <Tooltip title={t('Label')}><IconButton aria-label={t('Label selected')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'label' })}><LabelIcon /></IconButton></Tooltip>
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }} noWrap>
-                  {t('{{count}} selected', { count: allInFolder ? total : selected.size })}
-                </Typography>
-              </Stack>
-            ) : (
-              <>
-                <Tooltip title={t('Refresh')}><IconButton aria-label={t('Refresh')} onClick={() => { void load(0); void refreshMailboxes(); }}><Refresh fontSize="small" /></IconButton></Tooltip>
-                <Tooltip title={t('More')}><IconButton aria-label={t('More')} aria-haspopup="menu" onClick={(e) => setMoreMenu(e.currentTarget)}><MoreVert fontSize="small" /></IconButton></Tooltip>
-                <Box sx={{ flex: 1 }} />
-                {visible.length > 0 && (
-                  <Typography variant="caption" color="text.secondary">
-                    {t('{{from}}–{{to}} of {{total}}', { from: 1, to: visible.length, total: total.toLocaleString() })}
-                  </Typography>
-                )}
-              </>
-            )}
-          </Stack>
-          <Menu anchorEl={selectMenu} open={Boolean(selectMenu)} onClose={() => setSelectMenu(null)}>
-            {([
-              [t('All'), () => true],
-              [t('None'), () => false],
-              [t('Read'), (e: EmailSummary) => Boolean(e.keywords.$seen)],
-              [t('Unread'), (e: EmailSummary) => !e.keywords.$seen],
-              [t('Starred'), (e: EmailSummary) => Boolean(e.keywords.$flagged)],
-              [t('Unstarred'), (e: EmailSummary) => !e.keywords.$flagged],
-            ] as const).map(([name, pick]) => (
-              <MenuItem key={name} dense onClick={() => { setAllInFolder(false); setSelected(new Set(visible.filter(pick).map((e) => e.id))); setSelectMenu(null); }}>{name}</MenuItem>
-            ))}
-          </Menu>
-          <Menu anchorEl={moreMenu} open={Boolean(moreMenu)} onClose={() => setMoreMenu(null)}>
-            <MenuItem dense disabled={visible.length === 0} onClick={() => { setMoreMenu(null); void bulk('read', undefined, true); }}>{t('Mark all as read')}</MenuItem>
-          </Menu>
+        <Paper elevation={0} sx={{ width: { xs: '100%', md: threadId ? 400 : '100%' }, flexShrink: { md: threadId ? 0 : 1 }, flex: threadId ? undefined : 1, display: { xs: threadId ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', bgcolor: 'transparent', mx: { xs: 1, md: 0 }, mr: { md: 1 }, overflow: 'hidden', minWidth: 0 }}>
+          <ListToolbar
+            heading={serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : (mailbox ? folderName(mailbox) : '')}
+            visible={visible}
+            total={total}
+            selected={selected}
+            allInFolder={allInFolder}
+            inJunk={mailbox?.role === 'junk'}
+            folders={mailboxes.filter((m) => m.id !== mailbox?.id && (!m.shareOwner || m.myRights?.mayAddItems))}
+            labels={labels}
+            labelColor={labelColor}
+            onSelect={(ids) => { setAllInFolder(false); setSelected(ids); }}
+            onBulk={(action, argument, all) => void bulk(action, argument, all)}
+            onRefresh={() => { void load(0); void refreshMailboxes(); }}
+          />
           {selected.size > 0 && visible.every((e) => selected.has(e.id)) && total > visible.length && (
             <Alert severity="info" icon={false} sx={{ borderRadius: 0, py: 0 }}>
               {allInFolder ? t('All {{total}} conversations here are selected. ', { total }) : t('The {{length}} conversations shown are selected. ', { length: visible.length })}
@@ -1213,43 +952,7 @@ export default function MailPage() {
             </Alert>
           )}
           {categorised && !serverSearch && (
-            <Tabs
-              value={category}
-              onChange={(_, value) => setCategoryTab(value)}
-              variant="scrollable"
-              scrollButtons="auto"
-              aria-label={t('Inbox categories')}
-              // Like Gmail: equal tabs with the icon and name on the left, and a rounded bar under the open one.
-              sx={{ minHeight: 56, borderBottom: 1, borderColor: 'divider', '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' } }}
-            >
-              {CATEGORIES.map((entry) => (
-                <Tab
-                  key={entry.id}
-                  value={entry.id}
-                  icon={CATEGORY_ICONS[entry.id]}
-                  iconPosition="start"
-                  sx={{
-                    minHeight: 56, flex: '1 0 auto', minWidth: 160, maxWidth: 'none', justifyContent: 'flex-start', gap: 1.5, px: 2,
-                    textTransform: 'none', fontWeight: entry.id === category ? 700 : 400, ...dropStyle(`category:${entry.id}`),
-                  }}
-                  label={
-                    <Box sx={{ minWidth: 0, textAlign: 'left' }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <span>{entry.label}</span>
-                        {entry.id !== 'general' && (counts[entry.id] ?? 0) > 0 && <Chip size="small" color="primary" label={t('{{count}} new', { count: counts[entry.id] })} sx={{ height: 18, fontSize: 11, fontWeight: 700 }} aria-label={t('{{count}} unread', { count: counts[entry.id] })} />}
-                      </Stack>
-                      {/* Like Gmail, a closed category with new mail shows who wrote and about what. */}
-                      {entry.id !== 'general' && entry.id !== category && (counts[entry.id] ?? 0) > 0 && latest[entry.id] && (
-                        <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ maxWidth: 220, fontWeight: 400 }}>
-                          {latest[entry.id]!.senders.join(', ')}{latest[entry.id]!.subject ? ` – ${latest[entry.id]!.subject}` : ''}
-                        </Typography>
-                      )}
-                    </Box>
-                  }
-                  {...(entry.id === category ? {} : dropProps(`category:${entry.id}`, { category: entry.id }))}
-                />
-              ))}
-            </Tabs>
+            <CategoryTabs category={category} onChange={setCategoryTab} counts={counts} latest={latest} dropProps={dropProps} dropStyle={dropStyle} />
           )}
           {loading && <LinearProgress />}
           {offline && (
@@ -1257,13 +960,13 @@ export default function MailPage() {
               {t('You are offline. Showing the copy saved on this device.')}{pending > 0 ? ` ${t('{{count}} changes waiting to be synchronised.', { count: pending })}` : ''}
             </Alert>
           )}
-          <Box ref={listScroll} sx={{ flex: 1, overflow: 'auto' }} onScroll={onScroll}>
+          <Box ref={listScroll} sx={{ flex: 1, overflow: 'auto', pb: 1, borderRadius: '16px 16px 0 0' }} onScroll={onScroll}>
             {/* Only the rows in view (and a few around them) exist; the list keeps its full height. */}
             <List disablePadding aria-label={t('Messages')} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
               {virtualizer.getVirtualItems().map((item) => {
                 const email = visible[item.index];
                 return (
-                  <div key={email.id} data-index={item.index} ref={virtualizer.measureElement} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${item.start}px)` }}>
+                  <div key={email.id} data-index={item.index} ref={virtualizer.measureElement} style={{ position: 'absolute', top: 0, left: 0, width: '100%', paddingBottom: 2, transform: `translateY(${item.start}px)` }}>
                     <EmailRow
                       email={email}
                       index={item.index}
@@ -1274,6 +977,8 @@ export default function MailPage() {
                       showRecipients={mailbox?.role === 'sent' || mailbox?.role === 'drafts'}
                       chosen={allInFolder || selected.has(email.id)}
                       highlighted={threadId ? email.threadId === threadId : item.index === cursor}
+                      first={item.index === 0}
+                      last={item.index === visible.length - 1}
                       labelColors={labelColors}
                       canArchive={mailbox?.role !== 'archive' && Boolean(byRole('archive'))}
                       inTrash={mailbox?.role === 'trash'}
@@ -1342,7 +1047,7 @@ export default function MailPage() {
       </Box>
       {compact && !threadId && !draft && (
         <Fab variant={phone ? 'circular' : 'extended'} color="primary" aria-label={t('Compose')} onClick={() => compose()} sx={{ position: 'fixed', right: 16, bottom: 16, zIndex: 1050 }}>
-          <Edit sx={{ mr: phone ? 0 : 1 }} />
+          <Edit />
           {!phone && t('Compose')}
         </Fab>
       )}
@@ -1375,10 +1080,7 @@ export default function MailPage() {
         <DialogContent>
           <TextField autoFocus fullWidth label={t('Folder name')} value={newFolder ?? ''} onChange={(e) => setNewFolder(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void addFolder()} sx={{ mt: 1 }} />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setNewFolder(null)}>{t('Cancel')}</Button>
-          <Button variant="contained" onClick={() => void addFolder()}>{t('Create')}</Button>
-        </DialogActions>
+        <DialogButtons onCancel={() => setNewFolder(null)} onConfirm={() => void addFolder()} label={t('Create')} />
       </Dialog>
       <RowMenu
         target={rowMenu}
@@ -1391,73 +1093,19 @@ export default function MailPage() {
         onPick={(pick, target) => void rowMenuPick(pick, target)}
         onClose={() => setRowMenu(null)}
       />
-      <Menu anchorEl={bulkMenu?.anchor} open={Boolean(bulkMenu)} onClose={() => setBulkMenu(null)} slotProps={{ paper: { sx: { maxHeight: 360, minWidth: 200 } } }}>
-        {bulkMenu?.kind === 'move' &&
-          mailboxes
-            .filter((m) => m.id !== mailbox?.id && (!m.shareOwner || m.myRights?.mayAddItems))
-            .map((m) => (
-              <MenuItem key={m.id} dense onClick={() => void bulk('move', m.id)}>
-                {folderName(m)}
-              </MenuItem>
-            ))}
-        {bulkMenu?.kind === 'label' && labels.length === 0 && <MenuItem disabled>{t('No labels yet')}</MenuItem>}
-        {bulkMenu?.kind === 'label' &&
-          labels.map((name) => (
-            <MenuItem key={name} dense onClick={() => void bulk('label', name)}>
-              <ListItemIcon><LabelIcon fontSize="small" sx={{ color: labelColor(name) || undefined }} /></ListItemIcon>
-              {name}
-            </MenuItem>
-          ))}
-      </Menu>
       {labelDialog && (
-        <Dialog open onClose={() => setLabelDialog(null)} fullWidth maxWidth="xs">
-          <DialogTitle>{labelDialog.existing ? t('Label “{{name}}”', { name: labelDialog.name }) : t('New label')}</DialogTitle>
-          <DialogContent>
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              {!labelDialog.existing && (
-                <TextField
-                  autoFocus
-                  label={t('Label name')}
-                  value={labelDialog.name}
-                  onChange={(e) => setLabelDialog({ ...labelDialog, name: e.target.value })}
-                  error={Boolean(labelDialog.name) && !normalizeLabel(labelDialog.name)}
-                  helperText={t('Letters, digits, - _ . (spaces become dashes)')}
-                />
-              )}
-              <Stack direction="row" flexWrap="wrap" gap={1} role="radiogroup" aria-label={t('Label colour')}>
-                {LABEL_COLORS.map((color) => (
-                  <Box
-                    key={color || 'none'}
-                    component="button"
-                    role="radio"
-                    aria-checked={labelDialog.color === color}
-                    aria-label={color ? t('Colour {{color}}', { color }) : t('No colour')}
-                    onClick={() => setLabelDialog({ ...labelDialog, color })}
-                    sx={{ width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', p: 0, bgcolor: color || 'transparent', border: 3, borderColor: labelDialog.color === color ? 'text.primary' : color ? 'transparent' : 'divider' }}
-                  />
-                ))}
-              </Stack>
-            </Stack>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={() => setLabelDialog(null)}>{t('Cancel')}</Button>
-            <Button
-              variant="contained"
-              disabled={!normalizeLabel(labelDialog.name)}
-              onClick={() => {
-                const name = normalizeLabel(labelDialog.name)!;
-                const color = labelDialog.color;
-                setLabelDialog(null);
-                void saveLabel(name, color)
-                  .then(refreshLabels)
-                  .then(() => setNotice(labelDialog.existing ? t('Label updated') : t('Label “{{name}}” created', { name })))
-                  .catch((err) => setNotice(errorText(err, t('The label could not be saved'))));
-              }}
-            >
-              {t('Save label')}
-            </Button>
-          </DialogActions>
-        </Dialog>
+        <LabelDialog
+          value={labelDialog}
+          onChange={setLabelDialog}
+          onClose={() => setLabelDialog(null)}
+          onSave={(name, color) => {
+            setLabelDialog(null);
+            void saveLabel(name, color)
+              .then(refreshLabels)
+              .then(() => setNotice(labelDialog.existing ? t('Label updated') : t('Label “{{name}}” created', { name })))
+              .catch((err) => setNotice(errorText(err, t('The label could not be saved'))));
+          }}
+        />
       )}
       <Menu anchorEl={folderMenu?.anchor} open={Boolean(folderMenu)} onClose={() => setFolderMenu(null)}>
         {folderMenu && !folderMenu.mailbox.shareOwner && (
@@ -1515,15 +1163,5 @@ export default function MailPage() {
         }
       />
     </Box>
-  );
-}
-
-/** Muted message total beside a folder name; hidden when the sidebar is collapsed. */
-function FolderCount({ count }: { count: number }) {
-  if (!count) return null;
-  return (
-    <Typography className="mini-hide" variant="caption" color="text.secondary" aria-label={t('{{count}} messages', { count })} sx={{ mr: 0.5, fontVariantNumeric: 'tabular-nums' }}>
-      {count}
-    </Typography>
   );
 }

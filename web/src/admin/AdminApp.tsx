@@ -9,7 +9,6 @@ import Policy from '@mui/icons-material/Policy';
 import Lock from '@mui/icons-material/Lock';
 import Tune from '@mui/icons-material/Tune';
 import Dashboard from '@mui/icons-material/Dashboard';
-import MenuIcon from '@mui/icons-material/Menu';
 import Dns from '@mui/icons-material/Dns';
 import Hub from '@mui/icons-material/Hub';
 import AutoAwesome from '@mui/icons-material/AutoAwesome';
@@ -17,12 +16,10 @@ import ListAlt from '@mui/icons-material/ListAlt';
 import People from '@mui/icons-material/People';
 import Schedule from '@mui/icons-material/Schedule';
 import Security from '@mui/icons-material/Security';
-import { Box, SwipeableDrawer, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Paper, Tooltip, useMediaQuery, useTheme } from '@mui/material';
-import { SWIPE } from '../swipe';
-import { type ReactElement, useEffect, useState } from 'react';
-import { Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { type ReactElement } from 'react';
+import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../app';
-import { Copyright, TopBar } from '../shell';
+import { SideNavPage } from '../shell';
 import { Aliases } from './Aliases';
 import { Certificates } from './Certificates';
 import { DashboardPage } from './Dashboard';
@@ -74,39 +71,14 @@ export default function AdminApp() {
   const { account } = useAuth();
   const isSuper = account?.role === 'super_admin';
   const items = NAV.filter((item) => isSuper || !item.superOnly);
-  const theme = useTheme();
-  const compact = useMediaQuery(theme.breakpoints.down('md'));
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const location = useLocation();
-  useEffect(() => setDrawerOpen(false), [location.pathname, compact]);
-  const nav = (
-        <Box component="nav" aria-label={t('Administration')} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined }}>
-          <List dense>
-            {items.map((item) => (
-              <ListItemButton key={item.path} component={NavLink} to={`/admin/${item.path}`} sx={{ mb: 0.25, '&.active': { bgcolor: 'action.selected', fontWeight: 600 } }}>
-                <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-                <ListItemText primary={item.label} />
-              </ListItemButton>
-            ))}
-          </List>
-          <Copyright placement="admin" sx={{ mt: 'auto', px: 2, pt: 3, pb: 2, flexShrink: 0 }} />
-        </Box>
-  );
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-      <TopBar
-        title={t('unoMail Admin')}
-        leading={compact && <Tooltip title={t('Menu')}><IconButton aria-label={t('Administration menu')} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton></Tooltip>}
-      />
-      <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {compact ? (
-          <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
-            {nav}
-          </SwipeableDrawer>
-        ) : (
-          nav
-        )}
-        <Paper elevation={0} component="main" sx={{ flex: 1, minWidth: 0, overflow: 'auto', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, p: { xs: 2, sm: 3 } }}>
+    <SideNavPage
+      title={t('unoMail Admin')}
+      navLabel={t('Administration menu')}
+      placement="admin"
+      linkComponent={NavLink}
+      items={items.map((item) => ({ key: item.path, label: item.label, icon: item.icon, to: `/admin/${item.path}` }))}
+    >
           <Routes>
             <Route index element={<Navigate to={isSuper ? '/admin/dashboard' : '/admin/domains'} replace />} />
             {isSuper && <Route path="dashboard" element={<DashboardPage />} />}
@@ -131,8 +103,6 @@ export default function AdminApp() {
             {isSuper && <Route path="models" element={<Models />} />}
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
-        </Paper>
-      </Box>
-    </Box>
+    </SideNavPage>
   );
 }

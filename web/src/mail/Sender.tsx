@@ -111,7 +111,7 @@ const VERDICTS: Record<Security['verdict'], string> = {
 };
 
 /** The details shown when hovering a sender: who, to whom, when, and how it got here. */
-export function SenderDetails({ email, info }: { email: EmailFull; info: AvatarInfo | null }) {
+function SenderDetails({ email, info }: { email: EmailFull; info: AvatarInfo | null }) {
   const security = email.security;
   const list = (addresses: EmailFull['to']) => (addresses ?? []).map(formatAddress).join(', ');
   return (

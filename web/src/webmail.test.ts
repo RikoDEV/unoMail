@@ -5,7 +5,7 @@ vi.mock('./api', () => ({ get: vi.fn(async () => []), put: vi.fn(async () => ({}
 import { applySuggestion, imageProxyUrl, shareLevel, splitRecipients, suggestionText } from './mail/extra';
 import { buildFrameDocument, sanitizeEmail } from './mail/sanitize';
 import { createPluginApi, emit, registrySnapshot, resetPlugins, setPluginNotifier } from './plugins';
-import { BUILT_IN_SKINS, buildTheme, sanitizeSkin, skinIsDark } from './skins';
+import { BUILT_IN_SKINS, buildTheme, colorScheme, sanitizeSkin, skinIsDark, spring } from './skins';
 
 describe('remote images', () => {
   const html = '<p>Hi</p><img src="https://tracker.example/pixel.gif?id=42"><img src="http://cdn.example/logo.png" alt="Logo"><img src="data:image/png;base64,AAAA"><img src="javascript:alert(1)">';
@@ -72,9 +72,10 @@ describe('skins', () => {
     for (const skin of BUILT_IN_SKINS) {
       const theme = buildTheme(skin, '#6750a4', false);
       expect(theme.palette.mode).toBe(skinIsDark(skin, false) ? 'dark' : 'light');
-      // Skins with their own primary keep it; otherwise the accent, lightened on dark themes.
+      // Skins with their own primary keep it; otherwise the tonal scheme of the accent.
       if (skin.primary) expect(theme.palette.primary.main).toBe(skin.primary);
-      else if (!skinIsDark(skin, false)) expect(theme.palette.primary.main).toBe('#6750a4');
+      else expect(theme.palette.primary.main).toBe(colorScheme('#6750a4', skinIsDark(skin, false)).primary);
+      expect(theme.palette.m3.secondaryContainer).toMatch(/^#[0-9a-f]{6}$/);
     }
     const dark = buildTheme(BUILT_IN_SKINS[0], '#006e1c', true);
     expect(dark.palette.mode).toBe('dark');
@@ -86,6 +87,18 @@ describe('skins', () => {
       expect(contrast(buildTheme(BUILT_IN_SKINS[0], seed, false).palette.primary.main, '#fffbfe'), seed).toBeGreaterThan(4.5);
     }
     expect(buildTheme({ id: 'p', name: 'P', mode: 'light' }, '#006e1c', true).palette.mode).toBe('light');
+  });
+
+  it('turn Material springs into CSS easings', () => {
+    // A bouncy spring overshoots its target and settles on it; a critically damped one does not.
+    const bouncy = spring(0.6, 800);
+    const points = bouncy.easing.slice(7, -1).split(', ').map(Number);
+    expect(points[0]).toBe(0);
+    expect(points.at(-1)).toBe(1);
+    expect(Math.max(...points)).toBeGreaterThan(1);
+    expect(bouncy.duration).toBeGreaterThan(200);
+    expect(bouncy.duration).toBeLessThan(600);
+    expect(Math.max(...spring(1, 3800).easing.slice(7, -1).split(', ').map(Number))).toBeLessThanOrEqual(1);
   });
 });
 

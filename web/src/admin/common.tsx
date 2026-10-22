@@ -1,5 +1,5 @@
-import { Alert, Box, Button, Chip, LinearProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, type TableProps, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { Children, cloneElement, Fragment, isValidElement, type ReactElement, type ReactNode, useCallback, useState } from 'react';
+import { Alert, Box, Button, Chip, LinearProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, type TableProps, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Children, cloneElement, Fragment, isValidElement, type ReactElement, type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { t, uiLocale } from '../i18n';
 import { useTitle } from '../shell';
@@ -225,4 +225,56 @@ export function UsageBar({ label, used, limit }: { label: string; used: number; 
       <LinearProgress variant="determinate" value={Math.min(100, share * 100)} color={share >= 0.9 ? 'error' : share >= 0.7 ? 'warning' : 'primary'} />
     </>
   );
+}
+
+/** The width of an element as it resizes (at least 280px), for charts drawn to fit. */
+export function useElementWidth(initial: number): [RefObject<HTMLDivElement | null>, number] {
+  const holder = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(initial);
+  useEffect(() => {
+    const element = holder.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(280, Math.floor(entry.contentRect.width))));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [holder, width];
+}
+
+/** The Cancel and confirm buttons at the foot of a dialog (the confirm button submits its form when `submit`). */
+export function DialogButtons({ onCancel, onConfirm, label = t('Save'), disabled, cancelDisabled, submit }: {
+  onCancel: () => void;
+  onConfirm?: () => void;
+  label?: ReactNode;
+  disabled?: boolean;
+  cancelDisabled?: boolean;
+  submit?: boolean;
+}) {
+  return (
+    <DialogActions>
+      <Button onClick={onCancel} disabled={cancelDisabled}>{t('Cancel')}</Button>
+      <Button variant="contained" type={submit ? 'submit' : 'button'} onClick={onConfirm} disabled={disabled}>{label}</Button>
+    </DialogActions>
+  );
+}
+
+/** A long list shown a page at a time: the rows of the current page and the pager below them. */
+export function usePaged<T>(items: T[], label: string): { visible: T[]; pager: ReactElement; firstPage: () => void } {
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  // Removing rows can leave the page past the end; show the last one instead.
+  const current = Math.min(page, Math.max(0, Math.ceil(items.length / rowsPerPage) - 1));
+  const pager = (
+    <TablePagination
+      component="div"
+      count={items.length}
+      page={current}
+      onPageChange={(_event, next) => setPage(next)}
+      rowsPerPage={rowsPerPage}
+      onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }}
+      rowsPerPageOptions={[25, 50, 100]}
+      labelRowsPerPage={label}
+    />
+  );
+  return { visible: items.slice(current * rowsPerPage, (current + 1) * rowsPerPage), pager, firstPage: () => setPage(0) };
 }

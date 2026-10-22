@@ -19,7 +19,7 @@ function countryName(code: string): string {
 }
 
 /** The flag of a country given its two-letter code; a globe when the country is unknown. */
-export function Flag({ country }: { country?: string | null }) {
+function Flag({ country }: { country?: string | null }) {
   const code = country && /^[A-Za-z]{2}$/.test(country) ? country.toUpperCase() : null;
   const url = code ? flagUrl(code) : undefined;
   if (!code || !url) {

@@ -68,7 +68,7 @@ export function ListAvatar({ accountId, email, size, people }: { accountId: stri
       src={hasPicture ? `/jmap/avatar/${accountId}/${email.id}` : undefined}
       alt=""
       imgProps={{ loading: 'lazy', referrerPolicy: 'no-referrer' }}
-      sx={{ width: size, height: size, fontSize: size * 0.45, bgcolor: 'secondary.main', flexShrink: 0 }}
+      sx={{ width: size, height: size, fontSize: size * 0.45, bgcolor: 'm3.primaryContainer', color: 'm3.onPrimaryContainer', flexShrink: 0 }}
       aria-hidden
     >
       {initial}

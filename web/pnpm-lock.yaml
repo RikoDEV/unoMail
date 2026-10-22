@@ -14,6 +14,12 @@ importers:
       '@emotion/styled':
         specifier: ^11.14.1
         version: 11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react@19.3.0)
+      '@fontsource-variable/roboto-flex':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@material/material-color-utilities':
+        specifier: ^0.4.0
+        version: 0.4.0
       '@mui/icons-material':
         specifier: ^6.5.0
         version: 6.5.0(@mui/material@6.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react@19.3.0)(react@19.3.0)
@@ -243,6 +249,9 @@ packages:
       '@noble/hashes':
         optional: true
 
+  '@fontsource-variable/roboto-flex@5.3.0':
+    resolution: {integrity: sha512-bOxckUy0qXNRjhV6e4pcHGSvptix4ZRD1uaj5Za8h+p3qrb2GL4U4TQdpVmPSy0SmqwldfD+JJqEKdF68EyiAw==}
+
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
@@ -255,6 +264,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@material/material-color-utilities@0.4.0':
+    resolution: {integrity: sha512-dlq6VExJReb8dhjj3a/yTigr3ncNwoFmL5Iy2ENtbDX03EmNeOEdZ+vsaGrj7RTuO+mB7L58II4LCsl4NpM8uw==}
 
   '@mui/core-downloads-tracker@6.5.0':
     resolution: {integrity: sha512-LGb8t8i6M2ZtS3Drn3GbTI1DVhDY6FJ9crEey2lZ0aN2EMZo8IZBZj9wRf4vqbZHaWjsYgtbOnJw5V8UWbmK2Q==}
@@ -1594,6 +1606,8 @@ snapshots:
 
   '@exodus/bytes@1.16.0': {}
 
+  '@fontsource-variable/roboto-flex@5.3.0': {}
+
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -1607,6 +1621,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  '@material/material-color-utilities@0.4.0': {}
 
   '@mui/core-downloads-tracker@6.5.0': {}
 

@@ -5,7 +5,7 @@ import { t } from '../i18n';// Files attached without a connection wait in Index
 
 const DATABASE = 'unomail-offline';
 const STORE = 'attachments';
-export const PENDING_PREFIX = 'pending:';
+const PENDING_PREFIX = 'pending:';
 
 export const isPendingId = (blobId: string) => blobId.startsWith(PENDING_PREFIX);
 

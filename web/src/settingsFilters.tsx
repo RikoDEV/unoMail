@@ -8,7 +8,7 @@ import Close from '@mui/icons-material/Close';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import {
-  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItem, ListItemText,
+  Alert, Autocomplete, Box, Button, Card, CardContent, Checkbox, Dialog, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItem, ListItemText,
   MenuItem, Stack, Switch, Tab, Tabs, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
@@ -19,6 +19,7 @@ import {
 } from './filters/sieveRules';
 import { t } from './i18n';
 import { folderName, listMailboxes, type Mailbox, normalizeLabel } from './mail/jmapClient';
+import { DialogButtons } from './admin/common';
 
 const SIEVE_EXAMPLE = `require ["fileinto", "mailbox", "imap4flags"];
 
@@ -205,10 +206,7 @@ function RuleDialog({ rule: initial, folders, labels, onSave, onClose }: { rule:
           <FormControlLabel control={<Checkbox checked={rule.stop} onChange={(e) => set({ stop: e.target.checked })} />} label={t('Stop here: later rules are not applied to matching messages')} />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={save}>{t('Save rule')}</Button>
-      </DialogActions>
+      <DialogButtons onCancel={onClose} onConfirm={save} label={t('Save rule')} />
     </Dialog>
   );
 }

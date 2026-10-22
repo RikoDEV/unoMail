@@ -41,6 +41,9 @@ export interface EmailRowProps {
   showRecipients: boolean;
   chosen: boolean;
   highlighted: boolean;
+  /** The first and last rows round the outer corners of the list. */
+  first: boolean;
+  last: boolean;
   /** Colours of the labels in use (an unchanged object keeps rows from rendering again). */
   labelColors: Record<string, string>;
   canArchive: boolean;
@@ -58,15 +61,18 @@ export function listDate(iso: string): string {
 
 // Styles are constants: the style engine then finds them in its cache instead of resolving
 // new objects for every row on every render.
-const QUICK_ACTIONS_SX = { display: 'none', position: 'absolute', right: 4, bgcolor: 'background.paper', borderRadius: 4, boxShadow: 1 } as const;
+const QUICK_ACTIONS_SX = { display: 'none', position: 'absolute', right: 4, bgcolor: 'm3.surfaceContainerHigh', borderRadius: 999, boxShadow: 1 } as const;
 const QUICK_CONDENSED_SX = { ...QUICK_ACTIONS_SX, top: '50%', transform: 'translateY(-50%)' } as const;
 const QUICK_EXPANDED_SX = { ...QUICK_ACTIONS_SX, top: 2 } as const;
+// A segmented list (Material 3 Expressive): every conversation is its own tile, 2px apart, with
+// small corners that round further on hover and when selected.
 const ROW_SX = {
-  borderRadius: 0,
-  borderBottom: 1,
-  borderColor: 'divider',
+  borderRadius: '4px',
+  bgcolor: 'background.paper',
   gap: 0.5,
   pl: 0.5,
+  '&:hover': { borderRadius: '12px', bgcolor: 'm3.surfaceContainerHigh' },
+  '&.Mui-selected, &.Mui-selected:hover': { borderRadius: '16px' },
   // Only where a pointer can hover: on touch screens the actions would stick after a tap.
   '@media (hover: hover)': {
     '&:hover .row-actions, &:focus-within .row-actions': { display: 'flex' },
@@ -75,14 +81,17 @@ const ROW_SX = {
 } as const;
 const ROW_CONDENSED_SX = { ...ROW_SX, alignItems: 'center', py: 0.25 } as const;
 const ROW_EXPANDED_SX = { ...ROW_SX, alignItems: 'flex-start', py: 1 } as const;
-const ROW_UNREAD_CONDENSED_SX = { ...ROW_CONDENSED_SX, bgcolor: 'action.hover' } as const;
-const ROW_UNREAD_EXPANDED_SX = { ...ROW_EXPANDED_SX, bgcolor: 'action.hover' } as const;
+// Unread conversations sit on the lowest surface, in bold.
+const ROW_UNREAD_CONDENSED_SX = { ...ROW_CONDENSED_SX, bgcolor: 'm3.surfaceContainerLowest' } as const;
+const ROW_UNREAD_EXPANDED_SX = { ...ROW_EXPANDED_SX, bgcolor: 'm3.surfaceContainerLowest' } as const;
+const FIRST_SX = { borderTopLeftRadius: '16px', borderTopRightRadius: '16px' } as const;
+const LAST_SX = { borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px' } as const;
 const CHECKBOX_SX = { p: 0.5 } as const;
 const ATTACH_ICON_SX = { fontSize: 16, color: 'text.secondary', flexShrink: 0 } as const;
 const PRIMARY_SX = { color: 'text.primary' } as const;
 const SECONDARY_SX = { color: 'text.secondary' } as const;
 
-function EmailRowView({ email, index, accountId, density, narrow, showRecipients, chosen, highlighted, labelColors, canArchive, inTrash, handlers }: EmailRowProps) {
+function EmailRowView({ email, index, accountId, density, narrow, showRecipients, chosen, highlighted, first, last, labelColors, canArchive, inTrash, handlers }: EmailRowProps) {
   const unread = !email.keywords.$seen;
   const expanded = density === 'expanded';
   const people = showRecipients ? (email.to ?? []) : (email.from ?? []);
@@ -138,7 +147,7 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
       draggable
       onDragStart={(event) => handlers.dragStart(email, event)}
       onDragEnd={handlers.dragEnd}
-      sx={unread ? (expanded ? ROW_UNREAD_EXPANDED_SX : ROW_UNREAD_CONDENSED_SX) : expanded ? ROW_EXPANDED_SX : ROW_CONDENSED_SX}
+      sx={[unread ? (expanded ? ROW_UNREAD_EXPANDED_SX : ROW_UNREAD_CONDENSED_SX) : expanded ? ROW_EXPANDED_SX : ROW_CONDENSED_SX, first && FIRST_SX, last && LAST_SX]}
       data-testid="email-row"
       data-unread={unread}
       data-density={density}

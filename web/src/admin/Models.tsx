@@ -1,11 +1,11 @@
 import Add from '@mui/icons-material/Add';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
-import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { del, get, post, put } from '../api';
 import { t } from '../i18n';
-import { ConfirmDialog, PageHeader, useAction, useFormAction, useLoad } from './common';
+import { ConfirmDialog, DialogButtons, PageHeader, useAction, useFormAction, useLoad } from './common';
 
 const PROVIDERS = [
   { id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
@@ -88,10 +88,7 @@ function ModelDialog({ model, onClose, onSaved }: { model: Model; onClose: () =>
             <FormControlLabel control={<Switch checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />} label={t('Available in webmail')} />
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} disabled={form.busy}>{t('Cancel')}</Button>
-          <Button type="submit" variant="contained" disabled={form.busy}>{form.busy ? t('Saving…') : t('Save')}</Button>
-        </DialogActions>
+        <DialogButtons onCancel={onClose} cancelDisabled={form.busy} submit disabled={form.busy} label={form.busy ? t('Saving…') : t('Save')} />
       </Box>
     </Dialog>
   );

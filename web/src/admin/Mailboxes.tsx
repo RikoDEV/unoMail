@@ -6,7 +6,7 @@ import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
 import { useEffect, useState } from 'react';
 import { del, formatBytes, get, patch, post } from '../api';
 import { useAuth } from '../app';
-import { ConfirmDialog, PageHeader, routeBy, StatusChip, UsageBar, useAction, useFormAction, useLoad, validators, ScrollTable } from './common';
+import { ConfirmDialog, DialogButtons, PageHeader, routeBy, ScrollTable, StatusChip, UsageBar, useAction, useFormAction, useLoad, validators } from './common';
 
 import { t, uiLocale } from '../i18n';
 interface Mailbox {
@@ -471,12 +471,7 @@ export function Mailboxes() {
             </Stack>
           </DialogContent>
         )}
-        <DialogActions>
-          <Button onClick={() => setForm(null)}>{t('Cancel')}</Button>
-          <Button variant="contained" disabled={!valid || saving.busy} onClick={() => void save()}>
-            {editing ? t('Save') : t('Create')}
-          </Button>
-        </DialogActions>
+        <DialogButtons onCancel={() => setForm(null)} onConfirm={() => void save()} disabled={!valid || saving.busy} label={editing ? t('Save') : t('Create')} />
       </Dialog>
       {importing && <ImportDialog box={importing} isSuper={isSuper} onClose={() => { setImporting(null); void reload(); }} />}
       <ConfirmDialog

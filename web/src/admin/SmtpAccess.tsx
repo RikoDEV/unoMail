@@ -8,12 +8,12 @@ import Edit from '@mui/icons-material/Edit';
 import LockOpen from '@mui/icons-material/LockOpen';
 import VerifiedUser from '@mui/icons-material/VerifiedUser';
 import {
-  Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TablePagination, TableRow, Tabs, TextField,
+  Alert, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
   Tooltip, Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { del, formatTime, get, post, put } from '../api';
-import { PageHeader, routeBy, useAction, useFormAction, useLoad, ScrollTable } from './common';
+import { DialogButtons, PageHeader, routeBy, ScrollTable, useAction, useFormAction, useLoad, usePaged } from './common';
 import { RemoteAddress } from './RemoteAddress';
 
 import { t } from '../i18n';
@@ -119,12 +119,7 @@ function RuleDialog({ initial, onClose }: { initial: RuleForm; onClose: (saved: 
           <TextField label={t('Description (optional)')} value={form.description} onChange={(e) => set({ description: e.target.value })} error={Boolean(saving.fieldError('description'))} helperText={saving.fieldError('description')} />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={!form.network.trim() || !priorityValid || saving.busy}>
-          {t('Save rule')}
-        </Button>
-      </DialogActions>
+      <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={!form.network.trim() || !priorityValid || saving.busy} label={t('Save rule')} />
     </Dialog>
   );
 }
@@ -133,11 +128,8 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
   const { data, error, reload } = useLoad(() => get<Rule[]>(`/api/smtp-access/rules?source=${source}`), [source]);
   const { run, feedback } = useAction();
   const [editing, setEditing] = useState<RuleForm | null>(null);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
   const rules = data ?? [];
-  const currentPage = Math.min(page, Math.max(0, Math.ceil(rules.length / rowsPerPage) - 1));
-  const visibleRules = rules.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+  const { visible: visibleRules, pager } = usePaged(rules, t('Rules per page:'));
   return (
     <>
       {feedback}
@@ -208,16 +200,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
               ))}
             </TableBody>
           </ScrollTable>
-          <TablePagination
-            component="div"
-            count={rules.length}
-            page={currentPage}
-            onPageChange={(_event, nextPage) => setPage(nextPage)}
-            rowsPerPage={rowsPerPage}
-            onRowsPerPageChange={(event) => { setRowsPerPage(Number(event.target.value)); setPage(0); }}
-            rowsPerPageOptions={[25, 50, 100]}
-            labelRowsPerPage={t('Rules per page:')}
-          />
+          {pager}
         </>
       )}
       {editing && (

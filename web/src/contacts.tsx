@@ -17,6 +17,7 @@ import type { Contact, ContactGroup } from './mail/extra';
 import { TopBar, useTitle } from './shell';
 
 import { t } from './i18n';
+import { DialogButtons } from './admin/common';
 const EMPTY: Omit<Contact, 'id'> = { name: '', email: '', phone: '', organization: '', notes: '', pgp_key: '' };
 
 function ContactDialog({ contact, groups, onClose }: { contact: Contact | null; groups: ContactGroup[]; onClose: (saved: boolean) => void }) {
@@ -101,12 +102,7 @@ function ContactDialog({ contact, groups, onClose }: { contact: Contact | null; 
           />
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={() => onClose(false)}>{t('Cancel')}</Button>
-        <Button variant="contained" onClick={() => void save()} disabled={!form.email.trim()}>
-          {t('Save')}
-        </Button>
-      </DialogActions>
+      <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={!form.email.trim()} />
     </Dialog>
   );
 }

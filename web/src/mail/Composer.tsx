@@ -1,24 +1,12 @@
-import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
 import AttachFile from '@mui/icons-material/AttachFile';
 import Close from '@mui/icons-material/Close';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import Draw from '@mui/icons-material/Draw';
-import FormatBold from '@mui/icons-material/FormatBold';
-import FormatItalic from '@mui/icons-material/FormatItalic';
-import FormatListBulleted from '@mui/icons-material/FormatListBulleted';
-import FormatUnderlined from '@mui/icons-material/FormatUnderlined';
 import CloseFullscreen from '@mui/icons-material/CloseFullscreen';
-import FormatClear from '@mui/icons-material/FormatClear';
-import FormatIndentDecrease from '@mui/icons-material/FormatIndentDecrease';
-import FormatIndentIncrease from '@mui/icons-material/FormatIndentIncrease';
-import FormatListNumbered from '@mui/icons-material/FormatListNumbered';
-import FormatSize from '@mui/icons-material/FormatSize';
 import Minimize from '@mui/icons-material/Minimize';
 import MoreVert from '@mui/icons-material/MoreVert';
 import OpenInFull from '@mui/icons-material/OpenInFull';
-import Redo from '@mui/icons-material/Redo';
 import TextFormat from '@mui/icons-material/TextFormat';
-import Undo from '@mui/icons-material/Undo';
 import EmojiEmotionsOutlined from '@mui/icons-material/EmojiEmotionsOutlined';
 import Image from '@mui/icons-material/Image';
 import InsertLink from '@mui/icons-material/InsertLink';
@@ -27,25 +15,26 @@ import LockOpen from '@mui/icons-material/LockOpen';
 import Spellcheck from '@mui/icons-material/Spellcheck';
 import TextSnippet from '@mui/icons-material/TextSnippet';
 import {
-  alpha, Alert, Box, Button, ButtonGroup, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, InputBase, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Select,
-  Stack, TextField, Tooltip, Typography, useMediaQuery, useTheme,
+  alpha, Alert, Box, Button, Chip, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Select,
+  Stack, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, uploadBlob, errorText } from '../api';
 import { useAuth } from '../app';
 import { type ComposerHandle, emit, usePlugins } from '../plugins';
 import { updatePrefs, usePrefs } from '../prefs';
-import { applySuggestion, type Identity, listIdentities, listSignatures, listTemplates, type Signatures, saveTemplate, splitRecipients, suggestRecipients, type Suggestion, suggestionText, type Template } from './extra';
+import { type Identity, listIdentities, listSignatures, listTemplates, type Signatures, saveTemplate, type Template } from './extra';
 import { type Draft, type DraftAttachment, destroyEmails, draftRecipients, saveDraft, type Sent, type SendOptions, sendEmail, sendEncrypted } from './jmapClient';
 import { EmojiPicker } from './EmojiPicker';
+import { FormattingToolbar, SendButton } from './ComposerTools';
 import { fetchSmime } from './Smime';
-import { schedulePresets } from './timePresets';
 import { isNetworkError, performOrQueue } from './outbox';
 import { pendingFilesAvailable, removePendingFiles, storePendingFile } from './pendingFiles';
 import { fetchKeys, isUnlocked, lookupKeys } from './pgp';
 import { escapeHtml, sanitizeEmailHtml } from './sanitize';
 
-import { t, uiLocale } from '../i18n';
+import { t } from '../i18n';
+import { FIELD_ROW, Field, RecipientField } from './ComposerFields';
 const AUTOSAVE_DELAY_MS = 2500;
 /** Files attached without a connection are kept in the browser until the message is sent. */
 const MAX_OFFLINE_ATTACHMENT_BYTES = 25 * 1024 * 1024;
@@ -84,118 +73,6 @@ export interface SentInfo extends Sent {
   /** Seconds left to call the message back. */
   undoSeconds?: number;
   scheduledAt?: Date;
-}
-
-/** The inset look of the composer's header fields: a line under each, not reaching the edges. */
-const FIELD_ROW = { borderBottom: 1, borderColor: 'divider', mx: 2, minHeight: 48 } as const;
-
-function Field({ label, value, onChange, autoFocus }: { label: string; value: string; onChange: (value: string) => void; autoFocus?: boolean }) {
-  return (
-    <Stack direction="row" alignItems="center" sx={FIELD_ROW}>
-      <InputBase fullWidth value={value} placeholder={label} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus} inputProps={{ 'aria-label': label }} />
-    </Stack>
-  );
-}
-
-/** A recipient field that suggests contacts, groups and directory entries while typing. */
-function RecipientField({ label, placeholder, value, onChange, autoFocus, end }: { label: string; placeholder?: string; value: string; onChange: (value: string) => void; autoFocus?: boolean; end?: ReactNode }) {
-  const [options, setOptions] = useState<Suggestion[]>([]);
-  const [active, setActive] = useState(0);
-  // Suggestions follow what the user types, never a value that was filled in for them.
-  const [typed, setTyped] = useState(false);
-  const fragment = splitRecipients(value).current;
-  const listId = `suggestions-${label.toLowerCase()}`;
-
-  useEffect(() => {
-    if (!typed || fragment.length < 2) {
-      setOptions([]);
-      return;
-    }
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      suggestRecipients(fragment)
-        .then((found) => {
-          if (cancelled) return;
-          setOptions(found.slice(0, 8));
-          setActive(0);
-        })
-        .catch(() => !cancelled && setOptions([]));
-    }, 180);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [fragment, typed]);
-
-  const choose = (suggestion: Suggestion) => {
-    onChange(applySuggestion(value, suggestion));
-    setTyped(false);
-    setOptions([]);
-  };
-  const open = options.length > 0;
-  return (
-    <Box sx={{ position: 'relative' }}>
-      <Stack direction="row" alignItems="center" sx={FIELD_ROW}>
-        {value && (
-          <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
-            {label}
-          </Typography>
-        )}
-        <InputBase
-          fullWidth
-          value={value}
-          placeholder={placeholder ?? label}
-          autoFocus={autoFocus}
-          onChange={(e) => {
-            setTyped(true);
-            onChange(e.target.value);
-          }}
-          onBlur={() => setOptions([])}
-          onKeyDown={(e) => {
-            if (!open) return;
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActive((index) => (index + (e.key === 'ArrowDown' ? 1 : options.length - 1)) % options.length);
-            } else if (e.key === 'Enter' || e.key === 'Tab') {
-              e.preventDefault();
-              choose(options[active]);
-            } else if (e.key === 'Escape') {
-              e.stopPropagation();
-              setOptions([]);
-            }
-          }}
-          inputProps={{ 'aria-label': label, role: 'combobox', 'aria-expanded': open, 'aria-controls': listId, 'aria-autocomplete': 'list', autoComplete: 'off' }}
-        />
-        {end}
-      </Stack>
-      {open && (
-        <Paper id={listId} role="listbox" aria-label={t('Suggested recipients')} elevation={6} sx={{ position: 'absolute', left: 16, right: 16, top: '100%', zIndex: 2, borderRadius: 1, py: 0.5, maxHeight: 260, overflow: 'auto' }}>
-          {options.map((option, index) => (
-            <MenuItem
-              key={`${option.source}-${suggestionText(option)}`}
-              role="option"
-              aria-selected={index === active}
-              selected={index === active}
-              dense
-              // mousedown, not click: the field must not lose focus (and close the list) first.
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(option);
-              }}
-            >
-              <ListItemText
-                primary={option.source === 'group' ? `${option.name} (${option.members.length === 1 ? '1 person' : t('{{count}} people', { count: option.members.length })})` : option.name || option.email}
-                secondary={option.source === 'group' ? t('Group') : option.name ? option.email : undefined}
-                primaryTypographyProps={{ noWrap: true }}
-                secondaryTypographyProps={{ noWrap: true }}
-              />
-              {option.source !== 'contact' && option.source !== 'group' && <Chip size="small" label={option.source === 'ldap' ? t('Directory') : t('Colleague')} sx={{ ml: 1 }} />}
-            </MenuItem>
-          ))}
-        </Paper>
-      )}
-    </Box>
-  );
 }
 
 export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, onClose }: ComposerProps) {
@@ -239,8 +116,6 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
   useEffect(() => {
     fetchSmime().then((s) => setSmimeAvailable(Boolean(s.certificate)), () => {});
   }, []);
-  const [sendMenu, setSendMenu] = useState<HTMLElement | null>(null);
-  const [scheduling, setScheduling] = useState<string | null>(null);
   const dirty = useRef(initial.saveOnOpen === true);
   const saving = useRef(false);
   const closed = useRef(false);
@@ -599,10 +474,6 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
   };
 
   const tint = alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08);
-  const toolDivider = <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1 }} />;
-  const tool = (label: string, icon: ReactNode, onClick: () => void) => (
-    <Tooltip title={label}><IconButton size="small" aria-label={label} onClick={onClick}>{icon}</IconButton></Tooltip>
-  );
   return (
     <Paper
       elevation={8}
@@ -705,107 +576,16 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
             ))}
           </Stack>
         )}
-        {formatting && (
-          <Stack direction="row" alignItems="center" flexWrap="wrap" role="toolbar" aria-label={t('Formatting options')} sx={{ mx: 1.5, mb: 0.5, px: 1, py: 0.25, borderRadius: 999, bgcolor: tint }}>
-            {tool(t('Undo'), <Undo fontSize="small" />, () => format('undo'))}
-            {tool(t('Redo'), <Redo fontSize="small" />, () => format('redo'))}
-            {toolDivider}
-            <Select
-              size="small"
-              variant="standard"
-              disableUnderline
-              value=""
-              displayEmpty
-              renderValue={() => <FormatSize fontSize="small" sx={{ display: 'block' }} />}
-              onChange={(e) => format('fontSize', String(e.target.value))}
-              inputProps={{ 'aria-label': t('Font size') }}
-              sx={{ mx: 0.5 }}
-            >
-              <MenuItem value="2">{t('Small')}</MenuItem>
-              <MenuItem value="3">{t('Normal')}</MenuItem>
-              <MenuItem value="5">{t('Large')}</MenuItem>
-              <MenuItem value="6">{t('Huge')}</MenuItem>
-            </Select>
-            {toolDivider}
-            {tool(t('Bold'), <FormatBold fontSize="small" />, () => format('bold'))}
-            {tool(t('Italic'), <FormatItalic fontSize="small" />, () => format('italic'))}
-            {tool(t('Underline'), <FormatUnderlined fontSize="small" />, () => format('underline'))}
-            <Tooltip title={t('Text colour')}>
-              <Box component="input" type="color" aria-label={t('Text colour')} defaultValue="#1d1b20" onChange={(e: React.ChangeEvent<HTMLInputElement>) => format('foreColor', e.target.value)} sx={{ width: 26, height: 26, mx: 0.5, p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer' }} />
-            </Tooltip>
-            {toolDivider}
-            {tool(t('Numbered list'), <FormatListNumbered fontSize="small" />, () => format('insertOrderedList'))}
-            {tool(t('Bulleted list'), <FormatListBulleted fontSize="small" />, () => format('insertUnorderedList'))}
-            {tool(t('Indent less'), <FormatIndentDecrease fontSize="small" />, () => format('outdent'))}
-            {tool(t('Indent more'), <FormatIndentIncrease fontSize="small" />, () => format('indent'))}
-            {toolDivider}
-            {tool(t('Clear formatting'), <FormatClear fontSize="small" />, () => format('removeFormat'))}
-          </Stack>
-        )}
+        {formatting && <FormattingToolbar onFormat={format} tint={tint} />}
         <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap sx={{ px: 1.5, pt: 0.5, pb: 1.5, columnGap: 0.25, rowGap: 0.5 }}>
-          <ButtonGroup variant="contained" disabled={busy} disableElevation sx={{ mr: 1, borderRadius: 999, '& .MuiButtonGroup-firstButton': { borderRadius: '999px 0 0 999px', px: 2.5 }, '& .MuiButtonGroup-lastButton': { borderRadius: '0 999px 999px 0', minWidth: 36, px: 0.5 } }}>
-            <Button onClick={() => void send()} sx={{ fontWeight: 600 }}>
-              {t('Send')}
-            </Button>
-            <Button size="small" aria-label={t('More options')} onClick={(e) => setSendMenu(e.currentTarget)}>
-              <ArrowDropDown />
-            </Button>
-          </ButtonGroup>
-          <Menu anchorEl={sendMenu} open={Boolean(sendMenu)} onClose={() => setSendMenu(null)}>
-            <MenuItem disabled sx={{ opacity: '1 !important' }}>
-              <Typography variant="caption" color="text.secondary">{t('Schedule send')}</Typography>
-            </MenuItem>
-            {schedulePresets(new Date()).map((preset) => (
-              <MenuItem key={preset.label} onClick={() => { setSendMenu(null); void send(preset.at); }}>
-                <ListItemText primary={preset.label} secondary={preset.at.toLocaleString(uiLocale(), { weekday: 'short', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })} />
-              </MenuItem>
-            ))}
-            <MenuItem onClick={() => { setSendMenu(null); setScheduling(''); }}>{t('Pick a date and time…')}</MenuItem>
-            <Divider />
-            <MenuItem onClick={() => setReceipt((on) => !on)}>
-              <ListItemIcon><Checkbox edge="start" size="small" checked={receipt} tabIndex={-1} disableRipple /></ListItemIcon>
-              <ListItemText primary={t('Request a read receipt')} />
-            </MenuItem>
-            {smimeAvailable && (
-              <MenuItem onClick={() => setSmime((s) => ({ ...s, sign: !s.sign }))}>
-                <ListItemIcon><Checkbox edge="start" size="small" checked={smime.sign} tabIndex={-1} disableRipple /></ListItemIcon>
-                <ListItemText primary={t('Sign with S/MIME')} />
-              </MenuItem>
-            )}
-            {smimeAvailable && (
-              <MenuItem onClick={() => setSmime((s) => ({ ...s, encrypt: !s.encrypt }))}>
-                <ListItemIcon><Checkbox edge="start" size="small" checked={smime.encrypt} tabIndex={-1} disableRipple /></ListItemIcon>
-                <ListItemText primary={t('Encrypt with S/MIME')} secondary={t('Needs a certificate for every recipient')} />
-              </MenuItem>
-            )}
-          </Menu>
-          <Dialog open={scheduling !== null} onClose={() => setScheduling(null)}>
-            <DialogTitle>{t('Schedule send')}</DialogTitle>
-            <DialogContent>
-              <TextField
-                type="datetime-local"
-                label={t('Send at')}
-                value={scheduling ?? ''}
-                onChange={(e) => setScheduling(e.target.value)}
-                sx={{ mt: 1 }}
-                slotProps={{ inputLabel: { shrink: true } }}
-              />
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setScheduling(null)}>{t('Cancel')}</Button>
-              <Button
-                variant="contained"
-                disabled={!scheduling || new Date(scheduling).getTime() <= Date.now()}
-                onClick={() => {
-                  const at = new Date(scheduling ?? '');
-                  setScheduling(null);
-                  void send(at);
-                }}
-              >
-                {t('Schedule')}
-              </Button>
-            </DialogActions>
-          </Dialog>
+          <SendButton
+            busy={busy}
+            onSend={(at) => void send(at)}
+            receipt={receipt}
+            onToggleReceipt={() => setReceipt((on) => !on)}
+            smime={smimeAvailable ? smime : null}
+            onToggleSmime={(key) => setSmime((s) => ({ ...s, [key]: !s[key] }))}
+          />
           <Tooltip title={t('Formatting options')}>
             <IconButton aria-label={t('Formatting options')} aria-pressed={formatting} onClick={() => setFormatting((on) => !on)} sx={formatting ? { bgcolor: tint } : undefined}><TextFormat /></IconButton>
           </Tooltip>
