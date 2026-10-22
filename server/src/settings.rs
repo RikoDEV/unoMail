@@ -4,7 +4,7 @@
 //! applied without a restart.
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{Map, Value, json};
 use sqlx::SqlitePool;
 
 use crate::{config::Config, util::normalize_domain};
@@ -245,67 +245,26 @@ fn thirty() -> i64 {
 }
 
 impl Runtime {
+    /// The settings before any override: the environment's values where it has them, the
+    /// serde defaults above for everything else.
     pub fn from_config(cfg: &Config) -> Self {
-        Runtime {
-            greylist_enabled: cfg.greylist_enabled,
-            greylist_delay_secs: cfg.greylist_delay_secs,
-            max_message_size: cfg.max_message_size,
-            max_recipients: cfg.max_recipients,
-            dnsbl_zones: cfg.dnsbl_zones.clone(),
-            abuseipdb_threshold: cfg.abuseipdb_threshold,
-            smtp_require_tls: cfg.smtp_require_tls,
-            outbound_require_tls: cfg.outbound_require_tls,
-            dane_enabled: true,
-            mta_sts_enabled: true,
-            tls_reports_enabled: true,
-            dmarc_reports_enabled: true,
-            trash_retention_days: 30,
-            junk_retention_days: 30,
-            block_executable_attachments: true,
-            personal_spam_filter: true,
-            rspamd_fail_open: cfg.rspamd_fail_open,
-            outbound_max_messages_per_hour: cfg.outbound_max_messages_per_hour,
-            outbound_max_recipients_per_hour: cfg.outbound_max_recipients_per_hour,
-            forward_max_copies_per_hour: forward_max_copies_per_hour(),
-            queue_max_entries: queue_max_entries(),
-            spam_check_inbound: true,
-            spam_check_outbound: true,
-            spam_subject_enabled: false,
-            spam_subject_score: spam_subject_score(),
-            spam_subject_prefix: spam_subject_prefix(),
-            quarantine_misbehaving: false,
-            native_filter: true,
-            native_filter_score: native_filter_score(),
-            sender_reputation: true,
-            spam_traps: Vec::new(),
-            penalized_asns: Vec::new(),
-            penalized_countries: Vec::new(),
-            origin_score: origin_score(),
-            antivirus_inbound: true,
-            antivirus_outbound: true,
-            virus_quarantine: cfg.virus_quarantine,
-            default_route_enabled: cfg.outbound_relay.is_some(),
-            default_route: cfg.outbound_relay.clone().unwrap_or_default(),
-            default_route_auth: false,
-            default_route_username: String::new(),
-            default_route_password: String::new(),
-            strict_from_check: true,
-            privacy_remove_x_headers: false,
-            privacy_remove_user_agent: false,
-            privacy_hide_client_ip: true,
-            log_retention_days: ninety(),
-            stats_retention_days: four_hundred(),
-            login_window_mins: login_window_mins(),
-            login_max_failures_per_account_and_ip: login_max_failures_per_account_and_ip(),
-            login_max_failures_per_ip: login_max_failures_per_ip(),
-            login_max_failures_per_account: login_max_failures_per_account(),
-            login_max_lock_hours: login_max_lock_hours(),
-            login_tarpit_after: login_tarpit_after(),
-            login_report_after: login_report_after(),
-            captcha_provider: String::new(),
-            captcha_site_key: String::new(),
-            captcha_secret_key: String::new(),
-        }
+        serde_json::from_value(json!({
+            "greylist_enabled": cfg.greylist_enabled,
+            "greylist_delay_secs": cfg.greylist_delay_secs,
+            "max_message_size": cfg.max_message_size,
+            "max_recipients": cfg.max_recipients,
+            "dnsbl_zones": cfg.dnsbl_zones,
+            "abuseipdb_threshold": cfg.abuseipdb_threshold,
+            "smtp_require_tls": cfg.smtp_require_tls,
+            "outbound_require_tls": cfg.outbound_require_tls,
+            "rspamd_fail_open": cfg.rspamd_fail_open,
+            "outbound_max_messages_per_hour": cfg.outbound_max_messages_per_hour,
+            "outbound_max_recipients_per_hour": cfg.outbound_max_recipients_per_hour,
+            "virus_quarantine": cfg.virus_quarantine,
+            "default_route_enabled": cfg.outbound_relay.is_some(),
+            "default_route": cfg.outbound_relay.clone().unwrap_or_default(),
+        }))
+        .expect("every setting the environment does not give has a default")
     }
 
     /// The server all outgoing mail goes to, when the default route is on and complete.
