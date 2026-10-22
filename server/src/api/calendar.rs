@@ -485,6 +485,14 @@ pub async fn invitation_respond(State(state): State<AppState>, session: Session,
     let data = calendar.serialize();
     let uid = event.value("UID").unwrap_or("").trim().to_owned();
     let stored = store::object_by_uid(&state.db, me.id, &uid).await?;
+    // UIDs are not secret (every guest has them): an invitation from someone else must not
+    // replace or remove an event that the same UID names in our calendar.
+    if let Some((_, object)) = &stored {
+        let organizer = ical::parse(&object.data).ok().and_then(|calendar| ical::master(&calendar).and_then(ical::organizer));
+        if organizer != ical::organizer(&event) {
+            return Err(ApiError::Conflict("an event with the same identifier, organized by someone else, is already in your calendar".into()));
+        }
+    }
     let mut object_id = None;
     match (&stored, status) {
         (Some((calendar, object)), "DECLINED") => {

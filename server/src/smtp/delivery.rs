@@ -196,6 +196,10 @@ pub struct LocalDelivery<'a> {
     /// or a trusted relay handed it over). Only then may the message change things by itself,
     /// such as calendar entries.
     pub author_verified: bool,
+    /// The envelope sender is known to be genuine (SPF passed, or a user of this server sent
+    /// it). Automatic replies need this or `author_verified`: anyone can put a stranger's
+    /// address in the envelope and have us write to them.
+    pub sender_verified: bool,
 }
 
 /// Converts Sieve/IMAP flag names into system flags and keywords.
@@ -344,7 +348,12 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
             for address in &outcome.redirect {
                 let Some(target) = Address::parse(address) else { continue };
                 // A redirect back to the same mailbox (under any of its addresses) would loop.
-                let same_mailbox = match resolve(app, &target).await? {
+                let resolution = resolve(app, &target).await?;
+                if matches!(resolution, Resolution::NotLocal) && !app.rt().sieve_external_redirect {
+                    tracing::info!(recipient = d.recipient, "Sieve redirect to an outside address refused by the server settings");
+                    continue;
+                }
+                let same_mailbox = match resolution {
                     Resolution::Deliver(list) => list.iter().any(|t| matches!(t, Target::Local { account_id, .. } if *account_id == d.account_id)),
                     _ => false,
                 };
@@ -400,8 +409,10 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
             "message.received",
             serde_json::json!({ "sender": d.sender, "recipient": d.recipient, "size": message.len(), "junk": junk, "status": status }),
         );
-        // Out-of-office replies are never sent for junk, discarded mail or mail without a return path.
-        if !junk && !d.sender.is_empty() && !targets.is_empty() {
+        // Out-of-office replies are never sent for junk, discarded mail, mail without a return
+        // path or to a return path that may be forged: either it passed SPF, or the message
+        // is genuinely its author's (then its content is not a stranger's to choose).
+        if !junk && (d.sender_verified || d.author_verified) && !d.sender.is_empty() && !targets.is_empty() {
             crate::vacation::maybe_reply(app, d.account_id, d.recipient, d.sender, d.raw).await;
             if let Some(action) = &outcome.vacation {
                 crate::vacation::reply_from_sieve(app, d.account_id, d.recipient, d.sender, d.raw, action).await;

@@ -147,4 +147,16 @@ async fn only_authenticated_senders_post_as_members() {
     receive(&env.app, members, Role::Post, genuine, message("bob@example.org", "team@example.org", "Hi", "x").as_bytes(), false).await.unwrap();
     unomail::smtp::queue::process_due(&env.app).await;
     assert_eq!(env.inbox(&bob).await.len(), 1);
+    assert!(env.inbox(&bob).await[0].contains("From: bob@example.org\r\n"), "a verified author is passed on as is");
+
+    // A member proven by the envelope alone writes someone else of ours into From: the post
+    // goes out, but not as a copy signed in that person's name.
+    admin.post(&format!("/api/lists/{members}/members"), json!({ "addresses": "partner@remote.example" })).await;
+    let member = Sender { envelope: "partner@remote.example", envelope_verified: true, author_verified: false };
+    receive(&env.app, members, Role::Post, member, message("boss@example.org", "team@example.org", "Wire the money", "x").as_bytes(), false).await.unwrap();
+    unomail::smtp::queue::process_due(&env.app).await;
+    let inbox = env.inbox(&bob).await;
+    let copy = inbox.iter().find(|m| m.contains("Wire the money")).expect("the member's post is distributed");
+    assert!(copy.contains("From: \"boss@example.org via Team\" <team@example.org>\r\n"), "{copy}");
+    assert!(copy.contains("X-Original-From: boss@example.org\r\n") && !copy.contains("\nFrom: boss@example.org"), "{copy}");
 }

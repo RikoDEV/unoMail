@@ -29,6 +29,7 @@ async fn mail_for_a_send_only_mailbox_is_discarded() {
         remote: "203.0.113.9",
         direction: Direction::Inbound,
         author_verified: false,
+        sender_verified: true,
     };
     delivery::deliver_local(&env.app, deliver()).await.unwrap();
     assert_eq!(env.inbox(&noreply).await.len(), 1, "an ordinary mailbox keeps its mail");

@@ -130,6 +130,9 @@ pub struct Runtime {
     /// The From header of submitted mail must be an address of the sender.
     #[serde(default = "yes")]
     pub strict_from_check: bool,
+    /// Mail filters (Sieve) may redirect mail to addresses outside this server.
+    #[serde(default = "yes")]
+    pub sieve_external_redirect: bool,
 
     // Privacy of submitted mail.
     #[serde(default)]

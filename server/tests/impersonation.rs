@@ -135,14 +135,15 @@ async fn sieve_redirects_do_not_loop_and_count_as_sending() {
     assert!(mx.send_mail("x@remote.example", &["bob@example.org"], &returning).await.starts_with("250"));
     queue::process_due(&env.app).await;
     assert_eq!(sink.received().len(), 1);
-    assert_eq!(env.inbox(&bob).await.len(), 2);
+    // Both messages, and the note that the filter forwards to out@remote.example.
+    assert_eq!(env.inbox(&bob).await.len(), 3);
 
     // An account that may not send any more forwards nothing either.
     sqlx::query("UPDATE accounts SET outbound_blocked = 1 WHERE id = ?").bind(bob.id).execute(&env.app.db).await.unwrap();
     assert!(mx.send_mail("x@remote.example", &["bob@example.org"], &message("x@remote.example", "bob@example.org", "Third", "x")).await.starts_with("250"));
     queue::process_due(&env.app).await;
     assert_eq!(sink.received().len(), 1);
-    assert_eq!(env.inbox(&bob).await.len(), 3);
+    assert_eq!(env.inbox(&bob).await.len(), 4);
 }
 
 #[tokio::test]
@@ -174,6 +175,7 @@ async fn calendar_messages_change_nothing_unless_their_author_is_verified() {
         remote: "203.0.113.9",
         direction: Direction::Inbound,
         author_verified,
+        sender_verified: author_verified,
     };
     delivery::deliver_local(&env.app, deliver(false)).await.unwrap();
     assert_eq!(carol.get(october).await.body.as_array().unwrap().len(), 1, "a spoofed cancellation is left for Carol to judge");

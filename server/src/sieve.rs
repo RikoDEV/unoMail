@@ -234,6 +234,26 @@ pub struct Script {
     variables: bool,
 }
 
+impl Script {
+    /// The addresses the script may redirect mail to, as written: one built from variables
+    /// is returned unexpanded (it can name any address).
+    pub fn redirect_targets(&self) -> Vec<String> {
+        fn walk(commands: &[Command], out: &mut Vec<String>) {
+            for command in commands {
+                match command {
+                    Command::Redirect { address, .. } if !out.contains(address) => out.push(address.clone()),
+                    Command::If(branches) => branches.iter().for_each(|(_, body)| walk(body, out)),
+                    Command::Include { commands, .. } => walk(commands, out),
+                    _ => {}
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.commands, &mut out);
+        out
+    }
+}
+
 /// Looks up a script for `include`: one of the user's own, or (second argument) a global
 /// script provided by the administrator.
 pub type Loader<'a> = &'a dyn Fn(&str, bool) -> Option<String>;
@@ -1114,8 +1134,36 @@ pub async fn delete_global(app: &crate::app::App, name: &str) -> sqlx::Result<bo
     Ok(sqlx::query("DELETE FROM settings WHERE key = ?").bind(format!("{GLOBAL_PREFIX}{name}")).execute(&app.db).await?.rows_affected() > 0)
 }
 
+/// Addresses outside this server that `script` (with the account's other scripts and the
+/// global ones for `include`) may redirect mail to.
+async fn external_targets(app: &crate::app::App, stored: &Stored, scripts: &[Stored], globals: &[Stored]) -> Vec<String> {
+    let Ok(script) = compile_among(&stored.script, &stored.name, scripts, globals) else { return Vec::new() };
+    let mut out = Vec::new();
+    for target in script.redirect_targets() {
+        let local = match Address::parse(&target) {
+            Some(address) => !matches!(crate::smtp::delivery::resolve(app, &address).await, Ok(crate::smtp::delivery::Resolution::NotLocal) | Err(_)),
+            // Built from variables: it could be anywhere.
+            None => false,
+        };
+        if !local {
+            out.push(target);
+        }
+    }
+    out
+}
+
 /// Stores a script. At most one script per account is active.
+///
+/// Forwarding is how a stolen session keeps reading mail after the password was changed, so
+/// the account is told whenever a script starts sending its mail somewhere new outside.
 pub async fn save(app: &crate::app::App, account_id: i64, stored: &Stored) -> sqlx::Result<()> {
+    let scripts = all(app, account_id).await?;
+    let globals = globals(app).await?;
+    let before = match scripts.iter().find(|s| s.name == stored.name) {
+        Some(previous) => external_targets(app, previous, &scripts, &globals).await,
+        None => Vec::new(),
+    };
+    let added: Vec<String> = external_targets(app, stored, &scripts, &globals).await.into_iter().filter(|t| !before.contains(t)).collect();
     let mut tx = app.db.begin().await?;
     if stored.active {
         sqlx::query("UPDATE sieve_scripts SET active = 0 WHERE account_id = ?").bind(account_id).execute(&mut *tx).await?;
@@ -1131,7 +1179,35 @@ pub async fn save(app: &crate::app::App, account_id: i64, stored: &Stored) -> sq
     .bind(crate::util::now())
     .execute(&mut *tx)
     .await?;
-    tx.commit().await
+    tx.commit().await?;
+    if !added.is_empty() {
+        forwarding_notice(app, account_id, &stored.name, &added).await;
+    }
+    Ok(())
+}
+
+/// Puts a note about new forwarding into the account's inbox.
+async fn forwarding_notice(app: &crate::app::App, account_id: i64, name: &str, targets: &[String]) {
+    let Ok(Some(account)) = crate::auth::Account::by_id(&app.db, account_id).await else { return };
+    let Some(address) = Address::parse(&account.email) else { return };
+    let domain = address.domain.clone();
+    let list: String = targets.iter().map(|t| format!("  {}\r\n", crate::util::sanitize_line(t))).collect();
+    let raw = format!(
+        "From: \"Mail server\" <postmaster@{domain}>\r\nTo: <{to}>\r\nSubject: Your mail is now forwarded to another address\r\nDate: {date}\r\nMessage-ID: <{id}@{domain}>\r\n\
+         Auto-Submitted: auto-generated\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n\
+         The mail filter \"{name}\" was changed and can now send your incoming mail on to:\r\n\r\n{list}\r\n\
+         If you did not do this, someone else may have access to your account: change your password,\r\n\
+         sign out your other sessions and remove the filter under Settings > Filters.\r\n",
+        to = account.email,
+        date = crate::smtp::delivery::rfc2822_now(),
+        id = crate::util::random_token(),
+        name = crate::util::sanitize_line(name),
+    );
+    // Stored straight into the inbox: delivering it would run the very filter it warns about.
+    let Ok(Some(inbox)) = app.store.mailbox_by_role(account_id, "inbox").await else { return };
+    if let Err(err) = app.store.append(account_id, inbox.id, raw.as_bytes(), crate::store::Flags::default(), None).await {
+        tracing::warn!(%err, "forwarding notice not stored");
+    }
 }
 
 pub async fn delete(app: &crate::app::App, account_id: i64, name: &str) -> sqlx::Result<bool> {

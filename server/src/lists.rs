@@ -149,7 +149,7 @@ async fn send(app: &App, envelope_sender: &str, recipient: &str, raw: &[u8]) -> 
     for target in targets {
         match target {
             Target::Local { account_id, address } => {
-                let delivery = LocalDelivery { account_id, recipient: &address, sender: envelope_sender, raw, junk: false, remote: "", direction: Direction::Local, author_verified: false };
+                let delivery = LocalDelivery { account_id, recipient: &address, sender: envelope_sender, raw, junk: false, remote: "", direction: Direction::Local, author_verified: false, sender_verified: false };
                 if let Err(err) = delivery::deliver_local(app, delivery).await {
                     tracing::warn!(%err, recipient = address, "list mail not delivered");
                 }
@@ -264,8 +264,9 @@ async fn strict_dmarc(app: &App, domain: &str) -> bool {
     })
 }
 
-/// Sends a post to every member.
-async fn distribute(app: &App, list: &List, raw: &[u8]) -> anyhow::Result<usize> {
+/// Sends a post to every member. `author_verified` tells whether the visible author was
+/// authenticated; an unverified one is never passed on as the sender of a copy we sign.
+async fn distribute(app: &App, list: &List, raw: &[u8], author_verified: bool) -> anyhow::Result<usize> {
     let parsed = MessageParser::default().parse_headers(raw);
     let author = parsed.as_ref().and_then(|m| m.from()).and_then(|f| f.first()).map(|a| (a.name().unwrap_or("").to_owned(), a.address().unwrap_or("").to_owned())).unwrap_or_default();
     let subject = parsed.as_ref().and_then(|m| m.subject()).unwrap_or("").to_owned();
@@ -278,7 +279,9 @@ async fn distribute(app: &App, list: &List, raw: &[u8]) -> anyhow::Result<usize>
     }
     let author_domain = author.1.rsplit_once('@').map(|(_, d)| d.to_ascii_lowercase()).unwrap_or_default();
     let ours = author_domain == list.domain() || delivery::is_local_domain(app, &author_domain).await.unwrap_or(false);
-    if !ours && strict_dmarc(app, &author_domain).await {
+    // Copies are DKIM-signed with the list's domain: keeping an unverified From (above all one
+    // in a domain of ours) would turn a forged author into an authenticated one.
+    if !author_verified || (!ours && strict_dmarc(app, &author_domain).await) {
         copy = without_headers(&copy, &["From", "Reply-To", "DKIM-Signature"]);
         let display = if author.0.is_empty() { author.1.clone() } else { author.0.clone() };
         extra.push_str(&format!("From: \"{} via {}\" <{}>\r\n", sanitize_line(&display).replace('"', ""), sanitize_line(&list.name).replace('"', ""), list.address));
@@ -373,7 +376,8 @@ pub async fn moderate(app: &App, token: &str, approve: bool) -> anyhow::Result<O
     sqlx::query("DELETE FROM list_pending WHERE id = ?").bind(id).execute(&app.db).await?;
     if approve && let Some(hash) = hash {
         let raw = app.store.read_blob(&hash).await?;
-        distribute(app, &list, &raw).await?;
+        // Whether the author was authenticated is not kept with a held post.
+        distribute(app, &list, &raw, false).await?;
     }
     Ok(Some(format!("{} \u{201c}{}\u{201d} ({})", if approve { "Sent" } else { "Discarded" }, subject, list.address)))
 }
@@ -478,7 +482,7 @@ pub async fn receive(app: &App, list_id: i64, role: Role, sender: Sender<'_>, ra
                 _ => Err("the list is moderated"),
             };
             match decision {
-                Ok(()) => distribute(app, &list, raw).await.map(|_| ()),
+                Ok(()) => distribute(app, &list, raw, sender.author_verified).await.map(|_| ()),
                 Err(reason) => hold(app, &list, &from, raw, reason).await,
             }
         }
