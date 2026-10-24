@@ -160,7 +160,7 @@ export default function SettingsPage() {
         <Typography variant="body2">
           {t('Storage:')} {t('{{used}} of {{quota}}', { used: formatBytes(account.used_bytes), quota: account.quota_bytes ? formatBytes(account.quota_bytes) : t('unlimited') })}
         </Typography>
-        {account.quota_bytes > 0 && <LinearProgress variant="determinate" value={used} color={used >= 90 ? 'error' : 'primary'} sx={{ mt: 1, height: 8, borderRadius: 1.5, maxWidth: 520 }} />}
+        {account.quota_bytes > 0 && <LinearProgress variant="determinate" value={used} color={used >= 90 ? 'error' : 'primary'} thickness={8} sx={{ mt: 1, maxWidth: 520 }} />}
         {sending.data && (
           <Box sx={{ mt: 2, maxWidth: 520 }}>
             <Typography variant="body2" sx={{ mb: 0.5 }}>{t('Sending in the last hour:')}</Typography>

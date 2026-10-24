@@ -59,7 +59,7 @@ function Compliance({ passed, total }: { passed: number; total: number }) {
   const value = percent(passed, total);
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 150 }}>
-      <LinearProgress variant="determinate" value={value} color={value >= 95 ? 'success' : value >= 70 ? 'warning' : 'error'} sx={{ flex: 1, height: 8, borderRadius: 4 }} />
+      <LinearProgress variant="determinate" value={value} color={value >= 95 ? 'success' : value >= 70 ? 'warning' : 'error'} thickness={8} sx={{ flex: 1 }} />
       <Typography variant="body2" sx={{ width: 42, textAlign: 'right' }}>
         {value}%
       </Typography>
@@ -249,7 +249,7 @@ export function Diagnostics() {
               <Typography variant="h3" data-testid="deliverability-score" color={data.score >= 85 ? 'success.main' : data.score >= 60 ? 'warning.main' : 'error.main'}>
                 {data.score} / 100
               </Typography>
-              <LinearProgress variant="determinate" value={data.score} sx={{ height: 8, borderRadius: 4, mt: 1 }} />
+              <LinearProgress variant="determinate" value={data.score} thickness={8} sx={{ mt: 1 }} />
             </CardContent>
           </Card>
           <Typography variant="h6">{t('Port health')}</Typography>

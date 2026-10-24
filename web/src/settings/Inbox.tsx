@@ -77,7 +77,7 @@ function SpamFilterSection() {
           <Typography variant="body2">
             {t('Still learning: {{spam}} of {{needed}} spam and {{ham}} of {{needed}} wanted messages seen. It starts sorting once it has seen enough of both.', { spam: state.spam, ham: state.ham, needed: state.needed })}
           </Typography>
-          <LinearProgress variant="determinate" value={progress} sx={{ mt: 1, maxWidth: 360, height: 6, borderRadius: 3 }} aria-label={t('Spam filter training progress')} />
+          <LinearProgress variant="determinate" value={progress} thickness={6} sx={{ mt: 1, maxWidth: 360 }} aria-label={t('Spam filter training progress')} />
         </>
       )}
       {(state.spam > 0 || state.ham > 0) && (
