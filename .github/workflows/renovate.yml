@@ -8,6 +8,12 @@ on:
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch:
+    inputs:
+      log_level:
+        description: Log level (debug shows why a run fails)
+        type: choice
+        options: [info, debug]
+        default: info
 
 permissions:
   contents: read
@@ -28,4 +34,4 @@ jobs:
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           RENOVATE_ONBOARDING: "false"
           RENOVATE_REQUIRE_CONFIG: required
-          LOG_LEVEL: info
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
