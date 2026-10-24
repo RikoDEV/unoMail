@@ -71,16 +71,20 @@ test('models can be configured and used for summaries and translation of owned m
     // Saving tests the settings first: a failing provider keeps the dialog open with the reason.
     remote.fail();
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('Connection test failed');
     await expect(dialog.getByRole('alert')).toContainText('HTTP 401');
     await expect(dialog).not.toContainText('DO-NOT-LEAK');
+    await expect(dialog.getByRole('button', { name: 'Test connection' })).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Save anyway', exact: true })).toBeVisible();
     expect((await (await page.request.get('/api/models')).json()).some((m: { name: string }) => m.name === 'Mail assistant')).toBe(false);
+    // Correcting a setting clears the failure; saving tests again and, passing, saves.
     remote.fail(false);
-    await dialog.getByRole('button', { name: 'Test connection', exact: true }).click();
-    await expect(dialog.getByRole('status')).toContainText('Model connection successful');
+    await dialog.getByLabel('API key', { exact: true }).fill('');
+    await dialog.getByLabel('API key', { exact: true }).fill('secret-provider-key');
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dialog).toBeHidden();
-    expect(remote.requests).toHaveLength(2); // A passed test is not repeated when saving.
+    expect(remote.requests).toHaveLength(2); // The failed test, then the one that passed.
     const configured = await (await page.request.get('/api/models')).json();
     const model = configured.find((m: { name: string }) => m.name === 'Mail assistant');
     expect(model.has_api_key).toBe(true);

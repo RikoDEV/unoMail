@@ -67,39 +67,33 @@ const connectionChanged = (model: Model, draft: Model, key: string) =>
 function ModelDialog({ model, onClose, onSaved }: { model: Model; onClose: () => void; onSaved: () => void }) {
   const [draft, setDraftState] = useState(model);
   const [key, setKeyState] = useState('');
-  /** The outcome of testing the current settings: passed, or the error to show. */
-  const [tested, setTested] = useState<{ ok: boolean; message: string } | null>(null);
+  /** Why the connection test of the current settings failed; saving again then skips the test. */
+  const [failure, setFailure] = useState('');
   const [testing, setTesting] = useState(false);
   const form = useFormAction<string>(() => null);
   const edit = Boolean(model.id);
   // Any change to the settings makes an earlier test result stale.
-  const setDraft = (next: Model) => { setDraftState(next); setTested(null); };
-  const setKey = (next: string) => { setKeyState(next); setTested(null); };
-  const payload = () => ({ ...draft, id: model.id || undefined, api_key: key || undefined });
-
-  async function test(): Promise<boolean> {
-    setTesting(true);
-    try {
-      await post('/api/models/test', payload());
-      setTested({ ok: true, message: t('Model connection successful') });
-      return true;
-    } catch (error) {
-      setTested({ ok: false, message: error instanceof Error ? error.message : String(error) });
-      return false;
-    } finally {
-      setTesting(false);
-    }
-  }
+  const setDraft = (next: Model) => { setDraftState(next); setFailure(''); };
+  const setKey = (next: string) => { setKeyState(next); setFailure(''); };
 
   async function save() {
     // A new or re-pointed model is tested first; a failed test asks for a second, deliberate save.
-    const mustTest = connectionChanged(model, draft, key) && !tested?.ok;
-    if (mustTest && !tested && !(await test())) return;
-    const body = { ...payload(), id: undefined };
+    if (connectionChanged(model, draft, key) && !failure) {
+      setTesting(true);
+      try {
+        await post('/api/models/test', { ...draft, id: model.id || undefined, api_key: key || undefined });
+      } catch (error) {
+        setFailure(error instanceof Error ? error.message : String(error));
+        return;
+      } finally {
+        setTesting(false);
+      }
+    }
+    const body = { ...draft, api_key: key || undefined };
     if (await form.run(() => edit ? put(`/api/models/${model.id}`, body) : post('/api/models', body))) onSaved();
   }
   const busy = form.busy || testing;
-  const saveLabel = testing ? t('Testing…') : form.busy ? t('Saving…') : tested && !tested.ok ? t('Save anyway') : t('Save');
+  const saveLabel = testing ? t('Testing…') : form.busy ? t('Saving…') : failure ? t('Save anyway') : t('Save');
   return (
     <Dialog open onClose={busy ? undefined : onClose} fullWidth maxWidth="sm">
       <Box component="form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
@@ -119,11 +113,7 @@ function ModelDialog({ model, onClose, onSaved }: { model: Model; onClose: () =>
             <TextField required label={t('Base URL')} type="url" value={draft.base_url} onChange={(e) => setDraft({ ...draft, base_url: e.target.value })} helperText={t('For local models, use an address reachable from the mail server.')} />
             <TextField label={t('API key')} type="password" autoComplete="new-password" value={key} onChange={(e) => setKey(e.target.value)} helperText={model.has_api_key && draft.provider === model.provider && draft.base_url === model.base_url ? t('A key is saved. Leave blank to keep it.') : t('Optional for Ollama and local OpenAI-compatible providers.')} />
             <FormControlLabel control={<Switch checked={draft.enabled} onChange={(e) => setDraftState({ ...draft, enabled: e.target.checked })} />} label={t('Available in webmail')} />
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-              <Button variant="outlined" disabled={busy || !draft.model.trim() || !draft.base_url.trim()} onClick={() => void test()}>{testing ? t('Testing…') : t('Test connection')}</Button>
-              {!tested && !testing && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Saving tests the connection first.')}</Typography>}
-            </Stack>
-            {tested && <Alert severity={tested.ok ? 'success' : 'error'} role={tested.ok ? 'status' : 'alert'}>{tested.message}</Alert>}
+            {failure && <Alert severity="error">{t('Connection test failed: {{reason}}', { reason: failure })}</Alert>}
           </Stack>
         </DialogContent>
         <DialogButtons onCancel={onClose} cancelDisabled={busy} submit disabled={busy} label={saveLabel} />
