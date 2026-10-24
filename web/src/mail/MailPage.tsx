@@ -71,6 +71,8 @@ export default function MailPage() {
   const [search, setSearch] = useState('');
   const [serverSearch, setServerSearch] = useState('');
   const [cursor, setCursor] = useState(0);
+  // The keyboard cursor is only drawn once j, k or x has been used, so a fresh list has no row picked out.
+  const [cursorShown, setCursorShown] = useState(false);
   const [thread, setThread] = useState<EmailFull[] | null>(null);
   const [draft, setDraft] = useState<{ key: number; draft: Draft; emailId?: string } | null>(null);
   const [notice, setNotice] = useState('');
@@ -257,8 +259,16 @@ export default function MailPage() {
 
   useEffect(() => {
     setCursor(0);
+    setCursorShown(false);
     void load(0);
   }, [load]);
+
+  // Any mouse click puts the keyboard cursor away again until j, k or x is used.
+  useEffect(() => {
+    const hide = () => setCursorShown(false);
+    window.addEventListener('mousedown', hide);
+    return () => window.removeEventListener('mousedown', hide);
+  }, []);
 
   // The browser reports the connection coming back: synchronise right away.
   useEffect(() => {
@@ -630,9 +640,11 @@ export default function MailPage() {
       switch (event.key) {
         case 'j':
           setCursor((c) => Math.min(c + 1, Math.max(visible.length - 1, 0)));
+          setCursorShown(true);
           break;
         case 'k':
           setCursor((c) => Math.max(c - 1, 0));
+          setCursorShown(true);
           break;
         case 'Enter':
         case 'o':
@@ -653,6 +665,7 @@ export default function MailPage() {
           break;
         case 'x':
           if (!threadId && visible[cursor]) toggleSelected(visible[cursor].id);
+          setCursorShown(true);
           break;
         case 'r':
           if (last && account) compose(draftFor('reply', last, account.email, accountId));
@@ -977,7 +990,7 @@ export default function MailPage() {
                       narrow={Boolean(threadId) || phone}
                       showRecipients={mailbox?.role === 'sent' || mailbox?.role === 'drafts'}
                       chosen={allInFolder || selected.has(email.id)}
-                      highlighted={threadId ? email.threadId === threadId : item.index === cursor}
+                      highlighted={threadId ? email.threadId === threadId : cursorShown && item.index === cursor}
                       first={item.index === 0}
                       last={item.index === visible.length - 1}
                       labelColors={labelColors}
