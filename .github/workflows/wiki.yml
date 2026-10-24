@@ -1,0 +1,48 @@
+name: Wiki
+
+# Publishes docs/ to the GitHub wiki. The wiki is a copy: edits made there are overwritten.
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", ".github/workflows/wiki.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Clone the wiki
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+
+      - name: Copy docs and rewrite links
+        env:
+          BLOB: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}
+        run: |
+          find wiki -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r docs/. wiki/
+          mv wiki/README.md wiki/Home.md
+          # Wiki pages have no .md suffix, README is Home, and files outside docs/ link to the repository.
+          find wiki -name '*.md' -exec sed -E -i \
+            -e 's#\]\(README\.md(\#[^)]*)?\)#](Home\1)#g' \
+            -e 's#\]\(([A-Za-z0-9_-]+)\.md(\#[^)]*)?\)#](\1\2)#g' \
+            -e "s#\]\(\.\./([^)]*)\)#](${BLOB}/\1)#g" {} +
+
+      - name: Push
+        working-directory: wiki
+        run: |
+          git add -A
+          if git diff --cached --quiet; then echo "Wiki is up to date"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Sync from ${GITHUB_SHA::7}"
+          git push

@@ -106,13 +106,15 @@ Prebuilt binaries (Linux x86_64 and ARM64) are attached to each [GitHub release]
 
 | Guide | Contents |
 | --- | --- |
+| [Deployment and upgrades](docs/deployment.md) | Host and DNS requirements, upgrading, troubleshooting |
 | [Configuration](docs/configuration.md) | Environment variables and runtime server settings |
 | [Web client](docs/web-client.md) | Everything the webmail, calendar and address book can do |
-| [Administration](docs/administration.md) | Integrations, mailing lists, dashboard, blacklist, backups and restore |
+| [Administration](docs/administration.md) | Dashboard, blacklist, spam filter, backups and restore, integrations, mailing lists, AI models, masked addresses |
 | [Mail programs](docs/mail-programs.md) | Passkeys and app passwords, IMAP/SMTP/JMAP details, CalDAV and CardDAV setup |
 | [Security model](docs/security-model.md) | How authentication, sessions, storage and transport are protected |
 | [Known limitations](docs/limitations.md) | What is not supported (yet) |
-| [Development](docs/development.md) | Running tests and the hot-reload dev setup |
+| [API and command line](docs/api.md) | Masked-address API and server commands |
+| [Development](docs/development.md) | Running tests, the hot-reload dev setup, CI and dependency updates |
 
 ## Architecture
 

@@ -1,289 +1,176 @@
 # Administration
 
-## Masked addresses
+## Dashboard
 
-Users manage their own disposable addresses in Settings → Masked addresses.
-Administration → Masked addresses (`/admin/masked-addresses`) lets administrators load a
-managed mailbox, create/edit/disable/delete its masks, override its quota and grant
-additional hosted domains. Domain administrators remain confined to ordinary accounts
-in their managed domains and can grant only domains they administer.
+- Daily mail and connection stats for 7, 30 or 90 days (kept 400 days).
+- Disk and memory use for the last day or week.
+- Recent remote connections and SMTP replies (in memory, cleared on restart).
 
-Super administrators set the server default quota (100), permit or stop new mask creation,
-and close selected domains to new masks. These creation switches do not disable existing
-active addresses. Blank account quota overrides inherit the server default; zero blocks
-new masks. Active, disabled and expired records count toward the quota; deleted address
-reservations do not. Creation is limited to 30 masks per account per hour; a request that fails (quota
-reached, domain disabled, database error) does not count.
+Country flags come from Team Cymru's IP-to-ASN DNS service. They show where the network is
+registered, not necessarily where the host is.
 
-The account's primary domain is allowed by default when active and not closed to new masks.
-Additional domains require an explicit grant. Sharing an ordinary alias does not grant
-permission to create new addresses in its domain. Masks point directly to an account ID,
-so changing its primary email does not break them. A mask cannot authenticate as a mailbox.
+## Postmaster
 
-Addresses contain 128 random bits encoded in 26 lowercase base32 characters. An optional
-prefix of up to 37 lowercase letters, digits or underscores is followed by an underscore
-and the random suffix. Database reservations coordinate masks, mailboxes, aliases and list
-addresses, including list control addresses. Deleted masks retain only an address reservation
-to prevent reassignment and catch-all reactivation. Expiration is checked on every lookup;
-a background worker publishes expiration changes for synchronization every 30 seconds.
-Messages accepted before deactivation are retained. Mask state is checked again before
-accepting inbound DATA and when sending or releasing a scheduled reply. Read receipts and
-vacation replies use the mask; quoted message content and user-configured signatures are
-still whatever the user chose to include.
+Every domain gets a `postmaster@<domain>` system mailbox. DMARC and TLS reports are delivered
+there and parsed into the report pages. Set a password to read it, or forward it with Sieve.
+An existing `postmaster@` alias takes its place.
 
-### REST and JMAP
+## SMTP blacklist
 
-Browser sessions use the management API and its usual CSRF protection:
+| Tab | Contents |
+| --- | --- |
+| User defined | Block or allow addresses and CIDRs. Highest priority wins, then the most specific network. |
+| Automatic | Day-long blocks created by the server. Editing one makes it permanent. |
+| Karma | Score per remote address. Blocked at −20. Private addresses are never blocked. |
 
-```text
-GET/POST      /api/me/masked-addresses
-PATCH/DELETE  /api/me/masked-addresses/{id}
-GET           /api/me/masked-addresses/domains
-GET/POST      /api/me/masked-addresses/tokens
-DELETE        /api/me/masked-addresses/tokens/{id}
-```
+Allowed addresses skip DNS blocklists, reputation checks and greylisting.
 
-Create accepts `description`, `for_domain`, `integration_url`, `prefix`, `domain`,
-`expires_at` (Unix UTC seconds or null) and `enabled` (default true). Updates accept only
-`description`, `for_domain`, `integration_url` and `enabled`. Integration URLs must be HTTPS
-without embedded credentials. Metadata and tokens are scoped to the authenticated account.
+| Event | Karma |
+| --- | --- |
+| Accepted mail | +1 |
+| Unknown recipient | −1 |
+| DNS blocklist hit | −2 |
+| Failed login | −3 |
+| Rejected mail, too many errors, spam trap | −5 |
 
-JMAP advertises the unoMail-specific `urn:unomail:params:jmap:masked-email` capability and
-implements `MaskedEmail/get`, `MaskedEmail/query`, `MaskedEmail/set` and `MaskedEmail/changes`.
-Normal JMAP clients use `/jmap/api` with their existing credentials. Mask-only integrations
-use a separately scoped Bearer token and these endpoints:
+## Spam filtering
 
-```text
-GET   /api/masked-email/session
-POST  /api/masked-email/jmap
-Authorization: Bearer um_mask_...
-```
+- **Spam filter** sets Rspamd's action thresholds and rule scores. Changes apply immediately.
+- **Built-in filter** (Server settings) runs after Rspamd and records its results in
+  `X-Unomail-Filter`. It checks deceptive links, sender network and domain reputation, and
+  countries or networks you penalise.
+- **Spam traps** are unused addresses. Mail to them is dropped and its source is penalised.
 
-These credentials cannot authenticate to the normal mail APIs, read messages, send mail
-or manage another account's masks. At most ten unexpired tokens can exist per account.
-The UI issues 90-day tokens; the token API accepts an expiration up to one year away.
-Only a token hash is stored. Revocation and account/domain disablement take effect on the
-next request. Session discovery returns an account ID without revealing the primary address.
-This is an explicit integration API, not a claim of compatibility with every password manager
-or Stalwart's separate vendor namespace.
+## Reports
 
-Example request (`accountId` comes from session discovery):
-
-```json
-{
-  "using": ["urn:ietf:params:jmap:core", "urn:unomail:params:jmap:masked-email"],
-  "methodCalls": [["MaskedEmail/set", {
-    "accountId": "a1",
-    "create": {"new": {"description": "Shopping", "forDomain": "https://shop.example"}}
-  }, "create"]]
-}
-```
-
-JMAP properties use camelCase: `emailPrefix`, `emailDomain`, `forDomain`, `url` and
-RFC 3339 `expiresAt`. The server supplies `email`, `accountId`, `createdAt` and `createdBy`.
-Creation provenance comes from the credential's integration name, not a client-supplied value.
-Query is scoped by the top-level `accountId`, uses creation-descending order and supports
-pagination. Changes support state-based synchronization; creation/update/destroy responses
-use normal RFC 8620 per-object success/error shapes.
-
-### CLI
-
-The server binary exposes the same domain service to administrators with access to its
-configuration and data directory:
-
-```sh
-unomail masked-email list alice@example.com
-unomail masked-email create alice@example.com '{"description":"Shopping","prefix":"shop"}'
-unomail masked-email update alice@example.com 1 '{"enabled":false}'
-unomail masked-email delete alice@example.com 1
-```
-
-## AI models (Administration → Models)
-
-Super administrators can add, edit, disable, test and delete models at `/admin/models`.
-Choose OpenAI, Anthropic, Google Gemini, OpenRouter, Groq, DeepSeek, Ollama or an
-OpenAI-compatible provider. Enter a display name, the provider's exact model ID, its API
-base URL and API key. Several models from the same provider can be configured.
-
-The provider presets fill in the base URL. OpenAI-compatible URLs include the API version
-(for example, `https://api.openai.com/v1`); Ollama uses its server root
-(for example, `http://ollama:11434`). Local addresses must be reachable from the mail
-server container, where `localhost` refers to the container itself. Ollama and custom
-OpenAI-compatible servers may be used without an API key.
-
-API keys are encrypted with the server's existing credential key and never returned to
-the browser. Leave the key blank when editing to preserve it. Changing the provider or
-base URL requires entering the key again. **Test connection** sends a small test prompt
-without email content. **Available in webmail** controls whether users can select a model.
-
-Enabled models are available to every signed-in user for their own messages. Each
-summary or translation is requested explicitly and sends only the subject and text body
-to the selected provider. Encrypted messages and shared messages owned by another account
-are excluded. Requests allow up to 60,000 body characters, take at most 90 seconds and
-are limited to ten per minute per account, with eight simultaneous provider requests
-server-wide. Results are displayed in the reader without being stored in the mailbox.
-
-### Summary-card extraction
-
-Under **Models → Summary card extraction**, choose a model for extracting order, booking and bill facts
-from ordinary emails. **Allow automatic AI extraction** permits background processing only
-for users who also enable it in Settings → Inbox. Both automatic-processing switches are
-off by default. With a model selected, users can also explicitly request extraction from
-an eligible message without enabling automatic processing.
-
-JSON-LD (schema.org) data is read locally from the original email before HTML sanitization,
-and takes precedence over AI extraction: `Order` and `ParcelDelivery`; `FlightReservation`,
-`TrainReservation`, `BusReservation`, `LodgingReservation`, `RentalCarReservation`,
-`FoodEstablishmentReservation` and `EventReservation`; and `Invoice`. Local extraction works
-without any configured model. Inbox “Happening soon” and search cards are follow-up phases.
-
-The worker processes a durable queue outside the delivery transaction. It allows up to
-5,000 pending jobs, retries extraction failures up to three times, and defers provider
-rate limits without consuming those retries. AI calls share the existing per-account
-and global provider limits. Existing mail can be processed in bounded batches of up to
-200 recent messages from the user's inbox settings.
-
-Facts are scoped to the receiving account. Related messages match by sender domain and the
-card's party and number: merchant and order number (with separate shipment tracking
-details), provider and confirmation number (plus flight, train or bus number and travel
-day, so each leg is its own card), or biller, reference and due date. AI-extracted facts
-are kept only when the quoted evidence and each field appear verbatim in the message. Each source
-retains its extraction method and evidence. Deleted, Trash and Junk source messages
-no longer contribute facts or links. Status reflects the messages received, without
-contacting a carrier or merchant for live tracking updates.
-
-## Integrations (Administration → Integrations)
-
-- **Single sign-on** through an OpenID Connect provider (authorization code flow with PKCE).
-  The provider's verified e-mail address selects an existing mailbox; mailboxes are never
-  created automatically. Mail programs can sign in with the provider's access tokens using
-  SASL `XOAUTH2` or `OAUTHBEARER` on IMAP and SMTP submission; such a token must have been
-  issued to unoMail's client id, which is checked with the provider's token introspection
-  endpoint or, without one, the claims of a JWT access token. Providers that issue opaque
-  tokens and offer no introspection (Google) work for the web sign-in only.
-- **LDAP directory** for recipient suggestions (`ldaps://`, or `ldap://` with StartTLS).
-- **Webhooks**: signed JSON notifications for `message.received`, `message.sent`,
-  `message.bounced` and `account.created`. The body is signed with HMAC-SHA256
-  (`X-Unomail-Signature: sha256=<hex>`); notifications carry addresses and sizes, never content.
-  A notification the receiver does not take (no answer, 408, 429 or 5xx) is sent again after
-  5 and 30 seconds, byte for byte the same, so repeats can be recognised. Up to 1,000 events
-  wait for delivery; beyond that new ones are dropped with a warning in the log.
-- **Skins** are JSON design tokens: `id`, `name`, `mode` (`light`/`dark`/`auto`), `primary`,
-  `secondary`, `background`, `paper`, `text` (`#rrggbb`), `radius` (0–32), `density`
-  (`comfortable`/`compact`) and `font` (`roboto`/`system`/`serif`/`mono`). Anything else is
-  refused, so a skin cannot carry CSS or code.
-- **Plug-ins** extend the web client. A plug-in is a directory `plugins/<id>/` in the data
-  volume with a `plugin.json` (`name`, `version`, `description`) and a `plugin.js` module:
-
-  ```js
-  export default function (api) {
-    api.addMessageAction({ id: 'translate', label: 'Translate', onClick: (message) => { /* message.subject, .from, .html … */ } });
-    api.addComposerAction({ id: 'greeting', label: 'Greeting', onClick: (composer) => composer.insertHtml('<p>Hello,</p>') });
-    api.addSidebarLink({ id: 'wiki', label: 'Wiki', href: 'https://wiki.example.org/' });
-    api.on('message:open', (message) => api.log(message.subject));
-    api.on('message:sent', ({ subject, recipients }) => api.notify(`Sent: ${subject}`));
-  }
-  ```
-
-  Plug-ins run in every user's browser with the page's privileges. They can therefore only be
-  installed by someone with access to the server's disk, and are switched on and off in the
-  admin panel. The API is defined in [`web/src/plugins.ts`](../web/src/plugins.ts).
-
-## Mailing lists (Administration → Mailing lists)
-
-A list `team@example.org` delivers each post to all members, with RFC 2369 list headers and a
-one-click unsubscribe link (RFC 8058) per member, signed for the list's domain. Who may post:
-anyone, members (others are held), moderators (others are held) or owners only
-(announcements). Held posts are approved or discarded in the admin panel or from the link in
-the notice moderators receive. `team-request@` handles `subscribe`, `unsubscribe` and `help`
-by mail (confirmed by a link; subscribing only when the list is open), `team-owner@` reaches
-the owners, and `team-bounces@` is the return path: members whose copies keep bouncing are
-removed after five failures. When the sender's domain publishes a strict DMARC policy, copies
-are sent "via" the list address, as changing them would break the sender's signature.
-
-## Operations (Administration)
-
-- **Postmaster mailboxes:** every hosted domain has a `postmaster@<domain>` mailbox, created
-  with the domain (and at startup for older domains). Mail domains must accept postmaster
-  (RFC 5321), and the DMARC and TLS-RPT records on the DNS page send reports there: they are
-  read into the DMARC and TLS report pages and also kept in the mailbox. It is marked
-  *system* in Mailboxes and cannot be deleted; set a password to read it, or forward it with
-  a Sieve filter. An existing alias named postmaster@ is used instead, and the mailbox does not
-  count against a domain's mailbox limit.
-
-- **Dashboard** opens with *Daily stats*, a full-width line chart of the last 7, 30 or 90
-  days: valid and invalid SMTP connections (blocked by the blacklist, a DNS blocklist or
-  reputation; limited by the per-address connection limit), delivered mail (local and remote),
-  bounced, quarantined and discarded mail. Counts are per UTC day and kept for 400 days; the
-  mail figures start from the delivery log already on the server. It also charts free space
-  on the data volume and memory use over the last day or week (sampled every minute, kept for
-  a week). Below the mail flow it shows the remote addresses that connected most recently
-  (with country flag and reverse DNS name) and the last SMTP replies the server gave, with
-  their status codes. Both are kept in memory and start empty after a restart.
-- **SMTP blacklist** has three tabs. *User defined*: addresses or networks (CIDR) you block or
-  allow, with a priority, hit counter, last-seen time and description. A blacklisted address
-  is refused at connect on every SMTP port; a whitelisted one skips DNS blocklists, the
-  reputation check and greylisting. When several rules match, the highest priority wins, then
-  the most specific network, then the whitelist. *Automatically generated*: day-long blocks
-  the server creates itself; editing one makes it permanent. *Karma records*: a score per
-  remote address (accepted mail +1; unknown recipient −1; DNS blocklist hit −2; failed login
-  −3; rejected mail or too many errors −5). At −20 an address is blocked automatically;
-  private addresses are scored but never blocked.
-- **Spam filter** configures the built-in Rspamd: the scores at which mail is marked as spam
-  or rejected, the score of every rule, and the latest verdicts. Changes are stored by Rspamd
-  and apply immediately.
-- **Built-in spam filter** (Server settings) adds the server's own tests after Rspamd, recorded
-  in an `X-Unomail-Filter` header: links written as IP numbers, look-alike (mixed-script)
-  domains, user names in front of a host, link shorteners, links whose text names another
-  domain, and floods of domains; the reputation of the sending network (/24 or /48), its
-  autonomous system and its verified domain; and countries or autonomous systems you
-  penalise (looked up in Team Cymru's DNS service, `origin.asn.cymru.com`). Mail at the junk
-  score goes to Junk. Reputation is learned from clear verdicts (Rspamd's junk action, the
-  filter's own tests, spam traps), from DMARC-verified mail that was accepted, and from users
-  moving mail into or out of Junk. **Spam traps** are addresses of your domains that nobody
-  uses (publish them where only harvesters look): mail to them is accepted, never delivered,
-  teaches the reputation that its source sends spam, and lowers the sender's karma by 5.
-- **TLS reports** (RFC 8460) received about your domains, and how this server's own outgoing
-  sessions fared; domains that ask get the latter as a daily report. Outgoing mail honours
-  receivers' **MTA-STS** policies (RFC 8461) and **DANE** TLSA records (RFC 7672, checked with
-  DNSSEC); hosted domains can publish an MTA-STS policy (served at
-  `https://mta-sts.<domain>/.well-known/mta-sts.txt`), and the DNS page lists the records.
-- **DMARC aggregate reports** are also sent, once a day, to the domains whose policy asks for
-  them (`rua`), after checking that an address outside the domain agreed to receive them.
-- **Backups** shows the backup target, the snapshots kept there and recent runs, and starts
-  one on request (see [Backups and restore](#backups-and-restore)).
+- **DMARC**: incoming aggregate reports are parsed; outgoing ones are sent daily to domains that ask (`rua`).
+- **TLS** (RFC 8460): received reports and the server's own outbound sessions.
+- **MTA-STS and DANE** are enforced on outbound mail. Hosted domains can publish an MTA-STS policy.
 
 ## Backups and restore
 
-With `UNOMAIL_BACKUP_DIR` (ideally another disk) or a bucket (`UNOMAIL_BACKUP_S3_*`) set, the
-server backs itself up daily at `UNOMAIL_BACKUP_HOUR`: a consistent snapshot of the database and
-every message. Messages are content-addressed, so each run copies only new ones; snapshots
-beyond `UNOMAIL_BACKUP_KEEP` are removed together with the messages no remaining snapshot
-needs. The keys in the data directory (`secret.key`, `blob.key`, `vapid.key`) are deliberately
-not in the backup: keep a copy of them somewhere safe.
+Set `UNOMAIL_BACKUP_DIR` or `UNOMAIL_BACKUP_S3_*`. The server then takes a daily snapshot of
+the database and all messages at `UNOMAIL_BACKUP_HOUR`. Runs are incremental, and
+`UNOMAIL_BACKUP_KEEP` snapshots are kept.
 
-Signing keys and secrets in the database (DKIM and TLS private keys, the SRS and list secrets)
-are sealed with `secret.key`, so a backup restored without that file cannot sign mail: DKIM
-keys must be generated again and a self-signed certificate replaces the TLS one. If a backup or
-database copy made by a version before this sealing leaked, treat those keys as exposed: add a
-new DKIM selector and retire the old one, reissue the TLS certificate, and delete the
-`srs.secret` and `lists.secret` settings so new ones are generated (outstanding SRS bounces and
-unsubscribe links stop working). If `secret.key` itself leaked, all of the above applies too:
-stop the server, move `secret.key` aside and re-enter the credentials it protected.
+> [!IMPORTANT]
+> `secret.key`, `blob.key` and `vapid.key` are **not** backed up. Store them separately.
+> Without `secret.key`, a restore loses DKIM keys, the TLS key and stored credentials.
 
 ```sh
-unomail backup                     # take one now
-unomail backups                    # list the snapshots
-unomail restore [snapshot] [--force]   # with the server stopped; default: the latest
-unomail migrate-blobs [--from DIR] # move messages into S3, or seal older ones after enabling UNOMAIL_ENCRYPT_MAIL
+unomail backup                        # take one now
+unomail backups                       # list snapshots
+unomail restore [snapshot] [--force]  # server must be stopped
+unomail migrate-blobs [--from DIR]    # move to S3, or encrypt existing mail
 ```
 
-Encrypting stored mail (`UNOMAIL_ENCRYPT_MAIL`) seals each message with ChaCha20-Poly1305,
-bound to its address; mail stored before stays readable, and `migrate-blobs` seals it too.
-Backups taken with it on also seal their copy of the database. The live database itself is
-**not** encrypted: subjects, addresses, message previews and the full-text search index are
-readable to anyone with the data directory, so encryption at rest protects a leaked message
-store or bucket, not a stolen server. Disk encryption covers the rest.
+`UNOMAIL_ENCRYPT_MAIL` encrypts message contents only. The database (subjects, addresses,
+search index) stays readable, so use disk encryption too.
 
-Country flags come from Team Cymru's IP-to-ASN service over DNS (no account or database
-needed); they show where the network is registered, which is not always where the host is.
+If `secret.key` leaks: rotate the DKIM selector, reissue the TLS certificate, delete the
+`srs.secret` and `lists.secret` settings, and re-enter stored credentials.
+
+## Integrations
+
+### Single sign-on
+
+OpenID Connect with PKCE. The provider's verified e-mail address selects an existing mailbox;
+no mailboxes are created. IMAP and SMTP accept provider tokens (`XOAUTH2`, `OAUTHBEARER`) if
+they were issued to unoMail's client ID. Providers with opaque tokens and no introspection
+(e.g. Google) work for web sign-in only.
+
+### LDAP
+
+Recipient suggestions only. `ldaps://`, or `ldap://` with StartTLS.
+
+### Webhooks
+
+Events: `message.received`, `message.sent`, `message.bounced`, `account.created`. The payload
+holds addresses and sizes, never content.
+
+- Signature: `X-Unomail-Signature: sha256=<HMAC-SHA256 of the body>`.
+- Retries after 5 and 30 seconds on no answer, 408, 429 or 5xx.
+- The queue holds 1,000 events; more are dropped with a warning.
+
+### Skins
+
+JSON design tokens only, so a skin can't carry CSS or code:
+
+| Key | Values |
+| --- | --- |
+| `id`, `name` | Text |
+| `mode` | `light`, `dark`, `auto` |
+| `primary`, `secondary`, `background`, `paper`, `text` | `#rrggbb` |
+| `radius` | 0–32 |
+| `density` | `comfortable`, `compact` |
+| `font` | `roboto`, `system`, `serif`, `mono` |
+
+### Plug-ins
+
+A plug-in is `plugins/<id>/` in the data directory with `plugin.json` (`name`, `version`,
+`description`) and `plugin.js`. Enable it in the admin panel. API: [`web/src/plugins.ts`](../web/src/plugins.ts).
+
+```js
+export default function (api) {
+  api.addMessageAction({ id: 'translate', label: 'Translate', onClick: (message) => {} });
+  api.addComposerAction({ id: 'greeting', label: 'Greeting', onClick: (c) => c.insertHtml('<p>Hello,</p>') });
+  api.addSidebarLink({ id: 'wiki', label: 'Wiki', href: 'https://wiki.example.org/' });
+  api.on('message:sent', ({ subject }) => api.notify(`Sent: ${subject}`));
+}
+```
+
+> [!WARNING]
+> Plug-ins run in every user's browser with full page privileges.
+
+## Mailing lists
+
+For a list `team@example.org`:
+
+| Address | Purpose |
+| --- | --- |
+| `team@` | Posts, delivered to all members |
+| `team-request@` | `subscribe`, `unsubscribe`, `help` by mail |
+| `team-owner@` | Reaches the owners |
+| `team-bounces@` | Return path; members are removed after 5 bounces |
+
+Posting policy: anyone, members, moderators, or owners only. Held posts are approved in the
+admin panel or from the moderator's e-mail. Mail from strict-DMARC domains is sent "via" the list.
+
+## AI models
+
+Administration → Models (super administrators). Supported providers: OpenAI, Anthropic,
+Gemini, OpenRouter, Groq, DeepSeek, Ollama, and any OpenAI-compatible API.
+
+- **Base URL**: include the version for OpenAI-compatible APIs (`https://api.openai.com/v1`);
+  use the server root for Ollama (`http://ollama:11434`). `localhost` means the container.
+- **API keys** are encrypted and never shown again. Leave blank to keep the current one.
+- **Test connection** sends a prompt without mail content.
+
+| Limit | Value |
+| --- | --- |
+| Body sent | 60,000 characters |
+| Timeout | 90 seconds |
+| Per account | 10 requests per minute |
+| Server-wide | 8 concurrent requests |
+
+Only the subject and text body are sent. Results are not stored.
+
+### Summary cards
+
+Schema.org JSON-LD in the mail is read locally, without AI. For other mail, choose a model
+under **Models → Summary card extraction**. Automatic extraction runs only when both the
+administrator and the user turn it on (both off by default). AI-extracted fields are kept
+only if they appear verbatim in the message.
+
+## Masked addresses
+
+Administration → Masked addresses manages a mailbox's masks, quota and allowed domains.
+
+| Setting | Default |
+| --- | --- |
+| Masks per account | 100 (blank inherits, 0 blocks) |
+| Creation rate | 30 per account per hour |
+| Allowed domains | The account's primary domain; others need a grant |
+
+Deleted masks keep their address reserved so it is never reused. Domain administrators manage
+only their own domains. API: [API and command line](api.md#masked-addresses).
