@@ -198,16 +198,32 @@ const limitValue = (field: LimitField, text: string) => (text.trim() === '' ? nu
 const EMPTY: FormState = { email: '', display_name: '', password: '', role: 'user', quota_mb: '1024', enabled: true, imap_enabled: true, pop3_enabled: true, smtp_enabled: true, outbound_blocked: false, send_only: false, limits: NO_LIMITS };
 
 /** Whether a mailbox uses 2-step sign-in, with a reset for an owner who lost the phone. */
+interface TwoStep {
+  enabled: boolean;
+  totp: boolean;
+  passkeys: number;
+  app_passwords: number;
+  /** Tied to one identity at the single sign-on provider. */
+  sso_linked: boolean;
+}
+
 function TwoStepStatus({ id }: { id: number }) {
-  const [status, setStatus] = useState<{ enabled: boolean; totp: boolean; passkeys: number; app_passwords: number } | null>(null);
+  const [status, setStatus] = useState<TwoStep | null>(null);
   const [done, setDone] = useState('');
   useEffect(() => {
-    get<{ enabled: boolean; totp: boolean; passkeys: number; app_passwords: number }>(`/api/accounts/${id}/two-factor`).then(setStatus).catch(() => {});
+    get<TwoStep>(`/api/accounts/${id}/two-factor`).then(setStatus).catch(() => {});
   }, [id]);
   if (!status) return null;
+  const reset = () =>
+    void del(`/api/accounts/${id}/two-factor`).then(() => {
+      setStatus({ ...status, enabled: false, totp: false, passkeys: 0, app_passwords: 0, sso_linked: false });
+      const linkRemoved = status.sso_linked ? ` ${t('The single sign-on link was removed; the next identity to sign in with this address is linked.')}` : '';
+      setDone(t('2-step verification was reset and app passwords were revoked; the owner signs in with the password alone and can set it up again.') + linkRemoved);
+    });
   return (
-    <Alert severity={status.enabled ? 'info' : 'warning'} action={status.enabled && <Button color="inherit" size="small" onClick={() => void del(`/api/accounts/${id}/two-factor`).then(() => { setStatus({ ...status, enabled: false, totp: false, passkeys: 0, app_passwords: 0 }); setDone(t('2-step verification was reset and app passwords were revoked; the owner signs in with the password alone and can set it up again.')); })}>{t('Reset')}</Button>}>
+    <Alert severity={status.enabled ? 'info' : 'warning'} action={(status.enabled || status.sso_linked) && <Button color="inherit" size="small" onClick={reset}>{t('Reset')}</Button>}>
       {done || (status.enabled ? t('2-step verification is on ({{methods}}).', { methods: [status.totp && t('authenticator app'), status.passkeys > 0 && t('{{count}} passkeys', { count: status.passkeys })].filter(Boolean).join(', ') }) : t('2-step verification is off.'))}
+      {!done && status.sso_linked && ` ${t('Linked to a single sign-on identity.')}`}
       {status.app_passwords > 0 && ` ${t('{{count}} app passwords.', { count: status.app_passwords })}`}
     </Alert>
   );

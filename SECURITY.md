@@ -170,6 +170,18 @@ when the sender's domain passes DMARC; a user who forwards a lot of mail with a 
 | 4 | Low | Client address (`api/mod.rs`) | Unreadable `X-Forwarded-For` entries (such as `IP:port`) were skipped, so an address the client wrote itself could be taken for the client's | `IP:port` and bracketed forms are read; any other unreadable entry ends the walk at the last proxy | unit test `the_client_is_the_first_untrusted_hop_from_the_right` |
 | 5 | Low | ManageSieve | `MAXREDIRECTS 0` was announced although filters may redirect five times | the real limit is announced | `scripts_are_managed_over_managesieve` |
 
+### Review of 2026-10-24
+
+Scope: authorization of every HTTP handler, object access through JMAP, DAV and blob ids,
+outbound requests, rendering of message HTML, sign-in (password, second factors, single
+sign-on), sender identities and dependencies (`cargo audit`, `pnpm audit --prod`: clean).
+
+| # | Severity | Component | Vulnerability | Attack scenario | Fix | Verification |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | Medium (provider-dependent) | SSO (`oauth.rs`) | The provider's e-mail address alone chose the mailbox; the subject (`sub`) was stored but never compared, and each sign-in overwrote it | At a provider where users can change their address, another person there who took over the address signed in to the mailbox, in the browser and with tokens | the first sign-in links the mailbox to the subject; any other subject is refused, and open token connections close when the link no longer matches; an administrator's sign-in reset (`DELETE /api/accounts/{id}/two-factor`, shown in the mailbox dialog) removes the link | `a_mailbox_stays_with_the_identity_that_first_signed_in`, `token_sessions_end_when_the_provider_or_the_server_stops_vouching` |
+| 2 | Low | Second factor (`api/signin.rs`) | The try counter was read before the slow code check and raised afterwards | Parallel guesses all saw the same count and got more than five tries per sign-in (the account limiter still applied) | the try is counted, atomically, before the code is checked | `parallel_guesses_do_not_get_extra_tries` |
+| 3 | Low | CalDAV/CardDAV (`calendar/dav.rs`) | Remembered sign-ins (5 minutes) reloaded the account without checking its domain or the DAV switch | After a domain (or DAV for a mailbox) was switched off, synchronising clients kept access for up to 5 minutes | the remembered sign-in requires an enabled domain and DAV allowed | `switching_a_domain_off_ends_remembered_dav_sign_ins` |
+
 ### Residual risks and limits (not fixed)
 
 - **Database in plaintext.** Encryption at rest covers message blobs and backups, not the live

@@ -159,6 +159,8 @@
   ".{{extension}} files can run macros or scripts when opened.": "Les fichiers .{{extension}} peuvent exécuter des macros ou des scripts à l'ouverture.",
   "2-step verification": "Validation en deux étapes",
   "2-step verification is off.": "La validation en deux étapes est désactivée.",
+  "Linked to a single sign-on identity.": "Associé à une identité d'authentification unique.",
+  "The single sign-on link was removed; the next identity to sign in with this address is linked.": "L'association à l'authentification unique a été supprimée ; la prochaine identité qui se connecte avec cette adresse sera associée.",
   "2-step verification is on ({{methods}}).": "La validation en deux étapes est activée ({{methods}}).",
   "2-step verification was reset and app passwords were revoked; the owner signs in with the password alone and can set it up again.": "La validation en deux étapes a été réinitialisée et les mots de passe d'application révoqués ; le propriétaire se connecte avec le seul mot de passe et peut la configurer à nouveau.",
   "203.0.113.7 or 203.0.113.0/24": "203.0.113.7 ou 203.0.113.0/24",

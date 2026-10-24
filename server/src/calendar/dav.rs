@@ -86,8 +86,9 @@ async fn authenticate(state: &AppState, headers: &HeaderMap, ip: std::net::IpAdd
     let key = sha256_hex(format!("{user}\0{password}").as_bytes());
     let cached = VERIFIED.get(&key);
     if let Some((id, credential)) = cached
-        && let Ok(Some(account)) = Account::by_id(&state.db, id).await
+        && let Ok(Some(account)) = Account::in_enabled_domain(&state.db, id).await
         && account.enabled
+        && Protocol::Dav.allowed_for(&account)
         && still_valid(state, &account, &credential).await
     {
         return Ok(account);

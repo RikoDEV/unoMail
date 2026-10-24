@@ -114,6 +114,9 @@ struct Discovery {
     introspection_endpoint: Option<String>,
 }
 
+/// Who the provider says signed in: (subject, e-mail address).
+type Identity = (String, String);
+
 /// Pending web sign-ins: state -> (PKCE verifier, network of the browser, started).
 type Pending = HashMap<String, (String, String, Instant)>;
 
@@ -123,8 +126,8 @@ pub struct Caches {
     /// The provider's discovery document, by issuer.
     discovery: Mutex<HashMap<String, (Discovery, Instant)>>,
     pending: Mutex<Pending>,
-    /// Recently verified access tokens: sha256(token) -> (e-mail, verified at).
-    tokens: Mutex<HashMap<String, (String, Instant)>>,
+    /// Recently verified access tokens: sha256(token) -> (identity, verified at).
+    tokens: Mutex<HashMap<String, (Identity, Instant)>>,
 }
 
 async fn discover(app: &App, config: &OauthConfig) -> Result<Discovery, String> {
@@ -285,6 +288,31 @@ async fn local_account(app: &App, email: &str) -> Result<Account, String> {
     }
 }
 
+/// Ties `account_id` to the provider's identity `subject` on its first sign-in, and from then
+/// on refuses any other identity. The e-mail address alone is not enough: providers let users
+/// change it, so a different person there could otherwise come to claim this mailbox.
+/// An administrator's sign-in reset (`DELETE /api/accounts/{id}/two-factor`) removes the tie.
+async fn bind_subject(app: &App, account_id: i64, subject: &str) -> Result<(), String> {
+    let subject = sanitize_line(subject);
+    if subject.is_empty() {
+        return Err("the identity provider did not identify the user".into());
+    }
+    let refused = || "the account could not be loaded".to_owned();
+    sqlx::query("INSERT INTO oauth_links (account_id, subject, linked_at) VALUES (?, ?, ?) ON CONFLICT(account_id) DO NOTHING")
+        .bind(account_id)
+        .bind(&subject)
+        .bind(crate::util::now())
+        .execute(&app.db)
+        .await
+        .map_err(|_| refused())?;
+    let linked: String = sqlx::query_scalar("SELECT subject FROM oauth_links WHERE account_id = ?").bind(account_id).fetch_one(&app.db).await.map_err(|_| refused())?;
+    if linked != subject {
+        tracing::warn!(account_id, "single sign-on refused: the identity is not the one this mailbox is linked to");
+        return Err("this mailbox is linked to a different identity at the identity provider".into());
+    }
+    Ok(())
+}
+
 /// Completes a web sign-in and returns the local account the identity maps to.
 pub async fn finish(app: &App, state: &str, code: &str, ip: IpAddr) -> Result<Account, String> {
     let config = active(app).await.ok_or("single sign-on is not enabled")?;
@@ -316,12 +344,7 @@ pub async fn finish(app: &App, state: &str, code: &str, ip: IpAddr) -> Result<Ac
     let token: TokenResponse = response.json().await.map_err(|_| "the identity provider returned an invalid token response")?;
     let (subject, email) = identify(app, &config, &token.access_token).await?;
     let account = local_account(app, &email).await?;
-    let _ = sqlx::query("INSERT INTO oauth_links (account_id, subject, linked_at) VALUES (?, ?, ?) ON CONFLICT(account_id) DO UPDATE SET subject = excluded.subject, linked_at = excluded.linked_at")
-        .bind(account.id)
-        .bind(sanitize_line(&subject))
-        .bind(crate::util::now())
-        .execute(&app.db)
-        .await;
+    bind_subject(app, account.id, &subject).await?;
     crate::db::audit(&app.db, &account.email, "login.success", "oauth", &ip.to_string(), "").await;
     Ok(account)
 }
@@ -349,12 +372,15 @@ pub async fn authenticate_token(app: &App, user: &str, token: &str, ip: IpAddr, 
     };
     let Some(config) = active(app).await else { return fail().await };
 
-    let Some(email) = token_email(app, &config, token).await else { return fail().await };
+    let Some((subject, email)) = token_identity(app, &config, token).await else { return fail().await };
     // A valid token for somebody else must not open this mailbox.
     if email != user {
         return fail().await;
     }
     let Ok(account) = local_account(app, &email).await else { return fail().await };
+    if bind_subject(app, account.id, &subject).await.is_err() {
+        return fail().await;
+    }
     let allowed = protocol.allowed_for(&account);
     if !allowed {
         return fail().await;
@@ -363,15 +389,15 @@ pub async fn authenticate_token(app: &App, user: &str, token: &str, ip: IpAddr, 
     Ok(account)
 }
 
-/// The address an access token stands for, if the identity provider still vouches for it and
-/// it was issued to this server. Answers are cached for [`TOKEN_CACHE_TTL`].
-async fn token_email(app: &App, config: &OauthConfig, token: &str) -> Option<String> {
+/// The identity (subject, address) an access token stands for, if the identity provider still
+/// vouches for it and it was issued to this server. Answers are cached for [`TOKEN_CACHE_TTL`].
+async fn token_identity(app: &App, config: &OauthConfig, token: &str) -> Option<Identity> {
     let key = sha256_hex(token.as_bytes());
-    let cached = app.oauth.tokens.lock().get(&key).filter(|(_, at)| at.elapsed() < TOKEN_CACHE_TTL).map(|(email, _)| email.clone());
+    let cached = app.oauth.tokens.lock().get(&key).filter(|(_, at)| at.elapsed() < TOKEN_CACHE_TTL).map(|(identity, _)| identity.clone());
     if cached.is_some() {
         return cached;
     }
-    let (_, email) = identify(app, config, token).await.ok()?;
+    let identity = identify(app, config, token).await.ok()?;
     if let Err(reason) = check_audience(app, config, token).await {
         tracing::info!(reason, "token sign-in refused");
         return None;
@@ -379,17 +405,19 @@ async fn token_email(app: &App, config: &OauthConfig, token: &str) -> Option<Str
     let mut tokens = app.oauth.tokens.lock();
     tokens.retain(|_, (_, at)| at.elapsed() < TOKEN_CACHE_TTL);
     if tokens.len() < MAX_PENDING {
-        tokens.insert(key, (email.clone(), Instant::now()));
+        tokens.insert(key, (identity.clone(), Instant::now()));
     }
-    Some(email)
+    Some(identity)
 }
 
-/// Whether a connection signed in with `token` may stay open: single sign-on is still on and
-/// the provider still accepts the token for `email`. Revoking it there, or turning SSO off
-/// here, ends the session within a few minutes.
+/// Whether a connection signed in with `token` may stay open: single sign-on is still on, the
+/// provider still accepts the token for `email`, and the mailbox is still linked to that
+/// identity. Revoking it there, or turning SSO off here, ends the session within a few minutes.
 pub async fn token_still_valid(app: &App, email: &str, token: &str) -> bool {
     let Some(config) = active(app).await else { return false };
-    token_email(app, &config, token).await.is_some_and(|found| found == email)
+    let Some((subject, found)) = token_identity(app, &config, token).await else { return false };
+    let linked: Option<String> = sqlx::query_scalar("SELECT l.subject FROM oauth_links l JOIN accounts a ON a.id = l.account_id WHERE a.email = ?").bind(email).fetch_optional(&app.db).await.ok().flatten();
+    found == email && linked.is_some_and(|linked| linked == sanitize_line(&subject))
 }
 
 /// Extracts (user, token) from a decoded SASL XOAUTH2 or OAUTHBEARER initial response.

@@ -160,6 +160,8 @@
   ".{{extension}} files can run macros or scripts when opened.": "Soubory .{{extension}} mohou při otevření spouštět makra nebo skripty.",
   "2-step verification": "Dvoufázové ověření",
   "2-step verification is off.": "Dvoufázové ověření je vypnuto.",
+  "Linked to a single sign-on identity.": "Propojeno s identitou jednotného přihlášení.",
+  "The single sign-on link was removed; the next identity to sign in with this address is linked.": "Propojení s jednotným přihlášením bylo odstraněno; propojí se další identita, která se přihlásí s touto adresou.",
   "2-step verification is on ({{methods}}).": "Dvoufázové ověření je zapnuto ({{methods}}).",
   "2-step verification was reset and app passwords were revoked; the owner signs in with the password alone and can set it up again.": "Dvoufázové ověření bylo resetováno a hesla aplikací zrušena; vlastník se přihlašuje jen heslem a může ho znovu nastavit.",
   "203.0.113.7 or 203.0.113.0/24": "203.0.113.7 nebo 203.0.113.0/24",

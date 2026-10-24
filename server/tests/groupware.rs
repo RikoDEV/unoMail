@@ -514,3 +514,16 @@ async fn the_address_book_synchronises_over_carddav() {
     let left: i64 = sqlx::query_scalar("SELECT (SELECT COUNT(*) FROM contacts) + (SELECT COUNT(*) FROM contact_tombstones) + (SELECT COUNT(*) FROM addressbooks)").fetch_one(&env.app.db).await.unwrap();
     assert_eq!(left, 0);
 }
+
+#[tokio::test]
+async fn switching_a_domain_off_ends_remembered_dav_sign_ins() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+    let dav = Dav::new(&env, "bob@example.org");
+    let home = || dav.send("PROPFIND", "/dav/calendars/bob@example.org/", &[("depth", "0")], "");
+    assert_eq!(home().await.status, StatusCode::MULTI_STATUS);
+    // The next request is answered from the remembered sign-in; it must still see the domain switched off.
+    sqlx::query("UPDATE domains SET enabled = 0 WHERE name = 'example.org'").execute(&env.app.db).await.unwrap();
+    assert_eq!(home().await.status, StatusCode::UNAUTHORIZED);
+}

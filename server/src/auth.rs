@@ -121,6 +121,15 @@ impl Account {
             .await
     }
 
+    /// The account with this id, provided its domain is enabled. Signed-in clients are
+    /// re-checked with this, so that switching a domain off ends their access too.
+    pub async fn in_enabled_domain(db: &SqlitePool, id: i64) -> sqlx::Result<Option<Account>> {
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("{ACCOUNT_COLUMNS} JOIN domains d ON d.id = a.domain_id WHERE a.id = ? AND d.enabled = 1")))
+            .bind(id)
+            .fetch_optional(db)
+            .await
+    }
+
     /// Looks up an enabled account in an enabled domain by session token hash.
     pub async fn by_session(db: &SqlitePool, token_hash: &str) -> sqlx::Result<Option<(Account, String)>> {
         let sql = format!(
@@ -241,10 +250,7 @@ impl Grant {
     /// True while the sign-in holds. Failure to verify authorization closes the connection.
     pub async fn valid(&self, app: &crate::app::App) -> bool {
         let db = &app.db;
-        let account = sqlx::query_as::<_, Account>(sqlx::AssertSqlSafe(format!("{ACCOUNT_COLUMNS} JOIN domains d ON d.id = a.domain_id WHERE a.id = ? AND d.enabled = 1")))
-            .bind(self.account_id)
-            .fetch_optional(db)
-            .await;
+        let account = Account::in_enabled_domain(db, self.account_id).await;
         let account = match account {
             Ok(Some(account)) if account.enabled && self.protocol.allowed_for(&account) => account,
             Ok(_) => return false,

@@ -42,7 +42,7 @@ async fn provider() -> (SocketAddr, Provider) {
     async fn introspect(body: String) -> Json<Value> {
         let token = body.split('&').find_map(|pair| pair.strip_prefix("token=")).unwrap_or("");
         Json(match token {
-            "token-bob" | "token-unverified" | "token-stranger" => json!({ "active": true, "client_id": "unomail", "aud": ["unomail", "account"] }),
+            "token-bob" | "token-unverified" | "token-stranger" | "token-impostor" => json!({ "active": true, "client_id": "unomail", "aud": ["unomail", "account"] }),
             "token-other-app" => json!({ "active": true, "client_id": "someone-elses-app", "aud": "someone-elses-app" }),
             _ => json!({ "active": false }),
         })
@@ -61,6 +61,8 @@ async fn provider() -> (SocketAddr, Provider) {
             "token-bob" | "token-other-app" => json!({ "sub": "u-1", "email": "Bob@Example.org", "email_verified": true }),
             "token-unverified" => json!({ "sub": "u-2", "email": "bob@example.org", "email_verified": false }),
             "token-stranger" => json!({ "sub": "u-3", "email": "nobody@example.org", "email_verified": true }),
+            // Someone else at the provider who came to hold Bob's address (e-mail addresses change there).
+            "token-impostor" => json!({ "sub": "u-9", "email": "bob@example.org", "email_verified": true }),
             _ => return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "invalid_token" }))),
         };
         (StatusCode::OK, Json(profile))
@@ -181,6 +183,40 @@ async fn browser_sign_in_through_the_identity_provider() {
     assert!(refused(Api::new(&env).get("/api/auth/oauth/start").await.headers["location"].to_str().unwrap()));
 }
 
+/// Whether the browser callback for `code` ended with a session.
+async fn browser_signs_in(env: &TestEnv, code: &str) -> bool {
+    let (state, _, browser) = start(env).await;
+    let reply = browser.get(&format!("/api/auth/oauth/callback?code={code}&state={state}")).await;
+    reply.headers.get_all("set-cookie").iter().any(|c| c.to_str().unwrap().starts_with("unomail="))
+}
+
+#[tokio::test]
+async fn a_mailbox_stays_with_the_identity_that_first_signed_in() {
+    let (env, admin, _, _) = env_with_sso().await;
+    let ip = "127.0.0.1".parse().unwrap();
+    let bob_id: i64 = sqlx::query_scalar("SELECT id FROM accounts WHERE email = 'bob@example.org'").fetch_one(&env.app.db).await.unwrap();
+    let linked = || async { sqlx::query_scalar::<_, String>("SELECT subject FROM oauth_links WHERE account_id = ?").bind(bob_id).fetch_optional(&env.app.db).await.unwrap() };
+
+    // The first sign-in ties the mailbox to the provider's identity.
+    assert!(browser_signs_in(&env, "code-for-bob").await);
+    assert_eq!(linked().await.as_deref(), Some("u-1"));
+    assert_eq!(admin.get(&format!("/api/accounts/{bob_id}/two-factor")).await.body["sso_linked"], true);
+
+    // A different identity with the same verified address is refused, in the browser and for mail programs.
+    assert!(!browser_signs_in(&env, "code-for-impostor").await);
+    assert!(unomail::oauth::authenticate_token(&env.app, "bob@example.org", "token-impostor", ip, unomail::auth::Protocol::Imap).await.is_err());
+    assert_eq!(linked().await.as_deref(), Some("u-1"), "a refused identity does not replace the link");
+    assert!(unomail::oauth::authenticate_token(&env.app, "bob@example.org", "token-bob", ip, unomail::auth::Protocol::Imap).await.is_ok());
+
+    // An administrator's sign-in reset removes the link; the next identity is linked instead.
+    assert_eq!(admin.delete(&format!("/api/accounts/{bob_id}/two-factor")).await.status, StatusCode::OK);
+    assert_eq!(linked().await, None);
+    assert_eq!(admin.get(&format!("/api/accounts/{bob_id}/two-factor")).await.body["sso_linked"], false);
+    assert!(browser_signs_in(&env, "code-for-impostor").await);
+    assert_eq!(linked().await.as_deref(), Some("u-9"));
+    assert!(!browser_signs_in(&env, "code-for-bob").await);
+}
+
 fn xoauth2(user: &str, token: &str) -> String {
     STANDARD.encode(format!("user={user}\x01auth=Bearer {token}\x01\x01"))
 }
@@ -281,6 +317,14 @@ async fn token_sessions_end_when_the_provider_or_the_server_stops_vouching() {
     let (env, admin, addr, _) = env_with_sso().await;
     let bob = Account::by_email(&env.app.db, "bob@example.org").await.unwrap().unwrap();
     let session = |token: &str| Grant::new(&bob, Protocol::Imap, None).with_token(token.into());
+    // A connection starts with a sign-in, which links the mailbox to the identity.
+    unomail::oauth::authenticate_token(&env.app, "bob@example.org", "token-bob", "127.0.0.1".parse().unwrap(), Protocol::Imap).await.unwrap();
+    assert!(session("token-bob").valid(&env.app).await);
+    // The link removed (an administrator's sign-in reset): the open connection is closed.
+    let link: String = sqlx::query_scalar("SELECT subject FROM oauth_links WHERE account_id = ?").bind(bob.id).fetch_one(&env.app.db).await.unwrap();
+    sqlx::query("DELETE FROM oauth_links").execute(&env.app.db).await.unwrap();
+    assert!(!session("token-bob").valid(&env.app).await);
+    sqlx::query("INSERT INTO oauth_links (account_id, subject, linked_at) VALUES (?, ?, 0)").bind(bob.id).bind(link).execute(&env.app.db).await.unwrap();
     assert!(session("token-bob").valid(&env.app).await);
     // Revoked (or never issued) at the provider: the open connection is closed too.
     assert!(!session("token-forged").valid(&env.app).await);

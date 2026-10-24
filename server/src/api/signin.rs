@@ -227,9 +227,16 @@ pub struct SecondFactor {
 /// The second step of a sign-in: an authenticator code, a passkey, or a recovery code.
 pub async fn second_factor(State(state): State<AppState>, ClientIp(ip): ClientIp, headers: HeaderMap, jar: CookieJar, Json(input): Json<SecondFactor>) -> Result<(CookieJar, Json<Value>), ApiError> {
     let key = sha256_hex(input.token.as_bytes());
-    let Some((account_id, started_from, tries)) = PENDING.get(&key) else { return Err(ApiError::bad("the sign-in has expired; enter your password again")) };
+    let expired = || ApiError::bad("the sign-in has expired; enter your password again");
+    let Some((account_id, started_from, _)) = PENDING.get(&key) else { return Err(expired()) };
     if started_from != ip {
-        return Err(ApiError::bad("the sign-in has expired; enter your password again"));
+        return Err(expired());
+    }
+    // The try is counted before the code is checked, in one step: parallel guesses cannot all
+    // see the same count and so get more tries than allowed.
+    if PENDING.update(&key, |entry| { entry.2 += 1; entry.2 }).is_none_or(|tries| tries > MAX_SECOND_FACTOR_TRIES) {
+        PENDING.remove(&key);
+        return Err(expired());
     }
     let account = Account::by_id(&state.db, account_id).await?.filter(|a| a.enabled).ok_or(ApiError::InvalidCredentials)?;
     // The codes are short: guessing them meets the same limiter as passwords, and few tries per sign-in.
@@ -246,11 +253,6 @@ pub async fn second_factor(State(state): State<AppState>, ClientIp(ip): ClientIp
         return Err(ApiError::bad("enter a code or use a passkey"));
     };
     if !ok {
-        if tries + 1 >= MAX_SECOND_FACTOR_TRIES {
-            PENDING.remove(&key);
-        } else {
-            PENDING.update(&key, |entry| entry.2 += 1);
-        }
         tokio::time::sleep(state.limiter.tarpit(ip)).await;
         crate::db::audit(&state.db, &account.email, "login.second_factor_failed", "web", &ip.to_string(), "").await;
         // A new passkey challenge for the next try.
@@ -551,12 +553,13 @@ pub async fn app_password_delete(State(state): State<AppState>, session: Session
 }
 
 /// An administrator resets the second factors of a mailbox whose owner lost them. App passwords
-/// go too (one may live on the lost device), and so do the sessions they protected.
+/// go too (one may live on the lost device), and so do the sessions they protected. So does the
+/// link to a single sign-on identity: the next identity to sign in with the address is linked.
 pub async fn admin_reset(State(state): State<AppState>, session: Session, Path(id): Path<i64>) -> JsonResult<Value> {
     session.require_admin()?;
     let account = super::accounts::load_managed(&state, &session, id).await?;
     let mut tx = state.db.begin().await?;
-    for table in ["totp_secrets", "passkeys", "recovery_codes", "app_passwords", "sessions"] {
+    for table in ["totp_secrets", "passkeys", "recovery_codes", "app_passwords", "sessions", "oauth_links"] {
         sqlx::query(sqlx::AssertSqlSafe(format!("DELETE FROM {table} WHERE account_id = ?"))).bind(account.id).execute(&mut *tx).await?;
     }
     crate::jmap::submission::cancel_pending(&mut *tx, account.id).await?;
@@ -570,5 +573,6 @@ pub async fn admin_status(State(state): State<AppState>, session: Session, Path(
     let account = super::accounts::load_managed(&state, &session, id).await?;
     let factors = twofactor::factors(&state.db, account.id).await?;
     let apps: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM app_passwords WHERE account_id = ?").bind(account.id).fetch_one(&state.db).await?;
-    Ok(Json(json!({ "enabled": factors.enabled(), "totp": factors.totp, "passkeys": factors.passkeys, "app_passwords": apps })))
+    let sso_linked: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM oauth_links WHERE account_id = ?)").bind(account.id).fetch_one(&state.db).await?;
+    Ok(Json(json!({ "enabled": factors.enabled(), "totp": factors.totp, "passkeys": factors.passkeys, "app_passwords": apps, "sso_linked": sso_linked })))
 }

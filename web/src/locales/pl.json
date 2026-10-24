@@ -160,6 +160,8 @@
   ".{{extension}} files can run macros or scripts when opened.": "Pliki .{{extension}} mogą po otwarciu uruchamiać makra lub skrypty.",
   "2-step verification": "Weryfikacja dwuetapowa",
   "2-step verification is off.": "Weryfikacja dwuetapowa jest wyłączona.",
+  "Linked to a single sign-on identity.": "Powiązano z tożsamością logowania jednokrotnego.",
+  "The single sign-on link was removed; the next identity to sign in with this address is linked.": "Powiązanie z logowaniem jednokrotnym zostało usunięte; powiązana zostanie następna tożsamość, która zaloguje się tym adresem.",
   "2-step verification is on ({{methods}}).": "Weryfikacja dwuetapowa jest włączona ({{methods}}).",
   "2-step verification was reset and app passwords were revoked; the owner signs in with the password alone and can set it up again.": "Weryfikacja dwuetapowa została zresetowana, a hasła aplikacji unieważnione; właściciel loguje się samym hasłem i może ją ponownie skonfigurować.",
   "203.0.113.7 or 203.0.113.0/24": "203.0.113.7 lub 203.0.113.0/24",

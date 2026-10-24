@@ -75,7 +75,10 @@ If `secret.key` leaks: rotate the DKIM selector, reissue the TLS certificate, de
 ### Single sign-on
 
 OpenID Connect with PKCE. The provider's verified e-mail address selects an existing mailbox;
-no mailboxes are created. IMAP and SMTP accept provider tokens (`XOAUTH2`, `OAUTHBEARER`) if
+no mailboxes are created. The first sign-in links the mailbox to the provider's identity
+(its `sub`); a different identity with the same address is refused from then on. If a user's
+provider account is replaced, reset the mailbox's 2-step verification in its dialog: that also
+removes the link. IMAP and SMTP accept provider tokens (`XOAUTH2`, `OAUTHBEARER`) if
 they were issued to unoMail's client ID. Providers with opaque tokens and no introspection
 (e.g. Google) work for web sign-in only.
 

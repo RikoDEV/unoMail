@@ -120,6 +120,24 @@ async fn an_authenticator_app_guards_the_sign_in() {
 }
 
 #[tokio::test]
+async fn parallel_guesses_do_not_get_extra_tries() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    let bob = env.account("bob@example.org").await;
+    let secret = "JBSWY3DPEHPK3PXP";
+    sqlx::query("INSERT INTO totp_secrets (account_id, secret, enabled, created_at) VALUES (?, ?, 1, 0)").bind(bob.id).bind(env.app.secrets.seal(secret)).execute(&env.app.db).await.unwrap();
+    let mut api = Api::new(&env);
+    api.peer = "203.0.113.201:40000".parse().unwrap();
+    let waiting = api.post("/api/auth/login", json!({ "email": "bob@example.org", "password": PASSWORD })).await.body;
+    let token = waiting["second_factor"]["token"].as_str().unwrap().to_owned();
+    // More wrong codes than allowed, all at once: each must count.
+    let guesses = (0..8).map(|_| api.post("/api/auth/second-factor", json!({ "token": token, "code": "999999" })));
+    futures_util::future::join_all(guesses).await;
+    let reply = api.post("/api/auth/second-factor", json!({ "token": token, "code": code(secret, 0) })).await;
+    assert_eq!(reply.status, StatusCode::BAD_REQUEST, "the sign-in is used up: {}", reply.text);
+}
+
+#[tokio::test]
 async fn programs_need_app_passwords_once_two_step_sign_in_is_on() {
     let env = TestEnv::start().await;
     env.domain("example.org").await;
