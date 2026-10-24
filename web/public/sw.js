@@ -11,7 +11,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(SHELL);
-      await Promise.all(['/', '/favicon.svg', '/manifest.webmanifest'].map((url) => cache.add(url).catch(() => {})));
+      await Promise.all(['/', '/favicon.svg', '/icon-192.png', '/manifest.webmanifest'].map((url) => cache.add(url).catch(() => {})));
       await self.skipWaiting();
     })(),
   );
@@ -111,7 +111,7 @@ async function showNewest(accounts) {
     await self.registration.showNotification(message.from || 'New mail', {
       body: [message.subject || '(no subject)', message.preview].filter(Boolean).join('\n'),
       tag: `unomail-${message.threadId}`,
-      icon: '/favicon.svg',
+      icon: '/icon-192.png',
       data: { url: `/mail/inbox/${message.threadId}` },
     });
     return;
@@ -120,7 +120,7 @@ async function showNewest(accounts) {
     body: 'A new message has arrived.',
     tag: 'unomail-new-mail',
     renotify: true,
-    icon: '/favicon.svg',
+    icon: '/icon-192.png',
     data: { url: '/mail' },
   });
 }

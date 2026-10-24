@@ -135,7 +135,7 @@ export function pageNotifier(account: string, open: (threadId: string) => void):
       const notification = new Notification(message.from || t('New mail'), {
         body: [message.subject || t('(no subject)'), message.preview].filter(Boolean).join('\n'),
         tag: `unomail-${message.threadId}`,
-        icon: '/favicon.svg',
+        icon: '/icon-192.png',
       });
       notification.onclick = () => {
         window.focus();

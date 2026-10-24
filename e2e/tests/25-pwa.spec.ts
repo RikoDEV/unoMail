@@ -9,7 +9,14 @@ test.describe('installable web app', () => {
     expect(response.ok()).toBe(true);
     const manifest = await response.json();
     expect(manifest).toMatchObject({ name: 'unoMail', start_url: '/mail', display: 'standalone' });
-    for (const icon of manifest.icons) expect((await request.get(icon.src)).ok()).toBe(true);
+    for (const icon of manifest.icons) {
+      const file = await request.get(icon.src);
+      expect(file.ok()).toBe(true);
+      expect(file.headers()['content-type']).toContain(icon.type);
+    }
+    // Install prompts and splash screens want raster icons, not only SVG.
+    expect(manifest.icons).toContainEqual(expect.objectContaining({ sizes: '512x512', type: 'image/png', purpose: 'any' }));
+    expect(manifest.icons).toContainEqual(expect.objectContaining({ sizes: '512x512', type: 'image/png', purpose: 'maskable' }));
   });
 
   test('starts offline from the cached shell', async ({ page, context }) => {
