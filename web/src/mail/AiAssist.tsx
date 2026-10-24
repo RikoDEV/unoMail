@@ -79,7 +79,7 @@ export function AiAssist({ email }: { email: EmailFull }) {
   if (models.length === 0) return local && foreignLanguage && source ? <LocalTranslation email={email} source={source} /> : null;
   return (
     <Box component="section" aria-label={t('AI assistance')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <AutoAwesome color="action" fontSize="small" />
         <TextField select size="small" label={t('AI model')} value={modelId} disabled={Boolean(busy)} onChange={(e) => { select(e.target.value); reset(); }} sx={{ minWidth: 140 }}>
           {models.map((model) => <MenuItem key={model.id} value={model.id}>{model.name}</MenuItem>)}
@@ -90,14 +90,16 @@ export function AiAssist({ email }: { email: EmailFull }) {
         <Button size="small" startIcon={busy === 'summary' ? <CircularProgress size={16} /> : <AutoAwesome />} disabled={Boolean(busy)} onClick={() => void request('summary')}>{t('Summarize')}</Button>
         {foreignLanguage && <Button size="small" startIcon={busy === 'translate' ? <CircularProgress size={16} /> : <Translate />} disabled={Boolean(busy)} onClick={() => void request('translate')}>{t('Translate to {{language}}', { language: LANGUAGES.find(([code]) => code === language)?.[1] ?? language })}</Button>}
       </Stack>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>{foreignLanguage ? t('Request a summary or translation using the selected model.') : t('Request a summary using the selected model.')}</Typography>
+      <Typography
+        variant="caption"
+        sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>{foreignLanguage ? t('Request a summary or translation using the selected model.') : t('Request a summary using the selected model.')}</Typography>
       {error && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError('')}>{error}</Alert>}
       <Box aria-live="polite" aria-busy={Boolean(busy)}>
         {(['summary', 'translate'] as const).map((task) => results[task] && (
           <Box key={task} sx={{ mt: 1.5, borderTop: 1, borderColor: 'divider', pt: 1 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Typography variant="subtitle2" component="h3" sx={{ flex: 1 }}>{task === 'summary' ? t('Summary') : t('Translation')}</Typography>
-              <Typography variant="caption" color="text.secondary">{results[task]!.model}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{results[task]!.model}</Typography>
               <Button size="small" onClick={() => setResults((old) => ({ ...old, [task]: undefined }))}>{t('Hide')}</Button>
             </Stack>
             <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: 0.5 }}>{results[task]!.text}</Typography>
@@ -150,21 +152,21 @@ ${messageText(email)}`.trim());
   const languageName = LANGUAGES.find(([code]) => code === language)?.[1] ?? language;
   return (
     <Box component="section" aria-label={t('Translation')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
         <Translate color="action" fontSize="small" />
         <TextField select size="small" label={t('Target language')} value={language} disabled={busy} onChange={(e) => { cancel(); setLanguage(e.target.value); setResult(''); setError(''); setBusy(false); }} sx={{ minWidth: 140 }}>
           {LANGUAGES.map(([code, name]) => <MenuItem key={code} value={code}>{name}</MenuItem>)}
         </TextField>
         <Button size="small" startIcon={busy ? <CircularProgress size={16} /> : <Translate />} disabled={busy || !available} onClick={() => void translate()}>{t('Translate to {{language}}', { language: languageName })}</Button>
       </Stack>
-      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
         {!available ? t('This browser cannot translate into this language on the device.') : progress !== null && progress < 1 ? t('Downloading the language pack: {{percent}}%', { percent: Math.round(progress * 100) }) : t('Translated on this device; the message is not sent anywhere.')}
       </Typography>
       {error && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError('')}>{error}</Alert>}
       <Box aria-live="polite" aria-busy={busy}>
         {result && (
           <Box sx={{ mt: 1.5, borderTop: 1, borderColor: 'divider', pt: 1 }}>
-            <Stack direction="row" alignItems="center" spacing={1}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Typography variant="subtitle2" component="h3" sx={{ flex: 1 }}>{t('Translation')}</Typography>
               <Button size="small" onClick={() => setResult('')}>{t('Hide')}</Button>
             </Stack>

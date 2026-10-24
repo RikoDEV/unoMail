@@ -33,7 +33,7 @@ export function Queue() {
       <PageHeader title={t('Delivery queue')} />
       {error && <Alert severity="error">{error}</Alert>}
       {feedback}
-      {data?.length === 0 && <Typography color="text.secondary">{t('The queue is empty.')}</Typography>}
+      {data?.length === 0 && <Typography sx={{ color: 'text.secondary' }}>{t('The queue is empty.')}</Typography>}
       {data && data.length > 0 && (
         <ScrollTable size="small" aria-label={t('Queue')}>
           <TableHead>
@@ -350,9 +350,9 @@ export function Logs() {
           </TableBody>
         </ScrollTable>
       )}
-      {active.rows.length === 0 && !active.error && <Typography color="text.secondary" sx={{ mt: 2 }}>{t('No log entries match.')}</Typography>}
+      {active.rows.length === 0 && !active.error && <Typography sx={{ color: 'text.secondary', mt: 2 }}>{t('No log entries match.')}</Typography>}
       {active.rows.length >= 200 && tab !== 'system' && tab !== 'smtp' && (
-        <Stack alignItems="center" sx={{ mt: 2 }}>
+        <Stack sx={{ alignItems: 'center', mt: 2 }}>
           <Button onClick={() => void active.loadOlder()}>{t('Load older entries')}</Button>
         </Stack>
       )}

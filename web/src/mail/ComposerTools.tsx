@@ -28,7 +28,7 @@ const tool = (label: string, icon: ReactNode, onClick: () => void) => (
 /** Rich text commands for the message body. */
 export function FormattingToolbar({ onFormat, tint }: { onFormat: (command: string, value?: string) => void; tint: string }) {
   return (
-    <Stack direction="row" alignItems="center" flexWrap="wrap" role="toolbar" aria-label={t('Formatting options')} sx={{ mx: 1.5, mb: 0.5, px: 1, py: 0.25, borderRadius: 999, bgcolor: tint }}>
+    <Stack direction="row" role="toolbar" aria-label={t('Formatting options')} sx={{ alignItems: 'center', flexWrap: 'wrap', mx: 1.5, mb: 0.5, px: 1, py: 0.25, borderRadius: 999, bgcolor: tint }}>
       {tool(t('Undo'), <Undo fontSize="small" />, () => onFormat('undo'))}
       {tool(t('Redo'), <Redo fontSize="small" />, () => onFormat('redo'))}
       {toolDivider}
@@ -90,7 +90,7 @@ export function SendButton({ busy, onSend, receipt, onToggleReceipt, smime, onTo
       </ButtonGroup>
       <Menu anchorEl={sendMenu} open={Boolean(sendMenu)} onClose={() => setSendMenu(null)}>
         <MenuItem disabled sx={{ opacity: '1 !important' }}>
-          <Typography variant="caption" color="text.secondary">{t('Schedule send')}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Schedule send')}</Typography>
         </MenuItem>
         {schedulePresets(new Date()).map((preset) => (
           <MenuItem key={preset.label} onClick={() => { setSendMenu(null); onSend(preset.at); }}>

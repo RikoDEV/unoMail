@@ -81,7 +81,7 @@ function MonthView({ date, events, colorOf, onOpen, onCreate, onDay: openDay }: 
     <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
         {days.slice(0, 7).map((day) => (
-          <Typography key={day.getTime()} variant="caption" color="text.secondary" align="center" sx={{ py: 0.5 }}>
+          <Typography key={day.getTime()} variant="caption" align="center" sx={{ color: 'text.secondary', py: 0.5 }}>
             {weekday.format(day)}
           </Typography>
         ))}
@@ -99,7 +99,7 @@ function MonthView({ date, events, colorOf, onOpen, onCreate, onDay: openDay }: 
               onClick={() => onCreate(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9), false)}
               sx={{ borderRight: 1, borderBottom: 1, borderColor: 'divider', p: 0.5, minHeight: 0, overflow: 'hidden', cursor: 'pointer', bgcolor: outside ? 'action.hover' : undefined }}
             >
-              <Stack alignItems="center" sx={{ mb: 0.25 }}>
+              <Stack sx={{ alignItems: 'center', mb: 0.25 }}>
                 <Box
                   component="button"
                   type="button"
@@ -164,7 +164,7 @@ function TimeGrid({ days, events, colorOf, onOpen, onCreate, onDay: openDay }: V
         <Box />
         {days.map((day) => (
           <Box key={day.getTime()} sx={{ textAlign: 'center', py: 0.5, borderLeft: 1, borderColor: 'divider', minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary" component="div">{heading.format(day)}</Typography>
+            <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>{heading.format(day)}</Typography>
             <Box
               component="button"
               type="button"
@@ -189,7 +189,7 @@ function TimeGrid({ days, events, colorOf, onOpen, onCreate, onDay: openDay }: V
         <Box sx={{ display: 'grid', gridTemplateColumns: columns, height: 24 * HOUR, position: 'relative' }}>
           <Box sx={{ position: 'relative' }}>
             {Array.from({ length: 23 }, (_, index) => (
-              <Typography key={index} variant="caption" color="text.secondary" sx={{ position: 'absolute', top: (index + 1) * HOUR - 9, right: 6 }}>
+              <Typography key={index} variant="caption" sx={{ color: 'text.secondary', position: 'absolute', top: (index + 1) * HOUR - 9, right: 6 }}>
                 {hourLabel.format(new Date(2000, 0, 1, index + 1))}
               </Typography>
             ))}
@@ -240,7 +240,10 @@ function AgendaView({ date, events, colorOf, onOpen }: ViewProps) {
   const days = daysOf('agenda', date).map((day) => ({ day, list: events.filter((event) => onDay(event, day)).sort((a, b) => Number(isBanner(b)) - Number(isBanner(a)) || a.start - b.start) })).filter((entry) => entry.list.length > 0);
   const heading = new Intl.DateTimeFormat(uiLocale(), { weekday: 'long', month: 'long', day: 'numeric' });
   if (days.length === 0) {
-    return <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>{t('Nothing planned in these 30 days.')}</Typography>;
+    return (
+      <Typography
+        sx={{ color: 'text.secondary', p: 4, textAlign: 'center' }}>{t('Nothing planned in these 30 days.')}</Typography>
+    );
   }
   return (
     <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 2, pb: 2 }}>
@@ -249,8 +252,8 @@ function AgendaView({ date, events, colorOf, onOpen }: ViewProps) {
           <Typography variant="subtitle2" sx={{ width: 190, flexShrink: 0, color: sameDay(day, new Date()) ? 'primary.main' : 'text.primary' }}>{heading.format(day)}</Typography>
           <Stack spacing={0.5} sx={{ flex: 1, minWidth: 0 }}>
             {list.map((event) => (
-              <Stack key={`${event.id}-${event.start}`} direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2" color="text.secondary" sx={{ width: 150, flexShrink: 0 }}>
+              <Stack key={`${event.id}-${event.start}`} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary', width: 150, flexShrink: 0 }}>
                   {isBanner(event) ? t('All day') : `${formatTime(event.start)} – ${formatTime(event.end)}`}
                 </Typography>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -443,7 +446,7 @@ export default function CalendarPage() {
           )
         }
       >
-        <Stack direction="row" spacing={{ xs: 0, sm: 1 }} alignItems="center">
+        <Stack direction="row" spacing={{ xs: 0, sm: 1 }} sx={{ alignItems: 'center' }}>
           {phone ? (
             <IconButton aria-label={t('Today')} onClick={() => setDate(startOfDay(new Date()))}><Today /></IconButton>
           ) : (
@@ -453,7 +456,7 @@ export default function CalendarPage() {
           <IconButton aria-label={t('Next')} onClick={() => setDate(shift(view, date, 1))}><ChevronRight /></IconButton>
           <Typography variant="h6" component="h1" noWrap sx={{ flex: 1, minWidth: 0, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.25rem' } }} aria-live="polite">{formatTitle(view, date, undefined, phone)}</Typography>
           {compact ? (
-            <Select size="small" value={view} onChange={(e) => setView(e.target.value as View)} inputProps={{ 'aria-label': t('View') }} sx={{ flexShrink: 0, fontSize: { xs: 14, sm: 16 }, '& .MuiSelect-select': { py: 0.75, pl: 1.25, pr: '28px !important' } }}>
+            <Select size="small" value={view} onChange={(e) => setView(e.target.value as View)} slotProps={{ input: { 'aria-label': t('View') } }} sx={{ flexShrink: 0, fontSize: { xs: 14, sm: 16 }, '& .MuiSelect-select': { py: 0.75, pl: 1.25, pr: '28px !important' } }}>
               {VIEWS.map((option) => (
                 <MenuItem key={option} value={option}>{VIEW_LABELS[option]}</MenuItem>
               ))}
@@ -479,7 +482,9 @@ export default function CalendarPage() {
             </List>
           )}
           <Fab variant="extended" onClick={() => { setDrawerOpen(false); createNow(); }} sx={{ m: 1, mb: 2, alignSelf: 'flex-start' }} disabled={writable.length === 0}><Add />{t('New event')}</Fab>
-          <Typography variant="overline" color="text.secondary" sx={{ px: 2, display: 'block', mt: 1 }}>{t('Calendars')}</Typography>
+          <Typography
+            variant="overline"
+            sx={{ color: 'text.secondary', px: 2, display: 'block', mt: 1 }}>{t('Calendars')}</Typography>
           <List dense disablePadding>
             {calendars.map((calendar) => {
               const color = calendar.color.slice(0, 7) || COLORS[0];
@@ -495,9 +500,15 @@ export default function CalendarPage() {
                 >
                   <ListItemButton onClick={() => setHidden((current) => (current.includes(calendar.id) ? current.filter((id) => id !== calendar.id) : [...current, calendar.id]))}>
                     <ListItemIcon sx={{ minWidth: 36 }}>
-                      <Checkbox edge="start" size="small" tabIndex={-1} disableRipple checked={!hidden.includes(calendar.id)} inputProps={{ 'aria-label': t('Show {{name}}', { name: calendar.name }) }} sx={{ color, '&.Mui-checked': { color }, p: 0.5 }} />
+                      <Checkbox edge="start" size="small" tabIndex={-1} disableRipple checked={!hidden.includes(calendar.id)} slotProps={{ input: { 'aria-label': t('Show {{name}}', { name: calendar.name }) } }} sx={{ color, '&.Mui-checked': { color }, p: 0.5 }} />
                     </ListItemIcon>
-                    <ListItemText primary={calendar.name} secondary={calendar.shared ? (calendar.writable ? calendar.owner : t('{{owner}} · read only', { owner: calendar.owner })) : undefined} primaryTypographyProps={{ noWrap: true }} secondaryTypographyProps={{ noWrap: true }} />
+                    <ListItemText
+                      primary={calendar.name}
+                      secondary={calendar.shared ? (calendar.writable ? calendar.owner : t('{{owner}} · read only', { owner: calendar.owner })) : undefined}
+                      slotProps={{
+                        primary: { noWrap: true },
+                        secondary: { noWrap: true }
+                      }} />
                   </ListItemButton>
                 </ListItem>
               );

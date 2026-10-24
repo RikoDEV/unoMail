@@ -50,7 +50,7 @@ function SingleSignOn() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('Single sign-on (OpenID Connect)')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Lets users sign in through your identity provider, in the browser and (with XOAUTH2 / OAUTHBEARER) in mail programs. An identity is matched to an existing mailbox by its verified e-mail address; mailboxes are never created automatically.')}
         </Typography>
         {feedback}
@@ -131,13 +131,13 @@ function Ldap() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('LDAP directory')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Recipient suggestions in the composer are also looked up in this directory.')}
         </Typography>
         {feedback}
         <Stack spacing={2} sx={{ maxWidth: 640 }}>
           <FormControlLabel control={<Switch checked={config.enabled} onChange={(e) => set({ enabled: e.target.checked })} />} label={t('Use the directory for recipient suggestions')} />
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
             <TextField label={t('Directory URL')} value={config.url} onChange={(e) => set({ url: e.target.value })} placeholder="ldaps://ldap.example.org" fullWidth />
             <FormControlLabel control={<Checkbox checked={config.starttls} onChange={(e) => set({ starttls: e.target.checked })} />} label={t('StartTLS')} />
           </Stack>
@@ -151,7 +151,7 @@ function Ldap() {
             <TextField label={t('Name attribute')} value={config.name_attribute} onChange={(e) => set({ name_attribute: e.target.value })} fullWidth />
             <TextField label={t('Mail attribute')} value={config.mail_attribute} onChange={(e) => set({ mail_attribute: e.target.value })} fullWidth />
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <Button variant="contained" onClick={() => void save()} disabled={!config.url.trim() || !config.base_dn.trim()}>
               {t('Save directory')}
             </Button>
@@ -199,7 +199,7 @@ function Webhooks() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('Webhooks')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Other systems are notified of mail events with a signed JSON request (header X-Unomail-Signature, HMAC-SHA256 of the body). Notifications carry addresses and sizes, never message content.')}
         </Typography>
         {feedback}
@@ -209,13 +209,13 @@ function Webhooks() {
           </Alert>
         )}
         <Stack spacing={2}>
-          <Stack direction="row" spacing={2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
             <TextField label={t('Webhook URL')} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://hooks.example.org/unomail" sx={{ minWidth: 320, flex: 1 }} />
             <Button variant="contained" onClick={() => void create()} disabled={!url.trim() || events.length === 0}>
               {t('Add webhook')}
             </Button>
           </Stack>
-          <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1}>
+          <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: 'wrap' }}>
             {(data?.events ?? []).map((event) => (
               <FormControlLabel key={event} label={event} control={<Checkbox size="small" checked={events.includes(event)} onChange={(e) => setEvents((current) => (e.target.checked ? [...current, event] : current.filter((x) => x !== event)))} />} />
             ))}
@@ -285,7 +285,7 @@ function Skins() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('Custom skins')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Skins are sets of design tokens, in addition to the built-in ones ({{value}}). Users pick a skin in their settings. Allowed properties: id, name, mode (light, dark, auto), primary, secondary, background, paper, text (#rrggbb), radius (0 to 32), density (comfortable, compact) and font (roboto, system, serif, mono).', { value: BUILT_IN_SKINS.map((skin) => skin.name).join(', ') })}
         </Typography>
         {feedback}
@@ -320,21 +320,21 @@ function Plugins() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('Web client plug-ins')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('A plug-in is a folder under')} <code>plugins/</code> {t("in the server's data directory, containing")} <code>plugin.json</code> {t('and')}{' '}
           <code>plugin.js</code>{t(". Plug-ins run in every user's browser with the page's privileges, so they can only be installed by someone with access to the server itself. Changes apply the next time users load the page.")}
         </Typography>
         {feedback}
         {(data?.length ?? 0) === 0 ? (
-          <Typography color="text.secondary">{t('No plug-ins are installed.')}</Typography>
+          <Typography sx={{ color: 'text.secondary' }}>{t('No plug-ins are installed.')}</Typography>
         ) : (
           <ScrollTable size="small" aria-label={t('Plug-ins')}>
             <TableBody>
               {data!.map((plugin) => (
                 <TableRow key={plugin.id}>
                   <TableCell>
-                    <Typography fontWeight={600}>{plugin.name || plugin.id}</Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography sx={{ fontWeight: 600 }}>{plugin.name || plugin.id}</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       {plugin.description}
                     </Typography>
                   </TableCell>
@@ -342,7 +342,7 @@ function Plugins() {
                   <TableCell align="right">
                     <FormControlLabel
                       label={t('Enabled')}
-                      control={<Switch checked={plugin.enabled} onChange={(e) => void run(async () => { await put(`/api/plugins/${encodeURIComponent(plugin.id)}`, { enabled: e.target.checked }); await reload(); }, e.target.checked ? t('Plug-in enabled') : t('Plug-in disabled'))} inputProps={{ 'aria-label': t('Enable {{id}}', { id: plugin.id }) }} />}
+                      control={<Switch checked={plugin.enabled} onChange={(e) => void run(async () => { await put(`/api/plugins/${encodeURIComponent(plugin.id)}`, { enabled: e.target.checked }); await reload(); }, e.target.checked ? t('Plug-in enabled') : t('Plug-in disabled'))} slotProps={{ input: { 'aria-label': t('Enable {{id}}', { id: plugin.id }) } }} />}
                     />
                   </TableCell>
                 </TableRow>

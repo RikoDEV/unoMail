@@ -1,6 +1,6 @@
 import AttachFile from '@mui/icons-material/AttachFile';
 import Close from '@mui/icons-material/Close';
-import DeleteOutline from '@mui/icons-material/DeleteOutline';
+import DeleteOutline from '@mui/icons-material/DeleteOutlineOutlined';
 import Draw from '@mui/icons-material/Draw';
 import CloseFullscreen from '@mui/icons-material/CloseFullscreen';
 import Minimize from '@mui/icons-material/Minimize';
@@ -495,14 +495,12 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     >
       <Stack
         direction="row"
-        alignItems="center"
         onClick={() => minimized && setMinimized(false)}
-        sx={{ bgcolor: tint, pl: 2, pr: 1, py: 0.5, minHeight: 44, cursor: minimized ? 'pointer' : undefined }}
-      >
-        <Typography sx={{ flex: 1, fontSize: 14 }} fontWeight={500} noWrap>
+        sx={{ alignItems: 'center', bgcolor: tint, pl: 2, pr: 1, py: 0.5, minHeight: 44, cursor: minimized ? 'pointer' : undefined }}>
+        <Typography noWrap sx={{ fontWeight: 500, flex: 1, fontSize: 14 }}>
           {minimized && subject ? subject : t('New message')}
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }} aria-live="polite">
+        <Typography variant="caption" aria-live="polite" sx={{ color: 'text.secondary', mr: 1 }}>
           {status}
         </Typography>
         <Tooltip title={t('Minimize')}>
@@ -526,8 +524,12 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
           </Alert>
         )}
         {identities.length > 1 && (
-          <Stack direction="row" alignItems="center" sx={FIELD_ROW}>
-            <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+          <Stack
+            direction="row"
+            sx={[{
+              alignItems: "center"
+            }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mr: 1 }}>
               {t('From')}
             </Typography>
             <Select variant="standard" disableUnderline fullWidth value={identityId ?? ''} onChange={(e) => changeIdentity(Number(e.target.value))} SelectDisplayProps={{ 'aria-label': t('From') }} sx={{ fontSize: 14 }}>
@@ -570,14 +572,14 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
           }}
         />
         {attachments.filter((a) => !a.cid).length > 0 && (
-          <Stack direction="row" flexWrap="wrap" gap={1} sx={{ px: 2, pb: 1 }}>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, px: 2, pb: 1 }}>
             {attachments.filter((a) => !a.cid).map((a) => (
               <Chip key={a.blobId} label={`${a.name} (${formatBytes(a.size)})`} onDelete={() => { setAttachments((list) => list.filter((x) => x.blobId !== a.blobId)); void removePendingFiles([a.blobId]); markDirty(); }} />
             ))}
           </Stack>
         )}
         {formatting && <FormattingToolbar onFormat={format} tint={tint} />}
-        <Stack direction="row" alignItems="center" flexWrap="wrap" useFlexGap sx={{ px: 1.5, pt: 0.5, pb: 1.5, columnGap: 0.25, rowGap: 0.5 }}>
+        <Stack direction="row" useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', px: 1.5, pt: 0.5, pb: 1.5, columnGap: 0.25, rowGap: 0.5 }}>
           <SendButton
             busy={busy}
             onSend={(at) => void send(at)}
@@ -617,7 +619,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
                   displayEmpty
                   value={prefs.spell_lang ?? ''}
                   onChange={(e) => void updatePrefs({ spell_lang: String(e.target.value) }).catch(() => {})}
-                  inputProps={{ 'aria-label': t('Spelling language') }}
+                  slotProps={{ input: { 'aria-label': t('Spelling language') } }}
                   sx={{ fontSize: 13, minWidth: 70 }}
                 >
                   {SPELL_LANGUAGES.map(([code, name]) => (

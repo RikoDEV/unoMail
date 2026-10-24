@@ -136,7 +136,7 @@ export function Certificates() {
       {feedback}
       <Card variant="outlined" sx={{ mb: 3 }}>
         <CardContent>
-          <Stack direction="row" spacing={4} flexWrap="wrap" useFlexGap alignItems="center">
+          <Stack direction="row" spacing={4} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Box>
               <Typography variant="body2" color="text.secondary">
                 {t('Active certificate expires in')}
@@ -147,7 +147,7 @@ export function Certificates() {
               </Typography>
             </Box>
             <Box sx={{ flex: 1, minWidth: 260 }}>
-              <Stack direction="row" spacing={1} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }} useFlexGap>
                 <Chip label={data.mode === 'acme' ? t("Let's Encrypt (automatic)") : data.mode === 'custom' ? t('Custom certificate') : t('Self-signed')} color={data.mode === 'self_signed' ? 'warning' : 'success'} data-testid="tls-mode" />
                 {!cert.covers_hostname && <Chip label={t('not valid for {{hostname}}', { hostname: data.hostname })} color="error" />}
                 {cert.expires_soon && <Chip label={t('expires soon')} color="warning" />}
@@ -215,14 +215,14 @@ export function Certificates() {
           <Typography variant="body2" color="text.secondary">
             {t('Installing a custom certificate turns automatic issuance off. The private key is stored on the server and can never be read back.')}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <TextField label={t('Certificate chain (PEM)')} value={certPem} onChange={(e) => { setCertPem(e.target.value); setValidation(null); }} multiline minRows={5} maxRows={10} fullWidth placeholder="-----BEGIN CERTIFICATE-----" slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: 'monospace', fontSize: 12 } } }} />
             <Button component="label" startIcon={<UploadFile />} sx={{ whiteSpace: 'nowrap' }}>
               {t('Upload')}
               <input type="file" hidden accept=".pem,.crt,.cer" aria-label={t('Certificate file')} onChange={(e) => void run(async () => { const text = await readFile(e.target.files?.[0]); if (text) { setCertPem(text); setValidation(null); } })} />
             </Button>
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <TextField label={t('Private key (PEM)')} value={keyPem} onChange={(e) => { setKeyPem(e.target.value); setValidation(null); }} multiline minRows={4} maxRows={8} fullWidth placeholder="-----BEGIN PRIVATE KEY-----" slotProps={{ htmlInput: { spellCheck: false, autoComplete: 'off', style: { fontFamily: 'monospace', fontSize: 12 } } }} />
             <Button component="label" startIcon={<UploadFile />} sx={{ whiteSpace: 'nowrap' }}>
               {t('Upload')}

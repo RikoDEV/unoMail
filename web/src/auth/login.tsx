@@ -66,8 +66,8 @@ function SecondStep({ challenge, onDone, onCancel }: { challenge: SecondFactorCh
       }}
     >
       <Box>
-        <Typography variant="h5" component="h1" fontWeight={600}>{t('2-step verification')}</Typography>
-        <Typography color="text.secondary">{mode === 'totp' ? t('Enter the code from your authenticator app.') : t('Enter one of your recovery codes.')}</Typography>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>{t('2-step verification')}</Typography>
+        <Typography sx={{ color: 'text.secondary' }}>{mode === 'totp' ? t('Enter the code from your authenticator app.') : t('Enter one of your recovery codes.')}</Typography>
       </Box>
       {error && <Alert severity="error">{error}</Alert>}
       {(challenge.methods.totp || challenge.methods.recovery) && (
@@ -91,7 +91,7 @@ function SecondStep({ challenge, onDone, onCancel }: { challenge: SecondFactorCh
           {t('Use a passkey')}
         </Button>
       )}
-      <Stack direction="row" spacing={2} justifyContent="space-between">
+      <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between' }}>
         {challenge.methods.recovery && mode === 'totp' && <Link component="button" type="button" onClick={() => { setMode('recovery'); setCode(''); }}>{t('Use a recovery code')}</Link>}
         {challenge.methods.totp && mode === 'recovery' && <Link component="button" type="button" onClick={() => { setMode('totp'); setCode(''); }}>{t('Use the authenticator app')}</Link>}
         <Link component="button" type="button" onClick={onCancel}>{t('Back')}</Link>
@@ -264,13 +264,13 @@ export function Login({ adding = false }: { adding?: boolean }) {
           ) : (
           <Stack component="form" spacing={2.5} onSubmit={submit}>
             <Box>
-              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 0.5 }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 0.5 }}>
                 <Logo size={44} />
-                <Typography variant="h4" component="h1" color="primary" fontWeight={600}>
+                <Typography variant="h4" component="h1" color="primary" sx={{ fontWeight: 600 }}>
                   {t('unoMail')}
                 </Typography>
               </Stack>
-              <Typography color="text.secondary">{adding ? t('Add another account') : t('Sign in to your mailbox')}</Typography>
+              <Typography sx={{ color: 'text.secondary' }}>{adding ? t('Add another account') : t('Sign in to your mailbox')}</Typography>
             </Box>
             {error && <Alert severity="error">{error}</Alert>}
             {/* Not type="email": browsers refuse internationalized addresses in such fields. */}
@@ -295,7 +295,7 @@ export function Login({ adding = false }: { adding?: boolean }) {
               </>
             )}
             {adding && (
-              <Link component={RouterLink} to="/mail" textAlign="center">
+              <Link component={RouterLink} to="/mail" sx={{ textAlign: 'center' }}>
                 {t('Cancel')}
               </Link>
             )}

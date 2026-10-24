@@ -79,24 +79,26 @@ function CardFrame({ card, Icon, label, title, status, subtitle, actions, childr
   if (card.dismissed) return <Button size="small" startIcon={icon} onClick={() => onDismiss(card.id, false)}>{t('Show summary card')}</Button>;
   return (
     <Box component="article" aria-label={label} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
         {icon}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography component="h3" variant="subtitle2" sx={{ overflowWrap: 'anywhere' }}>{title}</Typography>
-          <Typography variant="body2" fontWeight={600}>{status}</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{subtitle}</Typography>
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>{status}</Typography>
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>{subtitle}</Typography>
         </Box>
         <Button size="small" onClick={() => onDismiss(card.id, true)}>{t('Dismiss')}</Button>
       </Stack>
       {children}
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1 }}>
         {actions}
         <Button size="small" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{t('Related messages')}</Button>
       </Stack>
       <Collapse in={expanded}>
         <Stack spacing={0.5} sx={{ pt: 1 }}>
           {card.sources.map((source) => <Link key={source.email_id} component={RouterLink} to={`/mail/inbox/${source.thread_id}`} variant="body2" sx={{ overflowWrap: 'anywhere' }}>{source.subject || t('(no subject)')}</Link>)}
-          <Typography variant="caption" color="text.secondary">{card.sources.some((s) => s.method === 'ai') ? t('Includes AI-extracted details. See the original messages.') : t('Details from structured email data.')}</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{card.sources.some((s) => s.method === 'ai') ? t('Includes AI-extracted details. See the original messages.') : t('Details from structured email data.')}</Typography>
         </Stack>
       </Collapse>
     </Box>
@@ -112,7 +114,7 @@ function PurchaseCard({ card, p, onDismiss }: { card: Card; p: Purchase; onDismi
       {p.shipments.map((shipment, index) => (
         <Box key={shipment.tracking_number ?? shipment.tracking_url ?? index} sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
           <Typography variant="body2">{[shipment.carrier, STATUSES[shipment.status]].filter(Boolean).join(' · ')}</Typography>
-          {(shipment.delivery_from || shipment.delivery_until) && <Typography variant="body2" color="text.secondary">
+          {(shipment.delivery_from || shipment.delivery_until) && <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('Estimated delivery')}: {shipment.delivery_from ? dateLabel(shipment.delivery_from) : dateLabel(shipment.delivery_until!)}{shipment.delivery_from && shipment.delivery_until && shipment.delivery_from !== shipment.delivery_until ? ` – ${dateLabel(shipment.delivery_until)}` : ''}
           </Typography>}
           {shipment.tracking_number && <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{t('Tracking number')}: {shipment.tracking_number}</Typography>}
@@ -139,8 +141,10 @@ function ReservationCard({ card, r, onDismiss }: { card: Card; r: Reservation; o
       {(route || period || r.location) && (
         <Box sx={{ mt: 1 }}>
           {route && <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{route}</Typography>}
-          {period && <Typography variant="body2" color="text.secondary">{period}</Typography>}
-          {r.location && <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{r.location}</Typography>}
+          {period && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{period}</Typography>}
+          {r.location && <Typography
+            variant="body2"
+            sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>{r.location}</Typography>}
         </Box>
       )}
     </CardFrame>

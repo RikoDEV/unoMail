@@ -130,10 +130,10 @@ function TotpSetup({ onDone, onClose }: { onDone: (codes: string[] | null) => vo
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
           <Typography variant="body2">{t('Scan the code with an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 1Password, …), then enter the six digits it shows.')}</Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'center' }}>
             {qr ? <Box component="img" src={qr} alt={t('QR code for the authenticator app')} sx={{ width: 200, height: 200, borderRadius: 1, bgcolor: '#fff' }} /> : <Box sx={{ width: 200, height: 200 }} />}
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" color="text.secondary">{t('Or enter this key by hand:')}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Or enter this key by hand:')}</Typography>
               <Typography sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }} data-testid="totp-secret">{setup?.secret.replace(/(.{4})/g, '$1 ').trim()}</Typography>
             </Box>
           </Stack>
@@ -199,21 +199,21 @@ export function TwoStepCard() {
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
           <Typography variant="h6" sx={{ flex: 1 }}>{t('2-step verification')}</Typography>
           <Chip label={overview.enabled ? t('On') : t('Off')} color={overview.enabled ? 'success' : 'default'} size="small" />
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 720 }}>
           {t('Ask for a second proof after the password: a code from an app on your phone, or a passkey. Mail and calendar programs then sign in with app passwords (below) instead of your password.')}
         </Typography>
         {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
         {notice && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice('')}>{notice}</Alert>}
         <Stack spacing={2.5} sx={{ maxWidth: 720 }}>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
             <PhonelinkLock color="action" />
             <Box sx={{ flex: 1 }}>
-              <Typography fontWeight={600}>{t('Authenticator app')}</Typography>
-              <Typography variant="body2" color="text.secondary">{overview.totp ? t('Codes from your app are asked for when you sign in.') : t('Not set up.')}</Typography>
+              <Typography sx={{ fontWeight: 600 }}>{t('Authenticator app')}</Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>{overview.totp ? t('Codes from your app are asked for when you sign in.') : t('Not set up.')}</Typography>
             </Box>
             {overview.totp ? (
               <Button color="error" onClick={() => setPrompt({ title: t('Turn off the authenticator app'), action: t('Turn off'), run: async (password) => { await api('DELETE', '/api/me/two-factor/totp', { password }); setPrompt(null); setNotice(t('The authenticator app is off')); await load(); } })}>
@@ -224,11 +224,11 @@ export function TwoStepCard() {
             )}
           </Stack>
           <Box>
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Key color="action" />
               <Box sx={{ flex: 1 }}>
-                <Typography fontWeight={600}>{t('Passkeys and security keys')}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography sx={{ fontWeight: 600 }}>{t('Passkeys and security keys')}</Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   {!overview.passkeys_supported
                     ? t('Passkeys need the web client to be reached by a host name, not an IP address.')
                     : !passkeysAvailable()
@@ -245,7 +245,7 @@ export function TwoStepCard() {
                     <TableRow key={passkey.id}>
                       <TableCell>
                         {passkey.name}
-                        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5 }} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.5 }}>
                           <Chip size="small" variant="outlined" label={passkey.synced ? t('Synced across devices') : t('On one device')} />
                           {passkey.discoverable !== false && <Chip size="small" variant="outlined" color="success" label={t('Signs in without a password')} />}
                         </Stack>
@@ -288,10 +288,10 @@ export function TwoStepCard() {
             )}
           </Box>
           {overview.enabled && (
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
               <Box sx={{ flex: 1 }}>
-                <Typography fontWeight={600}>{t('Recovery codes')}</Typography>
-                <Typography variant="body2" color="text.secondary">{t('{{recovery_codes_left}} unused. Each signs you in once without the phone or passkey.', { recovery_codes_left: overview.recovery_codes_left })}</Typography>
+                <Typography sx={{ fontWeight: 600 }}>{t('Recovery codes')}</Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('{{recovery_codes_left}} unused. Each signs you in once without the phone or passkey.', { recovery_codes_left: overview.recovery_codes_left })}</Typography>
               </Box>
               <Button onClick={() => setPrompt({ title: t('New recovery codes'), action: t('Make new codes'), run: async (password) => { const result = await post<{ recovery_codes: string[] }>('/api/me/two-factor/recovery-codes', { password }); setPrompt(null); setCodes(result.recovery_codes); await load(); } })}>
                 {t('Make new codes')}
@@ -360,16 +360,16 @@ export function AppPasswordsCard() {
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
           <Typography variant="h6" sx={{ flex: 1 }}>{t('App passwords')}</Typography>
           <Button variant="outlined" onClick={() => setCreating(true)}>{t('Create app password')}</Button>
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 720 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 720 }}>
           {t('A separate password for each mail, calendar or contacts program. It works only for what you allow, never for signing in here, and can be revoked without changing your password. With 2-step verification on, programs need one.')}
         </Typography>
         {error && !creating && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
         {list.length === 0 ? (
-          <Typography color="text.secondary">{t('No app passwords.')}</Typography>
+          <Typography sx={{ color: 'text.secondary' }}>{t('No app passwords.')}</Typography>
         ) : (
           <Table size="small" aria-label={t('App passwords')}>
             <TableHead>

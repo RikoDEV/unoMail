@@ -130,7 +130,7 @@ export function DailyStatsChart() {
   return (
     <Card variant="outlined" sx={{ mb: 3 }} data-testid="daily-stats">
       <CardContent>
-        <Stack direction="row" alignItems="center" flexWrap="wrap" gap={1} sx={{ mb: 1.5 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 1.5 }}>
           <Typography variant="h6" id={titleId} sx={{ flex: 1 }}>
             {t('Daily stats')}
           </Typography>
@@ -161,10 +161,17 @@ export function DailyStatsChart() {
                   <Box component="span">
                     <Typography component="span" variant="body2" sx={{ display: 'block' }}>
                       {series.label}{' '}
-                      <Typography component="span" variant="body2" fontWeight={600}>{number(totals[series.id]?.value ?? 0)}</Typography>
+                      <Typography component="span" variant="body2" sx={{ fontWeight: 600 }}>{number(totals[series.id]?.value ?? 0)}</Typography>
                     </Typography>
                     {series.parts?.map((part, index) => (
-                      <Typography key={part.label} component="span" variant="caption" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
+                      <Typography
+                        key={part.label}
+                        component="span"
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary",
+                          display: { xs: 'none', sm: 'block' }
+                        }}>
                         {number(totals[series.id]?.parts[index] ?? 0)} – {part.label}
                       </Typography>
                     ))}
@@ -177,7 +184,7 @@ export function DailyStatsChart() {
 
         <Box ref={holder} sx={{ position: 'relative' }}>
           {rows.length === 0 ? null : empty ? (
-            <Typography color="text.secondary" sx={{ height: HEIGHT, display: 'grid', placeItems: 'center' }}>
+            <Typography sx={{ color: 'text.secondary', height: HEIGHT, display: 'grid', placeItems: 'center' }}>
               {t('No connections or mail in this period yet.')}
             </Typography>
           ) : (
@@ -227,18 +234,18 @@ export function DailyStatsChart() {
                 ...(tooltipLeft > width / 2 ? { right: width - tooltipLeft + 12 } : { left: tooltipLeft + 12 }),
               }}
             >
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
                 {dateLabel(hovered.date, true)}
               </Typography>
               {shown.map((series) => (
                 <Box key={series.id} sx={{ mb: 0.25 }}>
-                  <Stack direction="row" alignItems="center" gap={1}>
+                  <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
                     <Box sx={{ width: 10, height: 3, borderRadius: 2, bgcolor: series.color[dark ? 1 : 0] }} />
                     <Typography variant="body2" sx={{ flex: 1 }}>{series.label}</Typography>
-                    <Typography variant="body2" fontWeight={600} sx={{ fontVariantNumeric: 'tabular-nums' }}>{number(series.value(hovered))}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{number(series.value(hovered))}</Typography>
                   </Stack>
                   {series.parts?.map((part) => (
-                    <Typography key={part.label} variant="caption" color="text.secondary" sx={{ display: 'block', pl: 2.25 }}>
+                    <Typography key={part.label} variant="caption" sx={{ color: 'text.secondary', display: 'block', pl: 2.25 }}>
                       {number(part.value(hovered))} – {part.label}
                     </Typography>
                   ))}

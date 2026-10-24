@@ -86,7 +86,7 @@ function VacationCard() {
             <TextField label={t('First day')} type="date" value={toDateInput(settings.starts_at)} onChange={(e) => set({ starts_at: fromDateInput(e.target.value) })} slotProps={{ inputLabel: { shrink: true } }} />
             <TextField label={t('Until')} type="date" value={toDateInput(settings.ends_at)} onChange={(e) => set({ ends_at: fromDateInput(e.target.value) })} slotProps={{ inputLabel: { shrink: true } }} />
           </Stack>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {t('Each correspondent gets at most one reply every {{interval_days}} days. Mailing lists and automated messages are never answered.', { interval_days: settings.interval_days })}
           </Typography>
           <Box>
@@ -154,7 +154,7 @@ export default function SettingsPage() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{account.display_name || account.email}</Typography>
-        <Typography color="text.secondary" sx={{ mb: 1 }}>
+        <Typography sx={{ color: 'text.secondary', mb: 1 }}>
           {account.email}
         </Typography>
         <Typography variant="body2">
@@ -198,7 +198,7 @@ export default function SettingsPage() {
   const sessionsCard = (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
           <Typography variant="h6" sx={{ flex: 1 }}>
             {t('Active sessions')}
           </Typography>

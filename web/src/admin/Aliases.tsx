@@ -89,7 +89,7 @@ export function Aliases() {
               <TableCell>
                 <Switch
                   checked={alias.enabled}
-                  inputProps={{ 'aria-label': t('Enabled {{source}}', { source: alias.source }) }}
+                  slotProps={{ input: { 'aria-label': t('Enabled {{source}}', { source: alias.source }) } }}
                   onChange={async (e) => {
                     if (await run(() => patch(`/api/aliases/${alias.id}`, { enabled: e.target.checked }))) await reload();
                   }}

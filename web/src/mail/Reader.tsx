@@ -88,7 +88,7 @@ function AttachmentChip({ file, size, onPreview }: { file: PreviewFile; size: nu
   const [ask, dialog] = useRiskConfirm();
   const risk = attachmentRisk(file.name);
   return (
-    <Stack direction="row" alignItems="center">
+    <Stack direction="row" sx={{ alignItems: 'center' }}>
       {dialog}
       {/* describeChild: the reason is a description, the file name stays the link's name. */}
       <Tooltip title={risk?.reason ?? ''} describeChild>
@@ -148,7 +148,7 @@ function UnlockPrompt({ ownEmail, onUnlocked }: { ownEmail: string; onUnlocked: 
       <Typography variant="body2" sx={{ mb: 1 }}>
         {t('This message is encrypted. Enter the passphrase of your private key to read it.')}
       </Typography>
-      <Stack direction="row" spacing={1} alignItems="flex-start">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
         <TextField label={t('Key passphrase')} type="password" autoComplete="off" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void submit()} error={Boolean(error)} helperText={error} />
         <Button variant="contained" onClick={() => void submit()} disabled={busy || !passphrase}>
           {t('Unlock')}
@@ -212,7 +212,7 @@ function MessageBody({ email, accountId, ownEmail }: { email: EmailFull; account
     (async () => {
       try {
         const armored = 'text' in source ? source.text : await (await fetch(downloadUrl(accountId, source.blobId, 'encrypted.asc'), { credentials: 'same-origin' })).text();
-        const keys = sender ? await lookupKeys([sender]).catch(() => ({}) as Record<string, string>) : {};
+        const keys = sender ? await lookupKeys([sender]).catch(() => (({}) as Record<string, string>)) : {};
         const opened = await decryptArmored(armored, Object.values(keys));
         if (cancelled) return;
         const inline: Record<string, string> = {};
@@ -352,7 +352,7 @@ function MessageBody({ email, accountId, ownEmail }: { email: EmailFull; account
         style={{ width: '100%', height, border: 0, display: 'block' }}
       />
       {fileUrls.length > 0 && (
-        <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+        <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mt: 2 }}>
           {fileUrls.map((file) => (
             <AttachmentChip key={file.url} file={file} size={file.size} onPreview={setPreview} />
           ))}
@@ -385,28 +385,21 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
   const received = new Date(email.receivedAt).toLocaleString(uiLocale());
   return (
     <Paper variant="outlined" sx={{ borderRadius: { xs: 0, sm: 1.5 }, borderLeft: { xs: 0, sm: 1 }, borderRight: { xs: 0, sm: 1 }, borderColor: { xs: 'divider', sm: 'divider' }, overflow: 'hidden' }} data-testid="message">
-      <Stack
-        direction="row"
-        spacing={1.5}
-        alignItems="center"
-        sx={{ p: 1.5, cursor: collapsible ? 'pointer' : 'default' }}
-        onClick={collapsible ? onToggle : undefined}
-        data-collapsible={collapsible}
-      >
+      <Stack direction="row" spacing={1.5} onClick={collapsible ? onToggle : undefined} data-collapsible={collapsible} sx={{ alignItems: 'center', p: 1.5, cursor: collapsible ? 'pointer' : 'default' }}>
         <Box onClick={keepOpen} sx={{ display: 'flex', cursor: expanded ? 'default' : undefined }}>
           <SenderAvatar accountId={accountId} email={email} info={avatarInfo} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box onClick={keepOpen} sx={{ display: 'inline-block', maxWidth: '100%', cursor: expanded ? 'text' : undefined }} data-testid="sender-block">
-          <Typography fontWeight={600} noWrap>
+          <Typography noWrap sx={{ fontWeight: 600 }}>
             <SenderHover email={email} info={avatarInfo}>{sender ? sender.name || sender.email : t('Unknown sender')}</SenderHover>
             {sender?.name && expanded && (
-              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+              <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1 }}>
                 &lt;{sender.email}&gt;
               </Typography>
             )}
           </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
+          <Typography variant="body2" noWrap sx={{ color: 'text.secondary' }}>
             {expanded ? t('to {{recipients}}', { recipients: (email.to ?? []).map(formatAddress).join(', ') || t('undisclosed recipients') }) : encrypted ? t('Encrypted message') : email.preview}
           </Typography>
           </Box>
@@ -419,7 +412,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
         )}
         {encrypted && <Lock fontSize="small" color="action" aria-label={t('Encrypted')} />}
         {/* A phone has room for the sender's name only beside a short date; the full one is in the tooltip. */}
-        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }} title={received}>
+        <Typography variant="caption" title={received} sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
           {phone ? listDate(email.receivedAt) : received}
         </Typography>
         {expanded && (
@@ -431,19 +424,22 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
       <Collapse in={expanded} unmountOnExit>
         <Box sx={{ px: { xs: 1.5, sm: 2 }, pb: 2 }}>
           {email.cc && email.cc.length > 0 && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
               {t('cc {{recipients}}', { recipients: email.cc.map(formatAddress).join(', ') })}
             </Typography>
           )}
           <SecurityWarnings email={email} />
-          {email.maskedAddresses?.map((address) => <Typography key={address} variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>{t('Received via {{address}}', { address })}</Typography>)}
+          {email.maskedAddresses?.map((address) => <Typography
+            key={address}
+            variant="caption"
+            sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>{t('Received via {{address}}', { address })}</Typography>)}
           <SmimeBadges status={email.smime} />
           {!encrypted && !email.smime?.encrypted && <SummaryCards key={`cards-${email.id}`} emailId={email.id} />}
           {!encrypted && !email.smime?.encrypted && <AiAssist key={email.id} email={email} />}
           <MessageBody email={email} accountId={accountId} ownEmail={ownEmail} />
           {invite && <Invitation key={invite.blobId} name={invite.name ?? 'invite.ics'} url={downloadUrl(accountId, invite.blobId, invite.name ?? 'invite.ics')} />}
           {files.length > 0 && (
-            <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 2 }}>
+            <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mt: 2 }}>
               {files.map((file) => (
                 <AttachmentChip
                   key={file.partId}
@@ -455,7 +451,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
             </Stack>
           )}
           {!encrypted && !email.smime?.encrypted && !email.keywords.$draft && email.from?.some((sender) => sender.email.toLowerCase() !== ownEmail.toLowerCase()) && <SmartReplies key={`replies-${email.id}`} emailId={email.id} onChoose={(text, replyAll) => onAction(replyAll ? 'replyAll' : 'reply', email, text)} />}
-          <Stack direction="row" spacing={1} sx={{ mt: 2 }} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
             <Button variant="outlined" startIcon={<Reply />} onClick={() => onAction('reply', email)}>
               {t('Reply')}
             </Button>
@@ -562,7 +558,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
   }
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label={t('Conversation')}>
-      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ p: 1 }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', p: 1 }}>
         <Tooltip title={t('Back to list (u)')}><IconButton aria-label={t('Back to list')} onClick={onBack}><ArrowBack /></IconButton></Tooltip>
         <Tooltip title={t('Archive (e)')}><IconButton aria-label={t('Archive')} onClick={onArchive}><Archive /></IconButton></Tooltip>
         {onNotSpam ? (
@@ -574,7 +570,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
         <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark as unread')} onClick={onMarkUnread}><MarkEmailUnread /></IconButton></Tooltip>
         <Tooltip title={t('Snooze')}><IconButton aria-label={t('Snooze')} onClick={(e) => setSnoozeAnchor(e.currentTarget)}><Snooze /></IconButton></Tooltip>
         <Menu anchorEl={snoozeAnchor} open={Boolean(snoozeAnchor)} onClose={() => setSnoozeAnchor(null)}>
-          <MenuItem disabled sx={{ opacity: '1 !important' }}><Typography variant="caption" color="text.secondary">{t('Snooze until')}</Typography></MenuItem>
+          <MenuItem disabled sx={{ opacity: '1 !important' }}><Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Snooze until')}</Typography></MenuItem>
           {snoozePresets(new Date()).map((preset) => (
             <MenuItem key={preset.label} onClick={() => { setSnoozeAnchor(null); onSnooze(preset.at); }}>
               <ListItemText primary={preset.label} secondary={preset.at.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} />
@@ -626,7 +622,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
           {emails[0]?.subject || t('(no subject)')}
         </Typography>
         {applied.length > 0 && (
-          <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mb: 2 }}>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mb: 2 }}>
             {applied.map((label) => (
               <Chip key={label} size="small" icon={<Label />} label={label} onDelete={() => onToggleLabel(label, false)} />
             ))}

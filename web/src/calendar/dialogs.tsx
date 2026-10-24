@@ -156,13 +156,19 @@ export function EventDialog({ editing, calendars, onClose }: { editing: Editing;
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
-          <TextField label={t('Title')} value={form.summary} onChange={(e) => set({ summary: e.target.value })} autoFocus required inputProps={{ maxLength: 300 }} />
+          <TextField label={t('Title')} value={form.summary} onChange={(e) => set({ summary: e.target.value })} autoFocus required slotProps={{
+            htmlInput: { maxLength: 300 }
+          }} />
           <FormControlLabel control={<Checkbox checked={form.all_day} onChange={(e) => setForm((current) => toggleAllDay(current, e.target.checked))} />} label={t('All day')} />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-            <TextField label={t('Starts')} type={form.all_day ? 'date' : 'datetime-local'} value={form.start} onChange={(e) => setStart(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} />
-            <TextField label={t('Ends')} type={form.all_day ? 'date' : 'datetime-local'} value={form.end} onChange={(e) => set({ end: e.target.value })} fullWidth InputLabelProps={{ shrink: true }} />
+            <TextField label={t('Starts')} type={form.all_day ? 'date' : 'datetime-local'} value={form.start} onChange={(e) => setStart(e.target.value)} fullWidth slotProps={{
+              inputLabel: { shrink: true }
+            }} />
+            <TextField label={t('Ends')} type={form.all_day ? 'date' : 'datetime-local'} value={form.end} onChange={(e) => set({ end: e.target.value })} fullWidth slotProps={{
+              inputLabel: { shrink: true }
+            }} />
           </Stack>
-          {foreignZone && <Typography variant="caption" color="text.secondary">{t('Times are in the event’s own time zone: {{timezone}}.', { timezone: form.timezone })}</Typography>}
+          {foreignZone && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Times are in the event’s own time zone: {{timezone}}.', { timezone: form.timezone })}</Typography>}
           {!single && (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField select label={t('Repeat')} value={repeat} onChange={(e) => setRepeat(e.target.value as RepeatKind)} fullWidth>
@@ -171,7 +177,9 @@ export function EventDialog({ editing, calendars, onClose }: { editing: Editing;
                 ))}
               </TextField>
               {repeat !== 'none' && repeat !== 'custom' && (
-                <TextField label={t('Repeat until')} type="date" value={until} onChange={(e) => setUntil(e.target.value)} fullWidth InputLabelProps={{ shrink: true }} helperText={t('Empty: no end')} />
+                <TextField label={t('Repeat until')} type="date" value={until} onChange={(e) => setUntil(e.target.value)} fullWidth helperText={t('Empty: no end')} slotProps={{
+                  inputLabel: { shrink: true }
+                }} />
               )}
             </Stack>
           )}
@@ -203,8 +211,8 @@ export function EventDialog({ editing, calendars, onClose }: { editing: Editing;
                 inputValue={guestInput}
                 onInputChange={(_, value) => setGuestInput(value)}
                 onChange={(_, values) => setGuests(values as string[])}
-                renderTags={(values, getTagProps) => values.map((email, index) => {
-                  const { key, ...tag } = getTagProps({ index });
+                renderValue={(values, getItemProps) => values.map((email, index) => {
+                  const { key, ...tag } = getItemProps({ index });
                   return <Chip key={key} size="small" label={email} color={occupied.includes(email) ? 'warning' : free.includes(email) ? 'success' : 'default'} variant="outlined" {...tag} />;
                 })}
                 renderInput={(params) => <TextField {...params} label={t('Guests')} placeholder="name@example.org" helperText={t('They are invited by e-mail when you save, and told about later changes.')} />}
@@ -216,10 +224,12 @@ export function EventDialog({ editing, calendars, onClose }: { editing: Editing;
               )}
             </Box>
           )}
-          {editing.foreign && <Typography variant="caption" color="text.secondary">{t('You were invited to this event; its guest list belongs to the organizer.')}</Typography>}
-          <TextField label={t('Location')} value={form.location} onChange={(e) => set({ location: e.target.value })} inputProps={{ maxLength: 300 }} />
+          {editing.foreign && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('You were invited to this event; its guest list belongs to the organizer.')}</Typography>}
+          <TextField label={t('Location')} value={form.location} onChange={(e) => set({ location: e.target.value })} slotProps={{
+            htmlInput: { maxLength: 300 }
+          }} />
           <TextField label={t('Description')} value={form.description} onChange={(e) => set({ description: e.target.value })} multiline minRows={3} />
-          {editing.id !== undefined && !single && repeat !== 'none' && <Typography variant="caption" color="text.secondary">{t('Changes apply to every occurrence of this repeating event.')}</Typography>}
+          {editing.id !== undefined && !single && repeat !== 'none' && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Changes apply to every occurrence of this repeating event.')}</Typography>}
         </Stack>
       </DialogContent>
       <DialogButtons onCancel={() => onClose(false)} onConfirm={() => void save()} disabled={busy || !form.summary.trim()} />
@@ -248,8 +258,10 @@ export function CalendarDialog({ calendar, onClose }: { calendar: Calendar | nul
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
-          <TextField label={t('Name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus inputProps={{ maxLength: 100 }} />
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap role="radiogroup" aria-label={t('Colour')}>
+          <TextField label={t('Name')} value={name} onChange={(e) => setName(e.target.value)} autoFocus slotProps={{
+            htmlInput: { maxLength: 100 }
+          }} />
+          <Stack direction="row" spacing={1} useFlexGap role="radiogroup" aria-label={t('Colour')} sx={{ flexWrap: 'wrap' }}>
             {COLORS.map((candidate) => (
               <Box
                 key={candidate}
@@ -308,7 +320,7 @@ export function ShareCalendarDialog({ calendar, onClose }: { calendar: Calendar;
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error">{error}</Alert>}
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('Colleagues with a mailbox in your domain see this calendar next to their own, here and in their calendar programs. With “may edit” they can add and change events, which stay yours.')}
           </Typography>
           <Stack direction="row" spacing={1}>
@@ -327,9 +339,9 @@ export function ShareCalendarDialog({ calendar, onClose }: { calendar: Calendar;
             />
             <Button variant="outlined" onClick={add}>{t('Add')}</Button>
           </Stack>
-          {shares?.length === 0 && <Typography variant="body2" color="text.secondary">{t('Not shared with anybody.')}</Typography>}
+          {shares?.length === 0 && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Not shared with anybody.')}</Typography>}
           {shares?.map((share) => (
-            <Stack key={share.email} direction="row" alignItems="center" spacing={1} data-testid="calendar-share">
+            <Stack key={share.email} direction="row" spacing={1} data-testid="calendar-share" sx={{ alignItems: 'center' }}>
               <Typography sx={{ flex: 1, minWidth: 0 }} noWrap>{share.email}</Typography>
               <FormControlLabel
                 control={<Checkbox size="small" checked={share.write} onChange={(e) => setShares((current) => (current ?? []).map((entry) => (entry.email === share.email ? { ...entry, write: e.target.checked } : entry)))} />}
@@ -355,17 +367,19 @@ function CopyField({ label, value }: { label: string; value: string }) {
       value={value}
       size="small"
       fullWidth
-      InputProps={{
-        readOnly: true,
-        endAdornment: (
-          <InputAdornment position="end">
-            <Tooltip title={copied ? t('Copied') : t('Copy')}>
-              <IconButton edge="end" size="small" aria-label={t('Copy {{value}}', { value: label.toLowerCase() })} onClick={() => void navigator.clipboard?.writeText(value).then(() => setCopied(true), () => {})}>
-                <ContentCopy fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </InputAdornment>
-        ),
+      slotProps={{
+        input: {
+          readOnly: true,
+          endAdornment: (
+            <InputAdornment position="end">
+              <Tooltip title={copied ? t('Copied') : t('Copy')}>
+                <IconButton edge="end" size="small" aria-label={t('Copy {{value}}', { value: label.toLowerCase() })} onClick={() => void navigator.clipboard?.writeText(value).then(() => setCopied(true), () => {})}>
+                  <ContentCopy fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </InputAdornment>
+          ),
+        }
       }}
     />
   );
@@ -377,13 +391,13 @@ export function ConnectDialog({ listing, onClose }: { listing: Listing; onClose:
       <DialogTitle>{t('Use these calendars in another app')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('Calendar programs that speak CalDAV (Thunderbird, Apple Calendar, DAVx⁵ on Android, and others) stay in sync with what you see here. Add a CalDAV account with the server address and sign in with your e-mail address and password. The same account also offers your contacts (CardDAV).')}
           </Typography>
           <CopyField label={t('Server address')} value={listing.caldav.server} />
           <CopyField label={t('User name')} value={listing.caldav.username} />
           <Typography variant="subtitle2">{t('Addresses of single calendars')}</Typography>
-          <Typography variant="body2" color="text.secondary">{t('Only needed by programs that cannot find the calendars from the server address.')}</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Only needed by programs that cannot find the calendars from the server address.')}</Typography>
           {listing.calendars.map((calendar) => (
             <CopyField key={calendar.id} label={calendar.shared ? `${calendar.name} (${calendar.owner})` : calendar.name} value={calendar.url} />
           ))}
@@ -398,7 +412,7 @@ export function ConnectDialog({ listing, onClose }: { listing: Listing; onClose:
 
 function Detail({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <Stack direction="row" spacing={1.5} alignItems="flex-start">
+    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
       <Box sx={{ color: 'text.secondary', display: 'flex', pt: 0.25 }}>{icon}</Box>
       <Typography variant="body2" component="div" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', minWidth: 0 }}>{children}</Typography>
     </Stack>
@@ -430,7 +444,7 @@ export function EventDetails({ event, calendar, onClose, onEdit, onDelete }: { e
           {event.attendees.length > 0 && (
             <Detail icon={<Group fontSize="small" />}>
               <Box component="ul" aria-label={t('Guests')} sx={{ listStyle: 'none', m: 0, p: 0 }}>
-                {event.organizer && <li>{event.organizer} <Typography component="span" variant="caption" color="text.secondary">{t('(organizer)')}</Typography></li>}
+                {event.organizer && <li>{event.organizer} <Typography component="span" variant="caption" sx={{ color: 'text.secondary' }}>{t('(organizer)')}</Typography></li>}
                 {event.attendees.filter((guest) => guest.email !== event.organizer).map((guest) => (
                   <li key={guest.email}>
                     {guest.name ? `${guest.name} <${guest.email}>` : guest.email}{' '}
@@ -441,7 +455,7 @@ export function EventDetails({ event, calendar, onClose, onEdit, onDelete }: { e
             </Detail>
           )}
           {event.description && <Detail icon={<Notes fontSize="small" />}>{event.description}</Detail>}
-          {calendar && <Typography variant="caption" color="text.secondary">{calendar.shared ? `${calendar.name} (${calendar.owner})` : calendar.name}{!writable && t(' · read only')}</Typography>}
+          {calendar && <Typography variant="caption" sx={{ color: 'text.secondary' }}>{calendar.shared ? `${calendar.name} (${calendar.owner})` : calendar.name}{!writable && t(' · read only')}</Typography>}
         </Stack>
       </DialogContent>
       <DialogActions>

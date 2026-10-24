@@ -69,8 +69,12 @@ export function TasksView({ calendars, hidden, onNotice }: { calendars: Calendar
           void add();
         }}
       >
-        <TextField label={t('New task')} size="small" value={summary} onChange={(e) => setSummary(e.target.value)} sx={{ flex: 1 }} inputProps={{ maxLength: 300 }} />
-        <TextField label={t('Due')} type="date" size="small" value={due} onChange={(e) => setDue(e.target.value)} InputLabelProps={{ shrink: true }} />
+        <TextField label={t('New task')} size="small" value={summary} onChange={(e) => setSummary(e.target.value)} sx={{ flex: 1 }} slotProps={{
+          htmlInput: { maxLength: 300 }
+        }} />
+        <TextField label={t('Due')} type="date" size="small" value={due} onChange={(e) => setDue(e.target.value)} slotProps={{
+          inputLabel: { shrink: true }
+        }} />
         {writable.length > 1 && (
           <TextField select label={t('In')} size="small" value={calendarId ?? ''} onChange={(e) => setTarget(Number(e.target.value))} sx={{ minWidth: 150 }}>
             {writable.map((calendar) => (
@@ -80,24 +84,25 @@ export function TasksView({ calendars, hidden, onNotice }: { calendars: Calendar
         )}
         <Button type="submit" variant="contained" disabled={!summary.trim() || !calendarId}>{t('Add')}</Button>
       </Stack>
-      {shown.length === 0 && <Typography color="text.secondary" sx={{ p: 2 }}>{t('No tasks. Tasks added in a calendar program show up here too.')}</Typography>}
+      {shown.length === 0 && <Typography
+        sx={{ color: 'text.secondary', p: 2 }}>{t('No tasks. Tasks added in a calendar program show up here too.')}</Typography>}
       <Box component="ul" aria-label={t('Tasks')} sx={{ listStyle: 'none', m: 0, p: 0, maxWidth: 900 }}>
         {shown.map((task) => {
           const calendar = byId.get(task.calendar_id);
           const editable = calendar?.writable ?? false;
           const overdue = !task.completed && task.due !== '' && task.due < today;
           return (
-            <Stack key={task.id} component="li" direction="row" alignItems="center" spacing={1} sx={{ py: 0.5, borderBottom: 1, borderColor: 'divider' }} data-testid="task" data-completed={task.completed}>
+            <Stack key={task.id} component="li" direction="row" spacing={1} data-testid="task" data-completed={task.completed} sx={{ alignItems: 'center', py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
               <Checkbox
                 checked={task.completed}
                 disabled={!editable}
                 onChange={(e) => void save(task, { completed: e.target.checked })}
-                inputProps={{ 'aria-label': task.completed ? t('Reopen {{summary}}', { summary: task.summary }) : t('Complete {{summary}}', { summary: task.summary }) }}
+                slotProps={{ input: { 'aria-label': task.completed ? t('Reopen {{summary}}', { summary: task.summary }) : t('Complete {{summary}}', { summary: task.summary }) } }}
                 sx={{ color: calendar?.color.slice(0, 7) || COLORS[0], '&.Mui-checked': { color: calendar?.color.slice(0, 7) || COLORS[0] } }}
               />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography noWrap sx={{ textDecoration: task.completed ? 'line-through' : undefined, color: task.completed ? 'text.secondary' : 'text.primary' }}>{task.summary}</Typography>
-                {task.description && <Typography variant="body2" color="text.secondary" noWrap>{task.description}</Typography>}
+                {task.description && <Typography variant="body2" noWrap sx={{ color: 'text.secondary' }}>{task.description}</Typography>}
               </Box>
               {overdue && <Typography variant="caption" color="error">{t('overdue')}</Typography>}
               <TextField
@@ -107,8 +112,10 @@ export function TasksView({ calendars, hidden, onNotice }: { calendars: Calendar
                 value={task.due}
                 disabled={!editable}
                 onChange={(e) => void save(task, { due: e.target.value })}
-                inputProps={{ 'aria-label': t('Due date of {{summary}}', { summary: task.summary }) }}
                 sx={{ width: 140 }}
+                slotProps={{
+                  htmlInput: { 'aria-label': t('Due date of {{summary}}', { summary: task.summary }) }
+                }}
               />
               <Tooltip title={t('Delete')}>
                 <span>

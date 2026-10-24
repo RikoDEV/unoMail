@@ -5,7 +5,9 @@ import { WITHIN_LABELS, emptyForm, formToQuery, queryToForm, type SearchForm } f
 import { t } from '../i18n';
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} spacing={{ xs: 0.5, sm: 2 }}>
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 2 }} sx={{
+      alignItems: { sm: 'center' }
+    }}>
       <Typography variant="body2" sx={{ width: { sm: 130 }, flexShrink: 0, color: 'text.secondary' }}>{label}</Typography>
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', gap: 1 }}>{children}</Box>
     </Stack>
@@ -25,7 +27,9 @@ export function AdvancedSearch({ anchor, query, folders, onSearch, onClose }: { 
   const result = formToQuery(form);
   const field = (label: string, key: 'from' | 'to' | 'subject' | 'words' | 'without', autoFocus = false) => (
     <Row label={label}>
-      <TextField variant="standard" fullWidth value={form[key]} onChange={(e) => set({ [key]: e.target.value })} inputProps={{ 'aria-label': label }} autoFocus={autoFocus} />
+      <TextField variant="standard" fullWidth value={form[key]} onChange={(e) => set({ [key]: e.target.value })} autoFocus={autoFocus} slotProps={{
+        htmlInput: { 'aria-label': label }
+      }} />
     </Row>
   );
   return (
@@ -52,27 +56,46 @@ export function AdvancedSearch({ anchor, query, folders, onSearch, onClose }: { 
         {field(t('Has the words'), 'words')}
         {field(t("Doesn't have"), 'without')}
         <Row label={t('Size')}>
-          <TextField select variant="standard" value={form.sizeOp} onChange={(e) => set({ sizeOp: e.target.value as SearchForm['sizeOp'] })} inputProps={{ 'aria-label': t('Size is') }} sx={{ width: 130 }}>
+          <TextField select variant="standard" value={form.sizeOp} onChange={(e) => set({ sizeOp: e.target.value as SearchForm['sizeOp'] })} sx={{ width: 130 }} slotProps={{
+            htmlInput: { 'aria-label': t('Size is') }
+          }}>
             <MenuItem value="larger">{t('greater than')}</MenuItem>
             <MenuItem value="smaller">{t('less than')}</MenuItem>
           </TextField>
-          <TextField variant="standard" type="number" value={form.size} onChange={(e) => set({ size: e.target.value })} inputProps={{ 'aria-label': t('Size'), min: 0 }} sx={{ flex: 1 }} />
-          <TextField select variant="standard" value={form.sizeUnit} onChange={(e) => set({ sizeUnit: e.target.value as SearchForm['sizeUnit'] })} inputProps={{ 'aria-label': t('Size unit') }} sx={{ width: 70 }}>
+          <TextField variant="standard" type="number" value={form.size} onChange={(e) => set({ size: e.target.value })} sx={{ flex: 1 }} slotProps={{
+            htmlInput: { 'aria-label': t('Size'), min: 0 }
+          }} />
+          <TextField select variant="standard" value={form.sizeUnit} onChange={(e) => set({ sizeUnit: e.target.value as SearchForm['sizeUnit'] })} sx={{ width: 70 }} slotProps={{
+            htmlInput: { 'aria-label': t('Size unit') }
+          }}>
             <MenuItem value="MB">MB</MenuItem>
             <MenuItem value="KB">KB</MenuItem>
           </TextField>
         </Row>
         <Row label={t('Date within')}>
-          <TextField select variant="standard" value={form.within} onChange={(e) => set({ within: e.target.value as SearchForm['within'] })} inputProps={{ 'aria-label': t('Date within') }} SelectProps={{ displayEmpty: true }} sx={{ width: 130 }}>
+          <TextField
+            select
+            variant="standard"
+            value={form.within}
+            onChange={(e) => set({ within: e.target.value as SearchForm['within'] })}
+            sx={{ width: 130 }}
+            slotProps={{
+              htmlInput: { 'aria-label': t('Date within') },
+              select: { displayEmpty: true }
+            }}>
             <MenuItem value="">{t('any time')}</MenuItem>
             {(Object.keys(WITHIN_LABELS) as (keyof typeof WITHIN_LABELS)[]).map((key) => (
               <MenuItem key={key} value={key}>{WITHIN_LABELS[key]}</MenuItem>
             ))}
           </TextField>
-          <TextField variant="standard" type="date" value={form.date} disabled={!form.within} onChange={(e) => set({ date: e.target.value })} inputProps={{ 'aria-label': t('Of the date') }} sx={{ flex: 1 }} />
+          <TextField variant="standard" type="date" value={form.date} disabled={!form.within} onChange={(e) => set({ date: e.target.value })} sx={{ flex: 1 }} slotProps={{
+            htmlInput: { 'aria-label': t('Of the date') }
+          }} />
         </Row>
         <Row label={t('Search')}>
-          <TextField select variant="standard" fullWidth value={form.folder} onChange={(e) => set({ folder: e.target.value })} inputProps={{ 'aria-label': t('Search in') }}>
+          <TextField select variant="standard" fullWidth value={form.folder} onChange={(e) => set({ folder: e.target.value })} slotProps={{
+            htmlInput: { 'aria-label': t('Search in') }
+          }}>
             <MenuItem value="default">{t('All mail')}</MenuItem>
             <MenuItem value="anywhere">{t('Mail & Junk & Trash')}</MenuItem>
             {folders.map((folder) => (
@@ -81,8 +104,11 @@ export function AdvancedSearch({ anchor, query, folders, onSearch, onClose }: { 
           </TextField>
         </Row>
         <FormControlLabel control={<Checkbox size="small" checked={form.attachment} onChange={(e) => set({ attachment: e.target.checked })} />} label={t('Has attachment')} />
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="caption" color="text.secondary" sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }} aria-live="polite">{result}</Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography
+            variant="caption"
+            aria-live="polite"
+            sx={{ color: 'text.secondary', flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{result}</Typography>
           <Button onClick={() => setForm(emptyForm())}>{t('Clear')}</Button>
           <Button type="submit" variant="contained" disabled={!result}>{t('Search')}</Button>
         </Stack>

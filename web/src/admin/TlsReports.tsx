@@ -44,14 +44,14 @@ export function TlsReports() {
         </TextField>
       </PageHeader>
       {error && <Alert severity="error">{error}</Alert>}
-      <Typography color="text.secondary" sx={{ mb: 2, maxWidth: 820 }}>
+      <Typography sx={{ color: 'text.secondary', mb: 2, maxWidth: 820 }}>
         {t('Mail servers that deliver to your domains report once a day whether they could do so over a verified TLS connection. Publish a')} <code>_smtp._tls</code> {t("record (see each domain's DNS page) to receive them.")}
       </Typography>
       <Card variant="outlined" sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1 }}>{t('Received reports')}</Typography>
           {data && data.received.length === 0 ? (
-            <Typography color="text.secondary">{t('No reports in this period.')}</Typography>
+            <Typography sx={{ color: 'text.secondary' }}>{t('No reports in this period.')}</Typography>
           ) : (
             <ScrollTable size="small" aria-label={t('Received TLS reports')}>
               <TableHead>
@@ -76,7 +76,7 @@ export function TlsReports() {
                       {report.failures === 0 ? (
                         <Chip size="small" color="success" label={t('none')} />
                       ) : (
-                        <Stack direction="row" gap={0.5} flexWrap="wrap">
+                        <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
                           {(report.details ?? []).map((detail, index) => (
                             <Chip key={index} size="small" color="error" variant="outlined" label={`${detail['result-type']} ×${detail['failed-session-count']}${detail['receiving-mx-hostname'] ? ` (${detail['receiving-mx-hostname']})` : ''}`} />
                           ))}
@@ -94,11 +94,11 @@ export function TlsReports() {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="h6" sx={{ mb: 1 }}>{t('Outgoing sessions')}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
               {t('How this server reached other domains, by the policy they publish. Domains asking for it get these figures as a daily report.')}
             </Typography>
             {data && data.outgoing.length === 0 ? (
-              <Typography color="text.secondary">{t('Nothing recorded in this period.')}</Typography>
+              <Typography sx={{ color: 'text.secondary' }}>{t('Nothing recorded in this period.')}</Typography>
             ) : (
               <ScrollTable size="small" aria-label={t('Outgoing TLS results')}>
                 <TableHead>

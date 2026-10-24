@@ -107,7 +107,7 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
       <Checkbox
         size="small"
         checked={chosen}
-        inputProps={{ 'aria-label': t('Select {{subject}}', { subject }) }}
+        slotProps={{ input: { 'aria-label': t('Select {{subject}}', { subject }) } }}
         onClick={(e) => e.stopPropagation()}
         onChange={() => handlers.toggleSelected(email.id)}
         sx={CHECKBOX_SX}
@@ -155,10 +155,10 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
       {expanded ? (
         // Expanded: picture, then sender and date, subject and text, and the files.
         <>
-          <Stack direction="row" alignItems="center" sx={{ mt: -0.25 }}>{controls}</Stack>
+          <Stack direction="row" sx={{ alignItems: 'center', mt: -0.25 }}>{controls}</Stack>
           <Box sx={{ pt: 0.25 }}><ListAvatar accountId={accountId} email={email} people={people} size={36} /></Box>
           <Box sx={{ flex: 1, minWidth: 0, ml: 1 }}>
-            <Stack direction="row" spacing={1} alignItems="baseline">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
               <Typography noWrap sx={{ flex: 1, fontWeight: weight }}>{names}</Typography>
               {email.hasAttachment && listedAttachments(email).length === 0 && <AttachFile className="row-date" sx={ATTACH_ICON_SX} />}
               <Typography className="row-date" variant="caption" color={unread ? 'primary' : 'text.secondary'} sx={{ whiteSpace: 'nowrap', fontWeight: weight }}>
@@ -173,7 +173,7 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
             ) : (
               <Typography noWrap variant="body2">{subjectAndPreview}</Typography>
             )}
-            {chips.length > 0 && <Stack direction="row" gap={0.5} sx={{ mt: 0.5 }} flexWrap="wrap">{chips}</Stack>}
+            {chips.length > 0 && <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>{chips}</Stack>}
             <ListAttachments accountId={accountId} email={email} onPreview={handlers.preview} />
           </Box>
         </>
@@ -183,7 +183,7 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
           {controls}
           <ListAvatar accountId={accountId} email={email} people={people} size={24} />
           <Typography noWrap sx={{ width: narrow ? 96 : { xs: 110, sm: 180 }, flexShrink: 0, fontWeight: weight, ml: 0.75 }}>{names}</Typography>
-          <Stack direction="row" alignItems="center" gap={0.75} sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flex: 1, minWidth: 0 }}>
             {!narrow && chips}
             <Typography noWrap variant="body2" sx={{ minWidth: 0 }}>{subjectAndPreview}</Typography>
           </Stack>

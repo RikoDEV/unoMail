@@ -58,7 +58,7 @@ const percent = (part: number, total: number) => (total > 0 ? Math.round((part /
 function Compliance({ passed, total }: { passed: number; total: number }) {
   const value = percent(passed, total);
   return (
-    <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 150 }}>
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 150 }}>
       <LinearProgress variant="determinate" value={value} color={value >= 95 ? 'success' : value >= 70 ? 'warning' : 'error'} sx={{ flex: 1, height: 8, borderRadius: 4 }} />
       <Typography variant="body2" sx={{ width: 42, textAlign: 'right' }}>
         {value}%
@@ -107,7 +107,7 @@ export function Dmarc() {
         <code> rua= </code>{t('address of your DMARC record) are imported automatically.')}
       </Typography>
       {data && data.domains.length === 0 && <Alert severity="info">{t('No reports received in this period yet.')}</Alert>}
-      <Stack direction="row" flexWrap="wrap" gap={2} sx={{ mb: 3 }}>
+      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2, mb: 3 }}>
         {(data?.domains ?? []).map((d) => (
           <Card key={d.domain} variant="outlined" sx={{ minWidth: 260, flex: '1 1 260px' }} data-testid={`dmarc-${d.domain}`}>
             <CardContent>
@@ -240,7 +240,7 @@ export function Diagnostics() {
         </Button>
       </PageHeader>
       {!data ? (
-        <Stack direction="row" spacing={2} alignItems="center"><CircularProgress size={20} /><Typography>{t('Running connectivity tests…')}</Typography></Stack>
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}><CircularProgress size={20} /><Typography>{t('Running connectivity tests…')}</Typography></Stack>
       ) : (
         <>
           <Card variant="outlined" sx={{ mb: 3, maxWidth: 420 }}>
@@ -266,7 +266,7 @@ export function Diagnostics() {
             </TableBody>
           </ScrollTable>
           <Typography variant="h6">{t('Outbound delivery')}</Typography>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 3 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 3 }}>
             <StatusChip status={data.outbound_port_25} />
             <Typography variant="body2">{data.outbound_message}</Typography>
           </Stack>
@@ -280,11 +280,11 @@ export function Diagnostics() {
             <Alert severity="success" sx={{ mb: 3 }}>{t('Not listed on any checked blocklist.')}</Alert>
           )}
           <Typography variant="h6">{t('Spam and virus filter')}</Typography>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <StatusChip status={data.rspamd} />
             <Typography variant="body2">{data.rspamd === 'ok' ? t('Rspamd is reachable.') : data.rspamd === 'warning' ? t('No content filter is configured.') : t('Rspamd is configured but unreachable; mail is deferred until it returns.')}</Typography>
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }} data-testid="virus-scanner-status">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }} data-testid="virus-scanner-status">
             <StatusChip status={data.virus_scanner} />
             <Typography variant="body2">{data.virus_message}</Typography>
           </Stack>
@@ -322,7 +322,7 @@ function Endpoint({ method, path, operation }: { method: string; path: string; o
   return (
     <Accordion disableGutters variant="outlined" slotProps={{ transition: { unmountOnExit: true } }}>
       <AccordionSummary expandIcon={<ExpandMore />}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
           <Chip size="small" label={method.toUpperCase()} color={METHOD_COLORS[method] ?? 'default'} sx={{ width: 72, fontWeight: 700 }} />
           <Typography sx={{ fontFamily: 'monospace', fontSize: 14 }} noWrap>{path}</Typography>
           <Typography variant="body2" color="text.secondary" noWrap>{operation.summary}</Typography>

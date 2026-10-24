@@ -14,7 +14,11 @@ export const FIELD_ROW = { borderBottom: 1, borderColor: 'divider', mx: 2, minHe
 
 export function Field({ label, value, onChange, autoFocus }: { label: string; value: string; onChange: (value: string) => void; autoFocus?: boolean }) {
   return (
-    <Stack direction="row" alignItems="center" sx={FIELD_ROW}>
+    <Stack
+      direction="row"
+      sx={[{
+        alignItems: "center"
+      }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
       <InputBase fullWidth value={value} placeholder={label} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus} inputProps={{ 'aria-label': label }} />
     </Stack>
   );
@@ -58,9 +62,13 @@ export function RecipientField({ label, placeholder, value, onChange, autoFocus,
   const open = options.length > 0;
   return (
     <Box sx={{ position: 'relative' }}>
-      <Stack direction="row" alignItems="center" sx={FIELD_ROW}>
+      <Stack
+        direction="row"
+        sx={[{
+          alignItems: "center"
+        }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
         {value && (
-          <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mr: 1 }}>
             {label}
           </Typography>
         )}
@@ -109,9 +117,10 @@ export function RecipientField({ label, placeholder, value, onChange, autoFocus,
               <ListItemText
                 primary={option.source === 'group' ? `${option.name} (${option.members.length === 1 ? '1 person' : t('{{count}} people', { count: option.members.length })})` : option.name || option.email}
                 secondary={option.source === 'group' ? t('Group') : option.name ? option.email : undefined}
-                primaryTypographyProps={{ noWrap: true }}
-                secondaryTypographyProps={{ noWrap: true }}
-              />
+                slotProps={{
+                  primary: { noWrap: true },
+                  secondary: { noWrap: true }
+                }} />
               {option.source !== 'contact' && option.source !== 'group' && <Chip size="small" label={option.source === 'ldap' ? t('Directory') : t('Colleague')} sx={{ ml: 1 }} />}
             </MenuItem>
           ))}

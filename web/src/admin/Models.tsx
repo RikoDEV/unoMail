@@ -39,23 +39,25 @@ function ExtractionSettings({ models }: { models: Model[] }) {
   const { run, feedback } = useAction();
   const value = draft ?? settings.data;
   if (!value) return settings.error ? <Alert severity="error">{settings.error}</Alert> : null;
-  return <Box component="section" aria-label={t('Summary card extraction')} sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-    <Typography variant="h6" sx={{ mb: 1 }}>{t('Summary card extraction')}</Typography>
-    {feedback}
-    <Stack spacing={1.5} alignItems="flex-start">
-      {/* MUI renders an empty-string select value as nothing selected, so local-only uses a sentinel. */}
-      <TextField select label={t('Extraction model')} value={models.some((m) => m.id === value.model_id && m.enabled) ? value.model_id : LOCAL_ONLY} onChange={(e) => { const id = e.target.value === LOCAL_ONLY ? '' : e.target.value; setDraft({ ...value, model_id: id, automatic_ai: id ? value.automatic_ai : false }); }} sx={{ minWidth: 260 }}>
-        <MenuItem value={LOCAL_ONLY}>{t('Local structured data only')}</MenuItem>
-        {models.filter((m) => m.enabled).map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
-      </TextField>
-      <FormControlLabel control={<Switch checked={value.automatic_ai} disabled={!value.model_id} onChange={(e) => setDraft({ ...value, automatic_ai: e.target.checked })} />} label={t('Allow automatic AI extraction')} />
-      <Typography variant="body2" color="text.secondary">{t('Automatic AI extraction also requires each user to opt in. Structured data is always processed locally.')}</Typography>
-      <Button variant="contained" disabled={busy || !draft} onClick={() => {
-        setBusy(true);
-        void run(() => put('/api/models/summary-cards', value), t('Extraction settings saved')).then((ok) => { if (ok) { setDraft(null); void settings.reload(); } }).finally(() => setBusy(false));
-      }}>{t('Save extraction settings')}</Button>
-    </Stack>
-  </Box>;
+  return (
+    <Box component="section" aria-label={t('Summary card extraction')} sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+      <Typography variant="h6" sx={{ mb: 1 }}>{t('Summary card extraction')}</Typography>
+      {feedback}
+      <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+        {/* MUI renders an empty-string select value as nothing selected, so local-only uses a sentinel. */}
+        <TextField select label={t('Extraction model')} value={models.some((m) => m.id === value.model_id && m.enabled) ? value.model_id : LOCAL_ONLY} onChange={(e) => { const id = e.target.value === LOCAL_ONLY ? '' : e.target.value; setDraft({ ...value, model_id: id, automatic_ai: id ? value.automatic_ai : false }); }} sx={{ minWidth: 260 }}>
+          <MenuItem value={LOCAL_ONLY}>{t('Local structured data only')}</MenuItem>
+          {models.filter((m) => m.enabled).map((m) => <MenuItem key={m.id} value={m.id}>{m.name}</MenuItem>)}
+        </TextField>
+        <FormControlLabel control={<Switch checked={value.automatic_ai} disabled={!value.model_id} onChange={(e) => setDraft({ ...value, automatic_ai: e.target.checked })} />} label={t('Allow automatic AI extraction')} />
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Automatic AI extraction also requires each user to opt in. Structured data is always processed locally.')}</Typography>
+        <Button variant="contained" disabled={busy || !draft} onClick={() => {
+          setBusy(true);
+          void run(() => put('/api/models/summary-cards', value), t('Extraction settings saved')).then((ok) => { if (ok) { setDraft(null); void settings.reload(); } }).finally(() => setBusy(false));
+        }}>{t('Save extraction settings')}</Button>
+      </Stack>
+    </Box>
+  );
 }
 
 function ModelDialog({ model, onClose, onSaved }: { model: Model; onClose: () => void; onSaved: () => void }) {
@@ -108,20 +110,27 @@ export function Models() {
   return (
     <>
       <PageHeader title={t('Models')}><Button variant="contained" startIcon={<Add />} onClick={() => setEditing({ ...emptyModel })}>{t('Add model')}</Button></PageHeader>
-      <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>{t('Configure AI models for email summaries and translations. API keys are encrypted and kept on the server.')}</Typography>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>{t('Configure AI models for email summaries and translations. API keys are encrypted and kept on the server.')}</Typography>
       {feedback}
       {models.error && <Alert severity="error">{models.error}</Alert>}
       {!models.data && !models.error && <CircularProgress aria-label={t('Loading models')} />}
       {models.data?.length === 0 && <Alert severity="info">{t('No AI models configured. Add a model to enable summaries and translations in webmail.')}</Alert>}
       <Stack divider={<Box sx={{ borderBottom: 1, borderColor: 'divider' }} />}>
         {models.data?.map((model) => (
-          <Stack key={model.id} direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} sx={{ py: 2 }}>
+          <Stack
+            key={model.id}
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={2}
+            sx={{
+              alignItems: { sm: 'center' },
+              py: 2
+            }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" spacing={1} alignItems="center"><Typography fontWeight={600}>{model.name}</Typography><Chip size="small" variant="outlined" label={model.enabled ? t('Enabled') : t('Disabled')} /></Stack>
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{PROVIDERS.find((p) => p.id === model.provider)?.name} · {model.model}</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>{model.base_url}</Typography>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><Typography sx={{ fontWeight: 600 }}>{model.name}</Typography><Chip size="small" variant="outlined" label={model.enabled ? t('Enabled') : t('Disabled')} /></Stack>
+              <Typography variant="body2" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>{PROVIDERS.find((p) => p.id === model.provider)?.name} · {model.model}</Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }}>{model.base_url}</Typography>
             </Box>
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <Button variant="outlined" disabled={Boolean(testing)} onClick={() => void test(model)}>{testing === model.id ? t('Testing…') : t('Test connection')}</Button>
               <Tooltip title={t('Edit model')}><IconButton aria-label={t('Edit {{name}}', { name: model.name })} onClick={() => setEditing(model)}><Edit /></IconButton></Tooltip>
               <Tooltip title={t('Delete model')}><IconButton aria-label={t('Delete {{name}}', { name: model.name })} onClick={() => setRemoving(model)}><Delete /></IconButton></Tooltip>

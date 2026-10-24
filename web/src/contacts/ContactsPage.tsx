@@ -75,7 +75,7 @@ function ContactDialog({ contact, groups, onClose }: { contact: Contact | null; 
           <TextField label={t('Notes')} value={form.notes} onChange={(e) => set({ notes: e.target.value })} multiline minRows={2} />
           {groups.length > 0 && (
             <Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {t('Groups')}
               </Typography>
               <FormGroup row>
@@ -176,12 +176,18 @@ export default function ContactsPage() {
       <DialogTitle>{t('Use these contacts on a phone or in a mail program')}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('Add a CardDAV account (on Android with DAVx⁵; built into iOS, macOS and Thunderbird) with the server address below and sign in with your e-mail address and password. Contacts added or changed there appear here, and the other way round.')}
           </Typography>
-          <TextField label={t('Server address')} value={sync.carddav.server} size="small" InputProps={{ readOnly: true }} onFocus={(e) => e.target.select()} />
-          <TextField label={t('User name')} value={sync.caldav.username} size="small" InputProps={{ readOnly: true }} onFocus={(e) => e.target.select()} />
-          <TextField label={t('Address book (if the program asks for it)')} value={sync.carddav.addressbook} size="small" InputProps={{ readOnly: true }} onFocus={(e) => e.target.select()} />
+          <TextField label={t('Server address')} value={sync.carddav.server} size="small" onFocus={(e) => e.target.select()} slotProps={{
+            input: { readOnly: true }
+          }} />
+          <TextField label={t('User name')} value={sync.caldav.username} size="small" onFocus={(e) => e.target.select()} slotProps={{
+            input: { readOnly: true }
+          }} />
+          <TextField label={t('Address book (if the program asks for it)')} value={sync.carddav.addressbook} size="small" onFocus={(e) => e.target.select()} slotProps={{
+            input: { readOnly: true }
+          }} />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -202,7 +208,9 @@ export default function ContactsPage() {
             {groups.map((candidate) => (
               <ListItemButton key={candidate.id} selected={group === candidate.id} onClick={() => setGroup(candidate.id)} sx={{ mb: 0.25 }}>
                 <ListItemIcon sx={{ minWidth: 40 }}><Group /></ListItemIcon>
-                <ListItemText primary={candidate.name} secondary={t('{{count}} members', { count: candidate.members })} primaryTypographyProps={{ noWrap: true }} />
+                <ListItemText primary={candidate.name} secondary={t('{{count}} members', { count: candidate.members })} slotProps={{
+                  primary: { noWrap: true }
+                }} />
                 <IconButton size="small" aria-label={t('Delete group {{name}}', { name: candidate.name })} onClick={(e) => { e.stopPropagation(); removeGroup(candidate); }}>
                   <Delete fontSize="inherit" />
                 </IconButton>
@@ -215,7 +223,7 @@ export default function ContactsPage() {
           </List>
         </Box>
         <Paper elevation={0} component="main" sx={{ flex: 1, minWidth: 0, overflow: 'auto', borderRadius: 1.5, mr: 1, mb: 1, p: 3 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 2 }}>
             <Typography variant="h5" component="h1" sx={{ flex: 1 }}>
               {currentGroup ? currentGroup.name : t('All contacts')}
             </Typography>
@@ -237,7 +245,7 @@ export default function ContactsPage() {
             </Button>
           </Stack>
           {contacts.length === 0 ? (
-            <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>
+            <Typography sx={{ color: 'text.secondary', p: 4, textAlign: 'center' }}>
               {query ? t('No contacts match your search.') : t('No contacts yet.')}
             </Typography>
           ) : (

@@ -33,7 +33,7 @@ async function flushPictures() {
     const list = [...ids];
     for (let i = 0; i < list.length; i += 200) {
       const chunk = list.slice(i, i + 200);
-      const found = await get<Record<string, string>>(`/jmap/avatars/${accountId}?ids=${chunk.join(',')}`).catch(() => ({}) as Record<string, string>);
+      const found = await get<Record<string, string>>(`/jmap/avatars/${accountId}?ids=${chunk.join(',')}`).catch(() => (({}) as Record<string, string>));
       for (const id of chunk) pictures.set(`${accountId}/${id}`, Boolean(found[id]) && found[id] !== 'none');
     }
   }
@@ -67,9 +67,11 @@ export function ListAvatar({ accountId, email, size, people }: { accountId: stri
     <Avatar
       src={hasPicture ? `/jmap/avatar/${accountId}/${email.id}` : undefined}
       alt=""
-      imgProps={{ loading: 'lazy', referrerPolicy: 'no-referrer' }}
       sx={{ width: size, height: size, fontSize: size * 0.45, bgcolor: 'm3.primaryContainer', color: 'm3.onPrimaryContainer', flexShrink: 0 }}
       aria-hidden
+      slotProps={{
+        img: { loading: 'lazy', referrerPolicy: 'no-referrer' }
+      }}
     >
       {initial}
     </Avatar>
@@ -96,7 +98,7 @@ export function ListAttachments({ accountId, email, onPreview }: { accountId: st
   if (files.length === 0) return null;
   const stop = (event: MouseEvent) => event.stopPropagation();
   return (
-    <Stack direction="row" gap={0.75} sx={{ mt: 0.75, minWidth: 0, overflow: 'hidden' }} role="list" aria-label={t('Attachments of {{subject}}', { subject: email.subject || t('(no subject)') })} onClick={stop}>
+    <Stack direction="row" role="list" aria-label={t('Attachments of {{subject}}', { subject: email.subject || t('(no subject)') })} onClick={stop} sx={{ gap: 0.75, mt: 0.75, minWidth: 0, overflow: 'hidden' }}>
       {dialog}
       {files.slice(0, SHOWN).map((part) => {
         const name = part.name ?? 'attachment';

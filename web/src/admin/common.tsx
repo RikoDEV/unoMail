@@ -78,7 +78,7 @@ export const routeBy =
 export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
   useTitle(title, t('Administration'));
   return (
-    <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }} flexWrap="wrap" useFlexGap>
+    <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 2 }}>
       <Typography variant="h5" component="h1" sx={{ flex: 1 }}>
         {title}
       </Typography>
@@ -205,7 +205,7 @@ export function rowWithDetail(key: string | number, compact: boolean, cells: Rea
           <TableCell colSpan={columns} sx={{ pt: 0 }}>
             {/* Stays in view while the wide table scrolls sideways. */}
             <Box sx={{ position: 'sticky', left: 16, maxWidth: 'calc(100vw - 64px)', overflowWrap: 'anywhere' }}>
-              <Typography variant="caption" color="text.secondary">{label}: </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}: </Typography>
               <Typography variant="body2" component="span">{detail}</Typography>
             </Box>
           </TableCell>
@@ -220,7 +220,7 @@ export function UsageBar({ label, used, limit }: { label: string; used: number; 
   const share = limit > 0 ? used / limit : 0;
   return (
     <>
-      <Typography variant="caption" display="block">
+      <Typography variant="caption" sx={{ display: 'block' }}>
         {t('{{label}}: {{used}} of {{limit}}', { label, used: used.toLocaleString(uiLocale()), limit: limit.toLocaleString(uiLocale()) })}
       </Typography>
       <LinearProgress variant="determinate" value={Math.min(100, share * 100)} color={share >= 0.9 ? 'error' : share >= 0.7 ? 'warning' : 'primary'} />

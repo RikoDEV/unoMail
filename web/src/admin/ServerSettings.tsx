@@ -269,11 +269,11 @@ function GlobalScripts() {
   return (
     <Box>
       <Typography variant="h6">{t('Global filter scripts')}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('Sieve scripts that users can include in their own filters with')} <code>include :global "name";</code>.
       </Typography>
       {feedback}
-      <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, mb: 2 }}>
         {(data ?? []).map((item) => (
           <Chip
             key={item.name}
@@ -285,7 +285,7 @@ function GlobalScripts() {
             color={item.name === name ? 'primary' : 'default'}
           />
         ))}
-        {data?.length === 0 && <Typography variant="body2" color="text.secondary">{t('No global scripts yet.')}</Typography>}
+        {data?.length === 0 && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('No global scripts yet.')}</Typography>}
       </Stack>
       <Stack spacing={2} sx={{ maxWidth: 720 }}>
         <TextField label={t('Global script name')} value={name} onChange={(e) => setName(e.target.value)} error={Boolean(name) && !nameValid} helperText={name && !nameValid ? t('Letters, digits, ".", "-" and "_" only') : ''} sx={{ maxWidth: 320 }} />
@@ -322,7 +322,7 @@ export function ServerSettings() {
   return (
     <>
       <PageHeader title={t('Server settings')} />
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
         {t('Changes apply immediately to all services, without a restart. Defaults come from the container environment.')}
       </Typography>
       {feedback}
@@ -330,89 +330,89 @@ export function ServerSettings() {
         // Whether secrets are stored is known separately: the values never carry them.
         const note = group.note?.({ ...data.values, ...Object.fromEntries(Object.entries(data.secrets_set ?? {}).map(([key, set]) => [`${key}_set`, set])) });
         return (
-        <Card key={group.title} variant="outlined" sx={{ mb: 2 }}>
-          <CardContent sx={{ pb: '8px !important' }}>
-          <Typography variant="h6">{group.title}</Typography>
-          {group.description && (
-            <Typography variant="body2" color="text.secondary">
-              {group.description}
-            </Typography>
-          )}
-          {note && <Alert severity="warning" sx={{ mt: 1 }}>{note}</Alert>}
-          <ScrollTable size="small" aria-label={group.title} sx={{ mt: 1, '& tr:last-of-type td': { borderBottom: 0 } }}>
-            <TableBody>
-              {group.fields
-                .filter((field) => (field.dependsOn ?? []).every((key) => Boolean(data.values[key])))
-                .filter((field) => !field.dependsOnValues || field.dependsOnValues.includes(String(data.values[field.dependsOn![0]])))
-                .map((field) => {
-                const value = data.values[field.key];
-                const overridden = data.overridden.includes(field.key);
-                const draft = drafts[field.key];
-                const parsed = draft !== undefined ? parse(field, draft) : {};
-                return (
-                  <TableRow key={field.key}>
-                    <TableCell sx={{ width: '42%' }}>
-                      <Typography>{field.label}</Typography>
-                      <Typography variant="caption" color="text.secondary">{field.help}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      {field.kind === 'bool' ? (
-                        <FormControlLabel
-                          control={<Switch checked={Boolean(value)} onChange={(e) => void save(field.key, e.target.checked)} inputProps={{ 'aria-label': field.label }} />}
-                          label={value ? t('On') : t('Off')}
-                        />
-                      ) : field.kind === 'select' ? (
-                        <TextField
-                          select
-                          value={String(value ?? '')}
-                          onChange={(e) => void save(field.key, e.target.value)}
-                          sx={{ width: 340 }}
-                          slotProps={{ select: { inputProps: { 'aria-label': field.label } } }}
-                        >
-                          {field.options!.map((option) => (
-                            <MenuItem key={option.value} value={option.value}>
-                              {option.label}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      ) : (
-                        <Stack direction="row" spacing={1} alignItems="flex-start">
-                          <TextField
-                            value={draft ?? toText(field, value)}
-                            onChange={(e) => setDrafts((d) => ({ ...d, [field.key]: e.target.value }))}
-                            error={Boolean(parsed.error)}
-                            helperText={parsed.error ?? (field.kind === 'secret' ? (data.secrets_set?.[field.key] ? t('A password is stored. Save an empty field to remove it.') : t('No password stored')) : undefined)}
-                            type={field.kind === 'secret' ? 'password' : 'text'}
-                            autoComplete={field.kind === 'secret' ? 'new-password' : 'off'}
-                            placeholder={field.kind === 'secret' && data.secrets_set?.[field.key] ? '••••••••' : undefined}
-                            sx={{ width: field.kind === 'list' || field.kind === 'text' || field.kind === 'secret' ? 340 : 160 }}
-                            slotProps={{ htmlInput: { 'aria-label': field.label } }}
+          <Card key={group.title} variant="outlined" sx={{ mb: 2 }}>
+            <CardContent sx={{ pb: '8px !important' }}>
+            <Typography variant="h6">{group.title}</Typography>
+            {group.description && (
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {group.description}
+              </Typography>
+            )}
+            {note && <Alert severity="warning" sx={{ mt: 1 }}>{note}</Alert>}
+            <ScrollTable size="small" aria-label={group.title} sx={{ mt: 1, '& tr:last-of-type td': { borderBottom: 0 } }}>
+              <TableBody>
+                {group.fields
+                  .filter((field) => (field.dependsOn ?? []).every((key) => Boolean(data.values[key])))
+                  .filter((field) => !field.dependsOnValues || field.dependsOnValues.includes(String(data.values[field.dependsOn![0]])))
+                  .map((field) => {
+                  const value = data.values[field.key];
+                  const overridden = data.overridden.includes(field.key);
+                  const draft = drafts[field.key];
+                  const parsed = draft !== undefined ? parse(field, draft) : {};
+                  return (
+                    <TableRow key={field.key}>
+                      <TableCell sx={{ width: '42%' }}>
+                        <Typography>{field.label}</Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{field.help}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        {field.kind === 'bool' ? (
+                          <FormControlLabel
+                            control={<Switch checked={Boolean(value)} onChange={(e) => void save(field.key, e.target.checked)} slotProps={{ input: { 'aria-label': field.label } }} />}
+                            label={value ? t('On') : t('Off')}
                           />
-                          <Button disabled={draft === undefined || Boolean(parsed.error)} onClick={() => void save(field.key, parsed.value)}>
-                            {t('Save')}
-                          </Button>
-                        </Stack>
-                      )}
-                    </TableCell>
-                    <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
-                      {overridden ? (
-                        <>
-                          <Chip size="small" label={t('changed')} color="primary" sx={{ mr: 1 }} />
-                          <Button size="small" onClick={() => void save(field.key, null)} aria-label={t('Reset {{label}}', { label: field.label })}>
-                            {t('Reset')}
-                          </Button>
-                        </>
-                      ) : (
-                        <Chip size="small" label={t('default')} variant="outlined" />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </ScrollTable>
-          </CardContent>
-        </Card>
+                        ) : field.kind === 'select' ? (
+                          <TextField
+                            select
+                            value={String(value ?? '')}
+                            onChange={(e) => void save(field.key, e.target.value)}
+                            sx={{ width: 340 }}
+                            slotProps={{ select: { inputProps: { 'aria-label': field.label } } }}
+                          >
+                            {field.options!.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        ) : (
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                            <TextField
+                              value={draft ?? toText(field, value)}
+                              onChange={(e) => setDrafts((d) => ({ ...d, [field.key]: e.target.value }))}
+                              error={Boolean(parsed.error)}
+                              helperText={parsed.error ?? (field.kind === 'secret' ? (data.secrets_set?.[field.key] ? t('A password is stored. Save an empty field to remove it.') : t('No password stored')) : undefined)}
+                              type={field.kind === 'secret' ? 'password' : 'text'}
+                              autoComplete={field.kind === 'secret' ? 'new-password' : 'off'}
+                              placeholder={field.kind === 'secret' && data.secrets_set?.[field.key] ? '••••••••' : undefined}
+                              sx={{ width: field.kind === 'list' || field.kind === 'text' || field.kind === 'secret' ? 340 : 160 }}
+                              slotProps={{ htmlInput: { 'aria-label': field.label } }}
+                            />
+                            <Button disabled={draft === undefined || Boolean(parsed.error)} onClick={() => void save(field.key, parsed.value)}>
+                              {t('Save')}
+                            </Button>
+                          </Stack>
+                        )}
+                      </TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                        {overridden ? (
+                          <>
+                            <Chip size="small" label={t('changed')} color="primary" sx={{ mr: 1 }} />
+                            <Button size="small" onClick={() => void save(field.key, null)} aria-label={t('Reset {{label}}', { label: field.label })}>
+                              {t('Reset')}
+                            </Button>
+                          </>
+                        ) : (
+                          <Chip size="small" label={t('default')} variant="outlined" />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </ScrollTable>
+            </CardContent>
+          </Card>
         );
       })}
       <Card variant="outlined">

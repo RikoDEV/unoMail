@@ -81,7 +81,7 @@ function IdentityDialog({ identity, onClose }: { identity: Identity | null; onCl
           <FormControlLabel control={<Switch checked={form.external} onChange={(e) => set({ external: e.target.checked })} />} label={t("Send through another provider's SMTP server")} />
           {form.external && (
             <>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {t('Messages from this identity are handed to that server only. The password is stored encrypted and is never shown again.')}
               </Typography>
               <Stack direction="row" spacing={2}>
@@ -196,7 +196,7 @@ export function TemplatesCard() {
   return (
     <ListCard title={t('Response templates')} addLabel={t('Add template')} onAdd={() => setEditing(null)} error={error} onDismiss={() => setError('')}>
       {items.length === 0 ? (
-        <Typography color="text.secondary">{t("No templates yet. Templates are inserted from the composer's toolbar.")}</Typography>
+        <Typography sx={{ color: 'text.secondary' }}>{t("No templates yet. Templates are inserted from the composer's toolbar.")}</Typography>
       ) : (
         <Table size="small" aria-label={t('Templates')}>
           <TableBody>

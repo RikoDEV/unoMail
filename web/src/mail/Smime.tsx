@@ -48,7 +48,7 @@ export function SmimeBadges({ status }: { status: SmimeStatus | null | undefined
   const signer = signature?.signer?.emails.join(', ') || signature?.signer?.subject || t('unknown signer');
   return (
     <Stack spacing={1} sx={{ mb: 1 }}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
         {status.encrypted && status.decrypted && (
           <Chip size="small" icon={<Lock />} label={t('Encrypted (S/MIME)')} variant="outlined" />
         )}

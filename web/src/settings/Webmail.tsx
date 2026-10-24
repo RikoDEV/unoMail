@@ -77,18 +77,18 @@ export function NotificationsCard() {
         </Typography>
         {notificationsSupported() ? (
           <FormControlLabel
-            control={<Switch checked={Boolean(enabled)} disabled={busy || enabled === null} onChange={(e) => void toggle(e.target.checked)} inputProps={{ 'aria-label': t('Notify me of new mail') }} />}
+            control={<Switch checked={Boolean(enabled)} disabled={busy || enabled === null} onChange={(e) => void toggle(e.target.checked)} slotProps={{ input: { 'aria-label': t('Notify me of new mail') } }} />}
             label={t('Notify me of new mail in this browser, also when unoMail is closed')}
           />
         ) : (
-          <Typography color="text.secondary">{t('This browser cannot show notifications.')}</Typography>
+          <Typography sx={{ color: 'text.secondary' }}>{t('This browser cannot show notifications.')}</Typography>
         )}
         {enabled && pageOnly && (
-          <Typography variant="body2" color="text.secondary">{t('Push notifications are not available here, so they appear only while unoMail is open in a tab.')}</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Push notifications are not available here, so they appear only while unoMail is open in a tab.')}</Typography>
         )}
         {error && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError('')}>{error}</Alert>}
         {mailtoHandlerSupported() && (
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 2 }}>
             <Button
               variant="outlined"
               onClick={() => {
@@ -102,7 +102,7 @@ export function NotificationsCard() {
             >
               {t('Open mail links with unoMail')}
             </Button>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
               {mailtoAsked ? t('Confirm in the browser (look for a prompt near the address bar).') : t('mailto: links on other sites will open a new message here.')}
             </Typography>
           </Stack>
@@ -129,7 +129,7 @@ export function MessageListCard() {
         <Typography variant="h6" sx={{ mb: 1 }}>
           {t('Message list')}
         </Typography>
-        <Stack direction={{ xs: 'column', sm: 'row' }} gap={1.5} role="radiogroup" aria-label={t('Message list density')}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} role="radiogroup" aria-label={t('Message list density')} sx={{ gap: 1.5 }}>
           {options.map((option) => (
             <Box
               key={option.value}
@@ -156,13 +156,13 @@ export function MessageListCard() {
                   </Stack>
                 )}
               </Box>
-              <Typography fontWeight={600}>{option.title}</Typography>
-              <Typography variant="body2" color="text.secondary">{option.text}</Typography>
+              <Typography sx={{ fontWeight: 600 }}>{option.title}</Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>{option.text}</Typography>
             </Box>
           ))}
         </Stack>
         <FormControlLabel sx={{ mt: 1.5 }} control={<Switch checked={offline} onChange={(_, enabled) => { setPersistentCache(enabled); setOffline(enabled); }} />} label="Keep mail offline on this trusted device" />
-        <Typography variant="body2" color="text.secondary">Off by default. Cached messages are stored unencrypted in this browser and removed on sign-out.</Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>Off by default. Cached messages are stored unencrypted in this browser and removed on sign-out.</Typography>
       </CardContent>
     </Card>
   );
@@ -221,10 +221,10 @@ export function AppearanceCard() {
         <Typography variant="h6" sx={{ mb: 1 }}>
           {t('Appearance')}
         </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Choose a skin. Light and dark mode are in the account menu.')}
         </Typography>
-        <Stack direction="row" flexWrap="wrap" gap={1.5} role="radiogroup" aria-label={t('Skin')}>
+        <Stack direction="row" role="radiogroup" aria-label={t('Skin')} sx={{ flexWrap: 'wrap', gap: 1.5 }}>
           {skins.map((candidate) => {
             const dark = skinIsDark(candidate, false);
             const custom = !BUILT_IN_SKINS.some((builtIn) => builtIn.id === candidate.id);
@@ -244,7 +244,7 @@ export function AppearanceCard() {
                 <Box sx={{ height: 28, mb: 0.5, bgcolor: candidate.paper ?? (dark ? '#1d1b20' : '#fffbfe'), borderRadius: `${Math.min(candidate.radius ?? 16, 12)}px`, display: 'flex', alignItems: 'center', px: 1 }}>
                   <Box sx={{ width: 36, height: 10, bgcolor: candidate.primary ?? 'primary.main', borderRadius: `${Math.min(candidate.radius ?? 16, 5)}px` }} />
                 </Box>
-                <Typography variant="body2" fontWeight={600} noWrap>
+                <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
                   {candidate.name}
                 </Typography>
                 {custom && <Typography variant="caption">{t('Custom')}</Typography>}
@@ -254,13 +254,13 @@ export function AppearanceCard() {
         </Stack>
         {takesAccent && (
           <Box sx={{ mt: 3 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {t('Accent colour')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
               {t('The colour of buttons, links and highlights. The interface builds its shades from it.')}
             </Typography>
-            <Stack direction="row" flexWrap="wrap" useFlexGap gap={1.5} role="group" aria-label={t('Accent colour')}>
+            <Stack direction="row" useFlexGap role="group" aria-label={t('Accent colour')} sx={{ flexWrap: 'wrap', gap: 1.5 }}>
               {SEEDS.map((color) => (
                 <Box
                   key={color}

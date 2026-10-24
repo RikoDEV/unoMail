@@ -110,7 +110,9 @@ export function MailSidebar({
             {...dropProps(m.id, { mailbox: m })}
           >
             <ListItemIcon sx={{ minWidth: 40 }}>{ICONS[m.role ?? ''] ?? (m.sharedWith ? <FolderShared /> : <Folder />)}</ListItemIcon>
-            <ListItemText primary={folderName(m)} primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }} />
+            <ListItemText primary={folderName(m)} slotProps={{
+              primary: { sx: { fontWeight: m.unreadEmails ? 700 : 400 }, noWrap: true }
+            }} />
             {m.unreadEmails > 0 && m.role !== 'drafts' ? <Badge badgeContent={m.unreadEmails} color="primary" variant={mini ? 'dot' : 'standard'} sx={{ mr: 1.5 }} /> : <FolderCount count={m.totalEmails} />}
             <IconButton size="small" aria-label={t('Folder actions {{value}}', { value: folderName(m) })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFolderMenu(e.currentTarget, m); }}>
               <MoreVert fontSize="inherit" />
@@ -125,11 +127,15 @@ export function MailSidebar({
           {...named(t('All mail'))}
         >
           <ListItemIcon sx={{ minWidth: 40 }}><AllInbox /></ListItemIcon>
-          <ListItemText primary={t('All mail')} primaryTypographyProps={{ noWrap: true }} />
+          <ListItemText primary={t('All mail')} slotProps={{
+            primary: { noWrap: true }
+          }} />
         </ListItemButton>)}
         {tip(t('Manage subscriptions'), <ListItemButton selected={subscriptionsPage} {...linkTo('/mail/subscriptions')} sx={{ mb: 0.25 }} {...named(t('Manage subscriptions'))}>
           <ListItemIcon sx={{ minWidth: 40 }}><UnsubscribeIcon /></ListItemIcon>
-          <ListItemText primary={t('Manage subscriptions')} primaryTypographyProps={{ noWrap: true }} />
+          <ListItemText primary={t('Manage subscriptions')} slotProps={{
+            primary: { noWrap: true }
+          }} />
         </ListItemButton>)}
         <ListItemButton className="mini-hide" onClick={onNewFolder}>
           <ListItemIcon sx={{ minWidth: 40 }}><Add /></ListItemIcon>
@@ -138,7 +144,7 @@ export function MailSidebar({
       </List>
       {sharedMailboxes.length > 0 && (
         <>
-          <Typography variant="overline" color="text.secondary" sx={{ px: 2, mt: 1, display: 'block' }}>
+          <Typography variant="overline" sx={{ color: 'text.secondary', px: 2, mt: 1, display: 'block' }}>
             {t('Shared with me')}
           </Typography>
           <List dense disablePadding aria-label={t('Shared folders')}>
@@ -155,9 +161,10 @@ export function MailSidebar({
                 <ListItemText
                   primary={m.name.split('/').slice(2).join('/') || m.name}
                   secondary={m.shareOwner}
-                  primaryTypographyProps={{ fontWeight: m.unreadEmails ? 700 : 400, noWrap: true }}
-                  secondaryTypographyProps={{ noWrap: true }}
-                />
+                  slotProps={{
+                    primary: { sx: { fontWeight: m.unreadEmails ? 700 : 400 }, noWrap: true },
+                    secondary: { noWrap: true }
+                  }} />
                 <FolderCount count={m.totalEmails} />
                 <IconButton size="small" aria-label={t('Folder actions {{name}}', { name: m.name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFolderMenu(e.currentTarget, m); }}>
                   <MoreVert fontSize="inherit" />
@@ -167,7 +174,7 @@ export function MailSidebar({
           </List>
         </>
       )}
-      <Typography variant="overline" color="text.secondary" sx={{ px: 2, mt: 1, display: 'block' }}>
+      <Typography variant="overline" sx={{ color: 'text.secondary', px: 2, mt: 1, display: 'block' }}>
         {t('Labels')}
       </Typography>
       <List dense disablePadding aria-label={t('Labels')}>
@@ -181,7 +188,9 @@ export function MailSidebar({
             {...dropProps(`label:${name}`, { label: name })}
           >
             <ListItemIcon sx={{ minWidth: 40 }}><LabelIcon sx={{ color: labelColor(name) || undefined }} /></ListItemIcon>
-            <ListItemText primary={name} primaryTypographyProps={{ noWrap: true }} />
+            <ListItemText primary={name} slotProps={{
+              primary: { noWrap: true }
+            }} />
             <IconButton size="small" aria-label={t('Colour of label {{name}}', { name })} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onLabelDialog({ name, color: labelColor(name), existing: true }); }}>
               <Palette fontSize="inherit" />
             </IconButton>
@@ -216,7 +225,7 @@ export function MailSidebar({
       </List>
       {account && (
         <Box className="mini-hide" sx={{ mt: 'auto', px: 2, pt: 3, flexShrink: 0 }}>
-          <Typography variant="caption" color="text.secondary" component="div">
+          <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
             {t('{{used}} of {{quota}}', { used: formatBytes(account.used_bytes), quota: account.quota_bytes ? formatBytes(account.quota_bytes) : t('unlimited') })}
           </Typography>
           {account.quota_bytes > 0 && (
@@ -238,7 +247,7 @@ export function MailSidebar({
 function FolderCount({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <Typography className="mini-hide" variant="caption" color="text.secondary" aria-label={t('{{count}} messages', { count })} sx={{ mr: 0.5, fontVariantNumeric: 'tabular-nums' }}>
+    <Typography className="mini-hide" variant="caption" aria-label={t('{{count}} messages', { count })} sx={{ color: 'text.secondary', mr: 0.5, fontVariantNumeric: 'tabular-nums' }}>
       {count}
     </Typography>
   );

@@ -39,7 +39,13 @@ if address :is "from" "boss@example.com" {
 function ConditionRow({ condition, onChange, onRemove }: { condition: Condition; onChange: (next: Condition) => void; onRemove?: () => void }) {
   const operators = operatorsFor(condition.field);
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} data-testid="condition" sx={(theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })}>
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={1}
+      data-testid="condition"
+      sx={[{
+        alignItems: { sm: 'center' }
+      }, (theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })]}>
       <TextField
         select
         size="small"
@@ -89,7 +95,13 @@ function ConditionRow({ condition, onChange, onRemove }: { condition: Condition;
 function ActionRow({ action, folders, labels, onChange, onRemove }: { action: Action; folders: Mailbox[]; labels: string[]; onChange: (next: Action) => void; onRemove?: () => void }) {
   const target = actionTarget(action.type);
   return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }} data-testid="action" sx={(theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })}>
+    <Stack
+      direction={{ xs: 'column', sm: 'row' }}
+      spacing={1}
+      data-testid="action"
+      sx={[{
+        alignItems: { sm: 'center' }
+      }, (theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })]}>
       <TextField
         select
         size="small"
@@ -254,7 +266,7 @@ function RulesPanel({ script, onChange, onShowScript }: { script: string; onChan
   return (
     <Stack spacing={1}>
       {rules.length === 0 ? (
-        <Typography color="text.secondary">{t('No rules yet. Rules are applied from the top to every incoming message.')}</Typography>
+        <Typography sx={{ color: 'text.secondary' }}>{t('No rules yet. Rules are applied from the top to every incoming message.')}</Typography>
       ) : (
         <List disablePadding aria-label={t('Filter rules')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
           {rules.map((rule, index) => (
@@ -270,7 +282,9 @@ function RulesPanel({ script, onChange, onShowScript }: { script: string; onChan
                 onChange={(e) => update(rules.map((r, i) => (i === index ? { ...r, enabled: e.target.checked } : r)))}
                 slotProps={{ input: { 'aria-label': t('Rule {{name}} enabled', { name: rule.name }) } }}
               />
-              <ListItemText primary={rule.name} secondary={summary(rule, label)} sx={{ minWidth: 0, flex: { xs: '1 1 calc(100% - 64px)', sm: 1 } }} secondaryTypographyProps={{ sx: { overflowWrap: 'anywhere' } }} />
+              <ListItemText primary={rule.name} secondary={summary(rule, label)} sx={{ minWidth: 0, flex: { xs: '1 1 calc(100% - 64px)', sm: 1 } }} slotProps={{
+                secondary: { sx: { overflowWrap: 'anywhere' } }
+              }} />
               <Stack direction="row" sx={{ flexShrink: 0, ml: { xs: 'auto', sm: 0 } }}>
                 <IconButton size="small" aria-label={t('Move {{name}} up', { name: rule.name })} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUpward fontSize="small" /></IconButton>
                 <IconButton size="small" aria-label={t('Move {{name}} down', { name: rule.name })} disabled={index === rules.length - 1} onClick={() => move(index, 1)}><ArrowDownward fontSize="small" /></IconButton>
@@ -382,14 +396,14 @@ export function FiltersCard() {
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('Mail filters')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Rules run on the server for every incoming message: file into folders, label, flag, forward or delete. Build them as rules, or write Sieve yourself. One script is active at a time; it can pull in the others with')}{' '}
           <code>include</code>{t('. Supported extensions: fileinto, mailbox, copy, envelope, body, imap4flags, regex, variables, vacation, include.')}
         </Typography>
         <Stack spacing={2}>
           {error && <Alert severity="error">{error}</Alert>}
           {saved && <Alert severity="success">{saved}</Alert>}
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField select label={t('Script')} value={name} onChange={(e) => { setSaved(''); setName(e.target.value); }} sx={{ minWidth: 200 }}>
               {options.map((option) => (
                 <MenuItem key={option.name} value={option.name}>

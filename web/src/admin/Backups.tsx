@@ -75,7 +75,7 @@ export function Backups() {
                 <code>UNOMAIL_BACKUP_S3_*</code> {t('credentials, and restart the server.')}
               </Alert>
             )}
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
               {t('Messages are stored in')} <code>{data.storage}</code>
               {data.encrypted_mail ? t(', encrypted') : ''}{t('. Backups do not contain the keys in the data directory (')}<code>secret.key</code>
               {data.encrypted_mail ? <>, <code>blob.key</code></> : null}{t('): keep a copy of them in a safe place, a restore needs them. Restore with')}{' '}
@@ -118,7 +118,7 @@ export function Backups() {
           <CardContent>
             <Typography variant="h6" sx={{ mb: 1 }}>{t('Recent runs')}</Typography>
             {data.runs.length === 0 ? (
-              <Typography color="text.secondary">{t('No backup has run yet.')}</Typography>
+              <Typography sx={{ color: 'text.secondary' }}>{t('No backup has run yet.')}</Typography>
             ) : (
               <ScrollTable size="small" aria-label={t('Backup runs')}>
                 <TableHead>

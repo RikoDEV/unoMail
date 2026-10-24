@@ -31,7 +31,7 @@ export function SmimeCard() {
           {t('S/MIME certificate')}
         </Typography>
         <Stack spacing={2} sx={{ maxWidth: 640 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('With a personal certificate (from your organisation or a certificate authority) your mail can be signed and encrypted with S/MIME, the standard built into Outlook, Apple Mail and Thunderbird. The private key is stored on this server, sealed with its key; the server uses it to sign what you send and to decrypt mail encrypted to you when you read it.')}
           </Typography>
           {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
@@ -39,11 +39,11 @@ export function SmimeCard() {
             <>
               <Box>
                 <Typography>{certificate.emails.join(', ')}</Typography>
-                <Typography variant="body2" color="text.secondary">{t('Issued by {{issuer}}', { issuer: certificate.issuer })}</Typography>
-                <Typography variant="body2" color="text.secondary">{t('Valid until {{not_after}}', { not_after: day(certificate.not_after) })}</Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Issued by {{issuer}}', { issuer: certificate.issuer })}</Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Valid until {{not_after}}', { not_after: day(certificate.not_after) })}</Typography>
                 <Typography variant="caption" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{certificate.fingerprint}</Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {t('Certificates of {{count}} correspondents are known, collected from their signed mail; you can encrypt mail to them.', { count: known })}
               </Typography>
               <Box>
@@ -53,7 +53,9 @@ export function SmimeCard() {
               </Box>
             </>
           ) : (
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{
+              alignItems: { sm: 'center' }
+            }}>
               <Button variant="outlined" component="label">
                 {file ? file.name : t('Choose .p12 / .pfx file')}
                 <input hidden type="file" accept=".p12,.pfx,application/x-pkcs12" aria-label={t('Certificate file')} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -115,10 +117,10 @@ function EncryptIncoming() {
   return (
     <Box>
       <FormControlLabel
-        control={<Switch checked={state.enabled} onChange={(e) => void toggle(e.target.checked)} inputProps={{ 'aria-label': t('Store incoming mail encrypted') }} />}
+        control={<Switch checked={state.enabled} onChange={(e) => void toggle(e.target.checked)} slotProps={{ input: { 'aria-label': t('Store incoming mail encrypted') } }} />}
         label={t('Store incoming mail encrypted to this key')}
       />
-      <Typography variant="caption" color="text.secondary" component="div">
+      <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
         {t('New messages are encrypted on arrival, before they are stored. Only you can read them, here after unlocking the key or in any mail program that has your private key; search covers their subject and senders only. Messages already stored are not changed.')}
       </Typography>
       {state.problem && <Alert severity="warning" sx={{ mt: 1 }}>{t('This key cannot be used for it: {{problem}}', { problem: state.problem })}</Alert>}
@@ -187,7 +189,7 @@ export function EncryptionCard() {
         <Stack spacing={2} sx={{ maxWidth: 640 }}>
           {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
           {notice && <Alert severity="success" onClose={() => setNotice('')}>{notice}</Alert>}
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t("Encrypted messages are encrypted and decrypted in your browser. The server stores your public key so that colleagues can write to you, and your private key only in its passphrase-protected form, if you choose so. Without the passphrase nobody, including the server's administrator, can read your encrypted mail; if you lose it, neither can you.")}
           </Typography>
           {keys === undefined ? null : keys ? (
@@ -197,26 +199,26 @@ export function EncryptionCard() {
                 <Typography sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }} data-testid="pgp-fingerprint">
                   {print}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   {keys.private_key ? t('The protected private key is stored on the server and available on every device.') : privateKey ? t('The private key is kept in this browser only.') : t('The private key is not available on this device.')}
                 </Typography>
               </Box>
               <EncryptIncoming key={keys.public_key} />
               {privateKey &&
                 (unlocked ? (
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                     <Chip color="success" label={t('Unlocked for this session')} />
                     <Button onClick={() => { lock(); setUnlocked(false); }}>{t('Lock')}</Button>
                   </Stack>
                 ) : (
-                  <Stack direction="row" spacing={1} alignItems="flex-start">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                     <TextField label={t('Passphrase')} type="password" autoComplete="off" value={unlockWith} onChange={(e) => setUnlockWith(e.target.value)} />
                     <Button variant="outlined" disabled={busy || !unlockWith} onClick={() => void run(() => unlock(privateKey, unlockWith), t('Key unlocked: messages you send are signed and encrypted mail can be read'))}>
                       {t('Unlock key')}
                     </Button>
                   </Stack>
                 ))}
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
                 <Button onClick={() => download(`${email}-public.asc`, keys.public_key)}>{t('Export public key')}</Button>
                 {privateKey && <Button onClick={() => download(`${email}-private.asc`, privateKey)}>{t('Back up private key')}</Button>}
                 <Button color="error" disabled={busy} onClick={() => window.confirm(t('Remove your keys? Mail encrypted to this key can no longer be read unless you kept a backup.')) && void run(() => removeKeys(email), t('Keys removed'))}>

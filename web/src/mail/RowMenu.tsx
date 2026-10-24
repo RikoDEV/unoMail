@@ -125,7 +125,7 @@ export function RowMenu({ target, folders, labels, labelColor, canArchive, inTra
       >
         {!single && (
           <MenuItem disabled dense sx={{ opacity: '1 !important' }}>
-            <Typography variant="caption" color="text.secondary">{t('{{count}} selected', { count: target?.count ?? 0 })}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('{{count}} selected', { count: target?.count ?? 0 })}</Typography>
           </MenuItem>
         )}
         {single && item(t('Reply'), <Reply fontSize="small" />, { kind: 'reply' })}

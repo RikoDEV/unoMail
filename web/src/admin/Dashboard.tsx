@@ -46,106 +46,106 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
     // Columns follow the room the section has (the admin menu takes part of the window):
     // three side by side, or mail flow and addresses over the replies, or one below another.
     <Box sx={{ mt: 1, containerType: 'inline-size' }}>
-    <Box
-      data-testid="activity"
-      sx={{
-        display: 'grid', gap: 3, alignItems: 'start', gridTemplateColumns: 'minmax(0, 1fr)',
-        '@container (min-width: 700px)': { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', '& > :last-of-type': { gridColumn: '1 / -1' } },
-        '@container (min-width: 1100px)': { gridTemplateColumns: 'minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.5fr)', '& > :last-of-type': { gridColumn: 'auto' } },
-      }}
-    >
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t('Mail flow, last 24 hours')}
-        </Typography>
-        {flow.length === 0 ? (
-          <Typography color="text.secondary">{t('No mail has been processed yet.')}</Typography>
-        ) : (
-          <ScrollTable size="small" aria-label={t('Mail flow, last 24 hours')}>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('Direction')}</TableCell>
-                <TableCell>{t('Status')}</TableCell>
-                <TableCell align="right">{t('Messages')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {flow.map((row) => (
-                <TableRow key={`${row.direction}-${row.status}`}>
-                  <TableCell>{row.direction}</TableCell>
-                  <TableCell>
-                    <StatusChip status={row.status} />
-                  </TableCell>
-                  <TableCell align="right">{row.count}</TableCell>
+      <Box
+        data-testid="activity"
+        sx={{
+          display: 'grid', gap: 3, alignItems: 'start', gridTemplateColumns: 'minmax(0, 1fr)',
+          '@container (min-width: 700px)': { gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', '& > :last-of-type': { gridColumn: '1 / -1' } },
+          '@container (min-width: 1100px)': { gridTemplateColumns: 'minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.5fr)', '& > :last-of-type': { gridColumn: 'auto' } },
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            {t('Mail flow, last 24 hours')}
+          </Typography>
+          {flow.length === 0 ? (
+            <Typography sx={{ color: 'text.secondary' }}>{t('No mail has been processed yet.')}</Typography>
+          ) : (
+            <ScrollTable size="small" aria-label={t('Mail flow, last 24 hours')}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('Direction')}</TableCell>
+                  <TableCell>{t('Status')}</TableCell>
+                  <TableCell align="right">{t('Messages')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </ScrollTable>
-        )}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t('Remote IPs')}
-        </Typography>
-        {!activity ? null : activity.remote_ips.length === 0 ? (
-          <Typography color="text.secondary">{t('Nobody has connected since the server started.')}</Typography>
-        ) : (
-          <ScrollTable size="small" aria-label={t('Remote IPs')}>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('Address')}</TableCell>
-                <TableCell align="right">{t('Connections')}</TableCell>
-                <TableCell>{t('Last seen')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activity.remote_ips.map((entry) => (
-                <TableRow key={entry.ip}>
-                  <TableCell>
-                    <RemoteAddress address={entry.ip} rdns={entry.rdns} country={entry.country} />
-                  </TableCell>
-                  <TableCell align="right">{entry.connections}</TableCell>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(entry.last_seen)}</TableCell>
+              </TableHead>
+              <TableBody>
+                {flow.map((row) => (
+                  <TableRow key={`${row.direction}-${row.status}`}>
+                    <TableCell>{row.direction}</TableCell>
+                    <TableCell>
+                      <StatusChip status={row.status} />
+                    </TableCell>
+                    <TableCell align="right">{row.count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </ScrollTable>
+          )}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            {t('Remote IPs')}
+          </Typography>
+          {!activity ? null : activity.remote_ips.length === 0 ? (
+            <Typography sx={{ color: 'text.secondary' }}>{t('Nobody has connected since the server started.')}</Typography>
+          ) : (
+            <ScrollTable size="small" aria-label={t('Remote IPs')}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('Address')}</TableCell>
+                  <TableCell align="right">{t('Connections')}</TableCell>
+                  <TableCell>{t('Last seen')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </ScrollTable>
-        )}
-      </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          {t('Last messages')}
-        </Typography>
-        {!activity ? null : activity.replies.length === 0 ? (
-          <Typography color="text.secondary">{t('No SMTP conversation has taken place yet.')}</Typography>
-        ) : (
-          <ScrollTable size="small" aria-label={t('Last messages')}>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('Time')}</TableCell>
-                <TableCell>{t('Status')}</TableCell>
-                <TableCell>{t('Message')}</TableCell>
-                <TableCell>{t('Sent to')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activity.replies.map((reply, index) => (
-                <TableRow key={`${reply.ts}-${index}`}>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(reply.ts * 1000).toLocaleTimeString(uiLocale())}</TableCell>
-                  <TableCell>
-                    <Chip size="small" label={reply.code} color={replyColor(reply.code)} />
-                  </TableCell>
-                  <TableCell sx={{ overflowWrap: 'anywhere' }}>{reply.text}</TableCell>
-                  <TableCell>
-                    <RemoteAddress address={reply.ip} country={countries[reply.ip]} />
-                  </TableCell>
+              </TableHead>
+              <TableBody>
+                {activity.remote_ips.map((entry) => (
+                  <TableRow key={entry.ip}>
+                    <TableCell>
+                      <RemoteAddress address={entry.ip} rdns={entry.rdns} country={entry.country} />
+                    </TableCell>
+                    <TableCell align="right">{entry.connections}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(entry.last_seen)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </ScrollTable>
+          )}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            {t('Last messages')}
+          </Typography>
+          {!activity ? null : activity.replies.length === 0 ? (
+            <Typography sx={{ color: 'text.secondary' }}>{t('No SMTP conversation has taken place yet.')}</Typography>
+          ) : (
+            <ScrollTable size="small" aria-label={t('Last messages')}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>{t('Time')}</TableCell>
+                  <TableCell>{t('Status')}</TableCell>
+                  <TableCell>{t('Message')}</TableCell>
+                  <TableCell>{t('Sent to')}</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </ScrollTable>
-        )}
+              </TableHead>
+              <TableBody>
+                {activity.replies.map((reply, index) => (
+                  <TableRow key={`${reply.ts}-${index}`}>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(reply.ts * 1000).toLocaleTimeString(uiLocale())}</TableCell>
+                    <TableCell>
+                      <Chip size="small" label={reply.code} color={replyColor(reply.code)} />
+                    </TableCell>
+                    <TableCell sx={{ overflowWrap: 'anywhere' }}>{reply.text}</TableCell>
+                    <TableCell>
+                      <RemoteAddress address={reply.ip} country={countries[reply.ip]} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </ScrollTable>
+          )}
+        </Box>
       </Box>
-    </Box>
     </Box>
   );
 }
@@ -184,7 +184,7 @@ function Capacity() {
   const percent = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '');
   return (
     <Box sx={{ mt: 4 }} data-testid="capacity">
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
         <Typography variant="h6" sx={{ flex: 1 }}>
           {t('Capacity')}
         </Typography>
@@ -193,7 +193,7 @@ function Capacity() {
           <ToggleButton value={168}>{t('7 days')}</ToggleButton>
         </ToggleButtonGroup>
       </Stack>
-      <Stack direction="row" flexWrap="wrap" gap={2}>
+      <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 2 }}>
         <TimeChart
           title={t('Free disk space')}
           headline={t('{{size}} free', { size: formatBytes(latest.disk_free) })}
@@ -220,14 +220,20 @@ function Metric({ label, value, hint }: { label: string; value: string | number;
   return (
     <Card variant="outlined" sx={{ minWidth: 0 }}>
       <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
-        <Typography variant="body2" color="text.secondary" noWrap sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            color: "text.secondary",
+            fontSize: { xs: '0.75rem', sm: '0.875rem' }
+          }}>
           {label}
         </Typography>
         <Typography variant="h4" component="div" noWrap sx={{ fontSize: { xs: '1.375rem', sm: '2.125rem' } }} data-testid={`metric-${label}`}>
           {value}
         </Typography>
         {hint && (
-          <Typography variant="caption" color="text.secondary" noWrap component="div">
+          <Typography variant="caption" noWrap component="div" sx={{ color: 'text.secondary' }}>
             {hint}
           </Typography>
         )}

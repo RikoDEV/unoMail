@@ -43,7 +43,7 @@ export function EmojiPicker({ anchor, onClose, onPick }: { anchor: HTMLElement |
           <Tab key={category.id} value={category.id} label={category.icon} aria-label={category.label()} />
         ))}
       </Tabs>
-      <Typography variant="caption" color="text.secondary" component="p" sx={{ px: 1.5, pt: 1 }}>
+      <Typography variant="caption" component="p" sx={{ color: 'text.secondary', px: 1.5, pt: 1 }}>
         {tab === 'recent' ? t('Recently used') : CATEGORIES.find((c) => c.id === tab)?.label()}
       </Typography>
       <Box role="listbox" aria-label={t('Insert emoji')} sx={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', p: 1, maxHeight: 248, overflowY: 'auto' }}>

@@ -60,11 +60,12 @@ export function Subscriptions() {
     <Paper elevation={0} sx={{ flex: 1, display: 'flex', flexDirection: 'column', borderRadius: 1.5, mx: { xs: 1, md: 0 }, mr: { md: 1 }, mb: 1, overflow: 'auto', minWidth: 0 }}>
       <Box sx={{ px: 2, pt: 2, pb: 1 }}>
         <Typography variant="h6" component="h1">{t('Subscriptions')}</Typography>
-        <Typography variant="caption" color="text.secondary">{t('After you unsubscribe, it can take senders a few days to stop sending you mail.')}</Typography>
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('After you unsubscribe, it can take senders a few days to stop sending you mail.')}</Typography>
       </Box>
       {error && <Alert severity="error" sx={{ mx: 2 }}>{error}</Alert>}
       {!list && !error && <CircularProgress sx={{ m: 4, alignSelf: 'center' }} aria-label={t('Loading')} />}
-      {list?.length === 0 && <Typography color="text.secondary" sx={{ px: 2, py: 4 }}>{t('No subscriptions in your recent mail.')}</Typography>}
+      {list?.length === 0 && <Typography
+        sx={{ color: 'text.secondary', px: 2, py: 4 }}>{t('No subscriptions in your recent mail.')}</Typography>}
       <Box component="ul" aria-label={t('Subscriptions')} sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {list?.map((entry) => {
           const name = entry.name || entry.sender;
@@ -80,12 +81,31 @@ export function Subscriptions() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                 <Avatar aria-hidden sx={{ width: 20, height: 20, fontSize: 11, bgcolor: colorFor(entry.sender), color: '#fff' }}>{name[0]?.toUpperCase()}</Avatar>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600} noWrap>{name}</Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ display: { md: 'none' } }}>{entry.sender}</Typography>
+                  <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>{name}</Typography>
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    component="div"
+                    sx={{
+                      color: "text.secondary",
+                      display: { md: 'none' }
+                    }}>{entry.sender}</Typography>
                 </Box>
               </Box>
-              <Typography variant="body2" color="text.secondary" noWrap sx={{ display: { xs: 'none', md: 'block' } }}>{entry.sender}</Typography>
-              <Typography variant="body2" color="text.secondary" noWrap sx={{ display: { xs: 'none', md: 'block' } }}>{volume(entry.recent)}</Typography>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  color: "text.secondary",
+                  display: { xs: 'none', md: 'block' }
+                }}>{entry.sender}</Typography>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{
+                  color: "text.secondary",
+                  display: { xs: 'none', md: 'block' }
+                }}>{volume(entry.recent)}</Typography>
               <Button size="small" color="inherit" disabled={busy === entry.sender} onClick={() => void unsubscribe(entry)} sx={{ textTransform: 'none', fontWeight: 600 }} aria-label={t('Unsubscribe from {{sender}}', { sender: name })}>
                 {t('Unsubscribe')}
               </Button>

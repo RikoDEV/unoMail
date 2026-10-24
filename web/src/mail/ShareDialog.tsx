@@ -46,10 +46,10 @@ export function ShareDialog({ mailbox, onClose }: { mailbox: Mailbox; onClose: (
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {error && <Alert severity="error" onClose={() => setError('')}>{error}</Alert>}
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t("People you share with see this folder under “Shared with me”, in the web client and in any IMAP mail program. Enter a colleague's address, or “anyone” for everybody in your domain.")}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <TextField label={t('Share with')} value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void add()} placeholder="colleague@example.org" fullWidth />
             <TextField select label={t('Access')} value={level} onChange={(e) => setLevel(e.target.value)} sx={{ minWidth: 220 }}>
               {SHARE_LEVELS.map((option) => (
@@ -81,7 +81,9 @@ export function ShareDialog({ mailbox, onClose }: { mailbox: Mailbox; onClose: (
                         variant="standard"
                         value={shareLevel(entry.rights)}
                         onChange={(e) => void apply(entry.identifier, SHARE_LEVELS.find((candidate) => candidate.id === e.target.value)?.rights ?? 'lrs')}
-                        inputProps={{ 'aria-label': t('Access for {{identifier}}', { identifier: entry.identifier }) }}
+                        slotProps={{
+                          htmlInput: { 'aria-label': t('Access for {{identifier}}', { identifier: entry.identifier }) }
+                        }}
                       >
                         {SHARE_LEVELS.map((option) => (
                           <MenuItem key={option.id} value={option.id}>
@@ -100,7 +102,7 @@ export function ShareDialog({ mailbox, onClose }: { mailbox: Mailbox; onClose: (
               </TableBody>
             </Table>
           ) : (
-            <Typography color="text.secondary">{t('This folder is not shared with anyone.')}</Typography>
+            <Typography sx={{ color: 'text.secondary' }}>{t('This folder is not shared with anyone.')}</Typography>
           )}
         </Stack>
       </DialogContent>

@@ -26,7 +26,7 @@ function CategoryLearningSection() {
   const known = CATEGORIES.filter((category) => state.learned[category.id] >= state.needed);
   return (
     <Box data-testid="category-learning" sx={{ pl: 6 }}>
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
         {t('The categories learn from you: move a message to another category and new mail from its sender goes there too. After {{needed}} corrections into each of two categories, mail from new senders is sorted by what it resembles.', { needed: state.needed })}
       </Typography>
       {state.total > 0 && (
@@ -62,10 +62,10 @@ function SpamFilterSection() {
   const progress = Math.round((100 * (Math.min(state.spam, state.needed) + Math.min(state.ham, state.needed))) / (2 * state.needed));
   return (
     <Box data-testid="spam-filter">
-      <Typography variant="subtitle1" fontWeight={600}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
         {t('Personal spam filter')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('It learns from you: “Report spam” teaches it what you do not want; “Not spam”, your replies and mail from people you write to teach it what you do. Mail from your contacts is never filed away by it.')}
       </Typography>
       {!state.enabled ? (
@@ -126,23 +126,23 @@ export function InboxCard() {
           {prefs.categories !== false && <CategoryLearningSection />}
           <SpamFilterSection />
           <Box>
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               {t('Blocked senders')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
               {t('Mail from these senders goes straight to Junk. The sender is not told. Enter an address, or @domain for everybody at a domain.')}
             </Typography>
             {error && <Alert severity="error" onClose={() => setError('')} sx={{ mb: 1 }}>{error}</Alert>}
-            <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mb: 1 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mb: 1 }}>
               <TextField label={t('Sender to block')} value={sender} onChange={(e) => setSender(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sender.trim() && void add()} placeholder={t('pest@example.com or @example.com')} fullWidth />
               <Button variant="outlined" disabled={!sender.trim()} onClick={() => void add()}>
                 {t('Block')}
               </Button>
             </Stack>
             {items.length === 0 ? (
-              <Typography color="text.secondary">{t('Nobody is blocked.')}</Typography>
+              <Typography sx={{ color: 'text.secondary' }}>{t('Nobody is blocked.')}</Typography>
             ) : (
-              <Stack direction="row" flexWrap="wrap" gap={1} role="list" aria-label={t('Blocked senders')}>
+              <Stack direction="row" role="list" aria-label={t('Blocked senders')} sx={{ flexWrap: 'wrap', gap: 1 }}>
                 {items.map((entry) => (
                   <Chip key={entry} role="listitem" label={entry} onDelete={() => void unblockSender(entry).then(reload).catch((err) => setError(errorText(err, t('Could not unblock'))))} />
                 ))}

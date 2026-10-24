@@ -161,7 +161,7 @@ export function AttachmentPreview({ file, onClose }: { file: PreviewFile; onClos
       <DialogTitle sx={{ overflowWrap: 'anywhere' }}>
         {file.name}
         {content && (
-          <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+          <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1 }}>
             {formatBytes(content.size)}
           </Typography>
         )}

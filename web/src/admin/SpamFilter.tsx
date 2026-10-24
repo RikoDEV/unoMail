@@ -58,11 +58,11 @@ function Thresholds({ overview, onSaved }: { overview: Overview; onSaved: () => 
     <Card variant="outlined">
       <CardContent>
         <Typography variant="h6">{t('Thresholds')}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
           {t('Every message gets a spam score, the sum of the scores of the rules it triggers. These two values decide what happens to it.')}
         </Typography>
         {feedback}
-        <Stack direction="row" spacing={2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <TextField label={t('Mark as spam at')} value={addHeader} onChange={(e) => setAddHeader(e.target.value)} helperText={t('Delivered to the Junk folder')} sx={{ width: 220 }} slotProps={{ htmlInput: { inputMode: 'decimal' } }} />
           <TextField label={t('Reject at')} value={reject} onChange={(e) => setReject(e.target.value)} helperText={t('Refused during the SMTP session')} sx={{ width: 220 }} slotProps={{ htmlInput: { inputMode: 'decimal' } }} />
           <Button variant="contained" disabled={!valid} onClick={() => void run(async () => { await put('/api/spam-filter/thresholds', { reject: numbers[0], add_header: numbers[1] }); await onSaved(); }, t('Thresholds saved'))}>
@@ -92,14 +92,14 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 1 }} flexWrap="wrap" useFlexGap>
+        <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
           <Typography variant="h6" sx={{ flex: 1 }}>
             {t('Rule scores')}
           </Typography>
           <TextField label={t('Search rules')} value={query} onChange={(e) => { setQuery(e.target.value); firstPage(); }} sx={{ minWidth: 260 }} />
         </Stack>
         {feedback}
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
           {t('{{matching}} of {{count}} rules', { matching: matching.length, count: rules.length })}{t('. Positive scores count towards spam, negative ones against it.')}
         </Typography>
         <ScrollTable size="small" aria-label={t('Spam filter rules')}>
@@ -118,7 +118,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
                     {rule.symbol}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {rule.description}
                   </Typography>
                 </TableCell>
@@ -140,7 +140,7 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
           <Dialog open onClose={() => setEditing(null)} fullWidth maxWidth="xs">
             <DialogTitle sx={{ wordBreak: 'break-all' }}>{editing.rule.symbol}</DialogTitle>
             <DialogContent>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
                 {editing.rule.description || t('No description.')}
               </Typography>
               {saving.formError}
@@ -184,7 +184,7 @@ function History({ rows }: { rows: Verdict[] }) {
           {t('Recent verdicts')}
         </Typography>
         {rows.length === 0 ? (
-          <Typography color="text.secondary">{t('Nothing has been scanned yet.')}</Typography>
+          <Typography sx={{ color: 'text.secondary' }}>{t('Nothing has been scanned yet.')}</Typography>
         ) : (
           <ScrollTable size="small" aria-label={t('Recent verdicts')}>
             <TableHead>
@@ -203,7 +203,7 @@ function History({ rows }: { rows: Verdict[] }) {
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.time ? formatTime(Math.floor(row.time)) : ''}</TableCell>
                   <TableCell sx={{ wordBreak: 'break-all' }}>
                     {row.sender}
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ fontFamily: 'monospace' }}>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', fontFamily: 'monospace' }}>
                       {row.ip}
                     </Typography>
                   </TableCell>
@@ -246,7 +246,7 @@ export function SpamFilter() {
       {data.configured && !data.available && <Alert severity="error">{t('The spam filter is configured but not answering: {{error}}', { error: data.error })}</Alert>}
       {data.available && (
         <Stack spacing={3}>
-          <Stack direction="row" flexWrap="wrap" gap={1}>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
             <Chip label={t('{{count}} scanned', { count: data.stat?.scanned ?? 0 })} />
             <Chip label={t('{{count}} learned', { count: data.stat?.learned ?? 0 })} />
             {Object.entries(actions).map(([action, count]) => (

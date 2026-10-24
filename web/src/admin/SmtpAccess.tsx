@@ -134,8 +134,8 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
     <>
       {feedback}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
+        <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
           {source === 'user'
             ? t('Addresses and networks you allow or block yourself. The rules apply on every SMTP port, as soon as they are saved.')
             : t('Created by the server when an address keeps misbehaving. These rules lapse after a day; editing one makes it permanent and moves it to your own list.')}
@@ -147,7 +147,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
         )}
       </Stack>
       {rules.length === 0 ? (
-        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+        <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
           {source === 'user' ? t('No rules yet.') : t('Nothing has been blocked automatically.')}
         </Typography>
       ) : (
@@ -179,7 +179,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
                   <TableCell sx={{ overflowWrap: 'anywhere' }}>
                     {rule.description}
                     {rule.expires_at && (
-                      <Typography variant="caption" color="text.secondary" display="block">
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                         {t('Until {{expires_at}}', { expires_at: formatTime(rule.expires_at) })}
                       </Typography>
                     )}
@@ -228,11 +228,11 @@ function KarmaTable() {
     <>
       {feedback}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('How remote servers have behaved. Accepted mail raises the score; rejected mail, failed logins, unknown recipients and protocol errors lower it. At a score of -20 an address is blacklisted for a day. Records idle for a month are forgotten.')}
       </Typography>
       {records.length === 0 ? (
-        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+        <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
           {t('No remote server has been scored yet.')}
         </Typography>
       ) : (
@@ -298,11 +298,11 @@ function LoginBlocksTable() {
     <>
       {feedback}
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('Networks and accounts refused for too many failed logins, on every protocol. The limits are set in the server settings. Unblocking also forgets the failures and earlier lockouts.')}
       </Typography>
       {blocks.length === 0 ? (
-        <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+        <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
           {t('Nothing is rate limited.')}
         </Typography>
       ) : (

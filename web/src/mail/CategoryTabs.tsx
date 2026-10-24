@@ -49,13 +49,13 @@ export function CategoryTabs({ category, onChange, counts, latest, dropProps, dr
           }}
           label={
             <Box sx={{ minWidth: 0, textAlign: 'left' }}>
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <span>{entry.label}</span>
                 {entry.id !== 'general' && (counts[entry.id] ?? 0) > 0 && <Chip size="small" color="primary" label={t('{{count}} new', { count: counts[entry.id] })} sx={{ height: 18, fontSize: 11, fontWeight: 700 }} aria-label={t('{{count}} unread', { count: counts[entry.id] })} />}
               </Stack>
               {/* Like Gmail, a closed category with new mail shows who wrote and about what. */}
               {entry.id !== 'general' && entry.id !== category && (counts[entry.id] ?? 0) > 0 && latest[entry.id] && (
-                <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ maxWidth: 220, fontWeight: 400 }}>
+                <Typography variant="caption" noWrap component="div" sx={{ color: 'text.secondary', maxWidth: 220, fontWeight: 400 }}>
                   {latest[entry.id]!.senders.join(', ')}{latest[entry.id]!.subject ? ` – ${latest[entry.id]!.subject}` : ''}
                 </Typography>
               )}

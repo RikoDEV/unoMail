@@ -180,7 +180,7 @@ export function SignaturesCard() {
     <Stack spacing={2}>
       <ListCard title={t('Signatures')} addLabel={t('Add signature')} onAdd={() => setEditing(null)} error={error} onDismiss={() => setError('')}>
         {signatures.length === 0 ? (
-          <Typography color="text.secondary">{t('No signatures yet. Add one, then choose below which addresses use it.')}</Typography>
+          <Typography sx={{ color: 'text.secondary' }}>{t('No signatures yet. Add one, then choose below which addresses use it.')}</Typography>
         ) : (
           <Table size="small" aria-label={t('Signatures')}>
             <TableBody>
@@ -206,7 +206,7 @@ export function SignaturesCard() {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="h6">{t('Signature defaults')}</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
               {t('The signature each of your addresses adds by itself. Another one can always be picked in the composer.')}
             </Typography>
             <Table size="small" aria-label={t('Signature defaults')}>

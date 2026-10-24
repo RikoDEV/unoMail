@@ -14,7 +14,7 @@ export function ListCard({ title, addLabel, onAdd, error, onDismiss, children }:
   return (
     <Card variant="outlined">
       <CardContent>
-        <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
           <Typography variant="h6" sx={{ flex: 1 }}>
             {title}
           </Typography>

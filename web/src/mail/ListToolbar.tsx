@@ -39,11 +39,11 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
   const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
   return (
     <>
-      <Stack direction="row" alignItems="center" sx={{ pl: 0.5, pr: 2, py: 0.5, minHeight: 48 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', pl: 0.5, pr: 2, py: 0.5, minHeight: 48 }}>
         <Typography component="h1" sx={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>{heading}</Typography>
         <Checkbox
           size="small"
-          inputProps={{ 'aria-label': t('Select all conversations') }}
+          slotProps={{ input: { 'aria-label': t('Select all conversations') } }}
           checked={visible.length > 0 && visible.every((e) => selected.has(e.id))}
           indeterminate={selected.size > 0 && !visible.every((e) => selected.has(e.id))}
           disabled={visible.length === 0}
@@ -54,7 +54,7 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
           <ArrowDropDown fontSize="small" />
         </IconButton>
         {selected.size > 0 ? (
-          <Stack direction="row" alignItems="center" sx={{ flex: 1, minWidth: 0 }} role="toolbar" aria-label={t('Actions for the selection')}>
+          <Stack direction="row" role="toolbar" aria-label={t('Actions for the selection')} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
             <Tooltip title={t('Archive')}><IconButton aria-label={t('Archive selected')} onClick={() => onBulk('archive')}><Archive /></IconButton></Tooltip>
             {inJunk ? (
               <Tooltip title={t('Not spam')}><IconButton aria-label={t('Mark selected as not spam')} onClick={() => onBulk('inbox')}><ReportOff /></IconButton></Tooltip>
@@ -66,7 +66,7 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
             <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark selected as unread')} onClick={() => onBulk('unread')}><MarkEmailUnread /></IconButton></Tooltip>
             <Tooltip title={t('Move to')}><IconButton aria-label={t('Move selected to a folder')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'move' })}><DriveFileMove /></IconButton></Tooltip>
             <Tooltip title={t('Label')}><IconButton aria-label={t('Label selected')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'label' })}><LabelIcon /></IconButton></Tooltip>
-            <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }} noWrap>
+            <Typography variant="body2" noWrap sx={{ color: 'text.secondary', ml: 1 }}>
               {t('{{count}} selected', { count: allInFolder ? total : selected.size })}
             </Typography>
           </Stack>
@@ -76,7 +76,7 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
             <Tooltip title={t('More')}><IconButton aria-label={t('More')} aria-haspopup="menu" onClick={(e) => setMoreMenu(e.currentTarget)}><MoreVert fontSize="small" /></IconButton></Tooltip>
             <Box sx={{ flex: 1 }} />
             {visible.length > 0 && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                 {t('{{from}}–{{to}} of {{total}}', { from: 1, to: visible.length, total: total.toLocaleString() })}
               </Typography>
             )}

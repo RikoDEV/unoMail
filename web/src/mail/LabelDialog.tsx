@@ -27,7 +27,7 @@ export function LabelDialog({ value, onChange, onClose, onSave }: {
               helperText={t('Letters, digits, - _ . (spaces become dashes)')}
             />
           )}
-          <Stack direction="row" flexWrap="wrap" gap={1} role="radiogroup" aria-label={t('Label colour')}>
+          <Stack direction="row" role="radiogroup" aria-label={t('Label colour')} sx={{ flexWrap: 'wrap', gap: 1 }}>
             {LABEL_COLORS.map((color) => (
               <Box
                 key={color || 'none'}

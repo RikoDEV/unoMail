@@ -39,7 +39,7 @@ function Flag({ country }: { country?: string | null }) {
 /** A remote address with its country flag and, when known, its reverse DNS name. */
 export function RemoteAddress({ address, rdns, country }: { address: string; rdns?: string | null; country?: string | null }) {
   return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
       <Flag country={country} />
       <Box sx={{ minWidth: 0 }}>
         {/* An IPv4 address stays on one line; only the long IPv6 ones may break. */}
@@ -47,7 +47,7 @@ export function RemoteAddress({ address, rdns, country }: { address: string; rdn
           {address}
         </Typography>
         {rdns && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', wordBreak: 'break-all' }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', wordBreak: 'break-all' }}>
             {rdns}
           </Typography>
         )}

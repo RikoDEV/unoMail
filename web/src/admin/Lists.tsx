@@ -68,7 +68,7 @@ export function Lists() {
       {error && <Alert severity="error">{error}</Alert>}
       {feedback}
       {data && data.length === 0 ? (
-        <Typography color="text.secondary">
+        <Typography sx={{ color: 'text.secondary' }}>
           {t('No lists yet. A list is an address whose mail goes to all its members, with moderation, subscribing by mail and one-click unsubscribe.')}
         </Typography>
       ) : (
@@ -180,7 +180,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                     <TableRow key={item.token}>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(item.received_at)}</TableCell>
                       <TableCell>{item.sender}</TableCell>
-                      <TableCell>{item.subject || t('(no subject)')}<Typography variant="caption" color="text.secondary" component="div">{item.reason}</Typography></TableCell>
+                      <TableCell>{item.subject || t('(no subject)')}<Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>{item.reason}</Typography></TableCell>
                       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                         <Button size="small" onClick={() => void run(() => post(`/api/lists/${id}/held/${item.token}`, { action: 'approve' }), t('Sent to the list')).then(() => held.reload())}>{t('Approve')}</Button>
                         <Button size="small" color="error" onClick={() => void run(() => post(`/api/lists/${id}/held/${item.token}`, { action: 'discard' }), t('Discarded')).then(() => held.reload())}>{t('Discard')}</Button>
@@ -213,7 +213,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                   {t('Save')}
                 </Button>
               </Box>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {t('Also in use:')} {current.address.replace('@', '-request@')} {t('(subscribe, unsubscribe, help),')} {current.address.replace('@', '-owner@')} {t('(reaches the owners) and')}{' '}
                 {current.address.replace('@', '-bounces@')} {t('(bounce handling).')}
               </Typography>
@@ -223,7 +223,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="h6" sx={{ mb: 2 }}>{t('Members ({{length}})', { length: members.data?.length ?? 0 })}</Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2 }} alignItems="flex-start">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: 'flex-start', mb: 2 }}>
               <TextField label={t('Add addresses')} multiline minRows={2} sx={{ flex: 1, maxWidth: 480 }} value={adding} onChange={(e) => setAdding(e.target.value)} helperText={t('One per line; Name <address> works too')} />
               <TextField select label={t('As')} value={role} onChange={(e) => setRole(e.target.value as Member['role'])} sx={{ width: 150 }}>
                 <MenuItem value="member">{t('Members')}</MenuItem>
@@ -263,7 +263,9 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                   <TableRow key={member.id}>
                     <TableCell>{member.name ? `${member.name} <${member.email}>` : member.email}</TableCell>
                     <TableCell>
-                      <TextField select size="small" variant="standard" value={member.role} inputProps={{ 'aria-label': t('Role of {{email}}', { email: member.email }) }} onChange={(e) => void run(() => patch(`/api/lists/${id}/members/${member.id}`, { role: e.target.value })).then(() => members.reload())}>
+                      <TextField select size="small" variant="standard" value={member.role} onChange={(e) => void run(() => patch(`/api/lists/${id}/members/${member.id}`, { role: e.target.value })).then(() => members.reload())} slotProps={{
+                        htmlInput: { 'aria-label': t('Role of {{email}}', { email: member.email }) }
+                      }}>
                         <MenuItem value="member">{t('Member')}</MenuItem>
                         <MenuItem value="moderator">{t('Moderator')}</MenuItem>
                         <MenuItem value="owner">{t('Owner')}</MenuItem>

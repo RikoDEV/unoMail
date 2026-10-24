@@ -126,7 +126,7 @@ function ImportDialog({ box, isSuper, onClose }: { box: Mailbox; isSuper: boolea
           ) : (
             <TextField label={t('Directory inside the import folder')} value={path} onChange={(e) => setPath(e.target.value)} helperText={t('Copy the Maildir to <data>/unomail/import/<name> on the server and enter <name>')} />
           )}
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
             {t('Folders, read/replied/flagged state and dates are preserved. Messages that already exist are skipped, so an import can be repeated safely.')}
           </Typography>
           {jobs.length > 0 && (
@@ -147,7 +147,7 @@ function ImportDialog({ box, isSuper, onClose }: { box: Mailbox; isSuper: boolea
                     <TableCell sx={{ wordBreak: 'break-all' }}>{job.source}</TableCell>
                     <TableCell>
                       <StatusChip status={job.status === 'completed' ? 'ok' : job.status === 'failed' ? 'error' : 'queued'} />
-                      {job.error && <Typography variant="caption" display="block" color="error">{job.error}</Typography>}
+                      {job.error && <Typography variant="caption" color="error" sx={{ display: 'block' }}>{job.error}</Typography>}
                     </TableCell>
                     <TableCell align="right">{job.imported}</TableCell>
                     <TableCell align="right">{job.skipped}</TableCell>
@@ -361,7 +361,7 @@ export function Mailboxes() {
         </TableBody>
       </ScrollTable>
       {data && data.total > data.items.length && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {t('Showing {{length}} of {{total}}. Refine the search to see more.', { length: data.items.length, total: data.total })}
         </Typography>
       )}
@@ -407,7 +407,7 @@ export function Mailboxes() {
                 </TextField>
               )}
               {editing && (
-                <Stack direction="row" flexWrap="wrap">
+                <Stack direction="row" sx={{ flexWrap: 'wrap' }}>
                   <FormControlLabel control={<Switch checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />} label={t('Enabled')} />
                   <FormControlLabel control={<Switch checked={form.imap_enabled} onChange={(e) => set({ imap_enabled: e.target.checked })} />} label="IMAP" />
                   <FormControlLabel control={<Switch checked={form.pop3_enabled} onChange={(e) => set({ pop3_enabled: e.target.checked })} />} label="POP3" />
@@ -420,7 +420,7 @@ export function Mailboxes() {
                   label={
                     <>
                       {t('Block sending')}
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         {form.outbound_blocked && form.outbound_blocked_reason
                           ? t('Blocked automatically: {{reason}}', { reason: form.outbound_blocked_reason })
                           : t('The mailbox can no longer send mail; incoming mail still arrives. Set automatically when it goes over its sending limits.')}
@@ -435,7 +435,7 @@ export function Mailboxes() {
                   label={
                     <>
                       {t('Send only')}
-                      <Typography variant="body2" color="text.secondary">{t('For noreply addresses: the mailbox can send, and all mail sent to it is discarded without a bounce.')}</Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('For noreply addresses: the mailbox can send, and all mail sent to it is discarded without a bounce.')}</Typography>
                     </>
                   }
                 />
@@ -443,7 +443,7 @@ export function Mailboxes() {
               {editing && (
                 <Stack spacing={1}>
                   <Typography variant="subtitle2">{t('Sending limits')}</Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {t('Leave a field empty to use the server setting. The message size and recipients per message can only be lower than the server allows.')}
                   </Typography>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -458,10 +458,12 @@ export function Mailboxes() {
                           label={{ max_messages_per_hour: t('Messages per hour'), max_recipients_per_hour: t('Recipients per hour'), max_message_size: t('Message size (MB)'), max_recipients: t('Recipients per message') }[field]}
                           value={form.limits[field]}
                           placeholder={serverValue === undefined ? t('Server default') : t('Server default ({{value}})', { value: serverValue })}
-                          InputLabelProps={{ shrink: true }}
                           onChange={(e) => set({ limits: { ...form.limits, [field]: e.target.value } })}
                           error={invalid}
                           helperText={invalid ? t('A whole number of at least 1') : undefined}
+                          slotProps={{
+                            inputLabel: { shrink: true }
+                          }}
                         />
                       );
                     })}

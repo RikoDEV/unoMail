@@ -89,20 +89,22 @@ export function Invitation({ name, url }: { name: string; url: string }) {
   const heading = cancelled ? t('Cancelled') : reply ? t('Answer to your invitation') : invitation ? t('Invitation') : t('Event');
   return (
     <Paper variant="outlined" component="section" aria-label={`${heading}: ${info.summary}`} sx={{ p: 1.5, my: 1, maxWidth: 560, borderLeft: 4, borderLeftColor: cancelled ? 'error.main' : 'primary.main' }}>
-      <Stack direction="row" spacing={1.5} alignItems="flex-start">
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
         {cancelled ? <EventBusy color="error" /> : <Event color="primary" />}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1.2 }}>{heading}</Typography>
+          <Typography
+            variant="overline"
+            sx={{ color: 'text.secondary', lineHeight: 1.2 }}>{heading}</Typography>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, textDecoration: cancelled ? 'line-through' : undefined, overflowWrap: 'anywhere' }}>{info.summary || t('(no title)')}</Typography>
           <Typography variant="body2">{when}{info.recurring ? t(' · repeats') : ''}</Typography>
-          {info.location && <Typography variant="body2" color="text.secondary">{info.location}</Typography>}
-          {info.organizer && !reply && <Typography variant="body2" color="text.secondary">{t('Organizer: {{organizer}}', { organizer: info.organizer })}</Typography>}
+          {info.location && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{info.location}</Typography>}
+          {info.organizer && !reply && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('Organizer: {{organizer}}', { organizer: info.organizer })}</Typography>}
           {reply && info.attendees.map((guest) => (
             <Typography key={guest.email} variant="body2">{guest.name || guest.email}: {STATUS_LABELS[guest.status] ?? guest.status}</Typography>
           ))}
-          {cancelled && <Typography variant="body2" color="text.secondary">{t('The organizer called this event off. If it was in your calendar, it has been removed.')}</Typography>}
+          {cancelled && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('The organizer called this event off. If it was in your calendar, it has been removed.')}</Typography>}
           {invitation && (
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 1 }}>
               {ANSWERS.map(([value, label]) => (
                 <Button key={value} size="small" variant={info.my_status === value ? 'contained' : 'outlined'} disabled={busy} aria-pressed={info.my_status === value} onClick={() => void answer(value)}>
                   {label}

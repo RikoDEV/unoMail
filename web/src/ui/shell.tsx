@@ -58,11 +58,11 @@ function AccountMenu() {
         </IconButton>
       </Tooltip>
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} slotProps={{ paper: { sx: { minWidth: 280 } } }}>
-        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ px: 2, py: 1 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 2, py: 1 }}>
           <AccountAvatar email={account.email} size={40} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography fontWeight={600} noWrap>{account.display_name || account.email}</Typography>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography noWrap sx={{ fontWeight: 600 }}>{account.display_name || account.email}</Typography>
+            <Typography variant="body2" noWrap sx={{ color: 'text.secondary' }}>
               {account.email}
             </Typography>
           </Box>
@@ -80,7 +80,10 @@ function AccountMenu() {
           >
             <ListItemIcon><AccountAvatar email={entry.account.email} size={28} /></ListItemIcon>
             <ListItemText primary={entry.account.display_name || entry.account.email} secondary={entry.account.display_name ? entry.account.email : undefined} />
-            {entry.unread > 0 && <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }} aria-label={t('{{count}} unread', { count: entry.unread })}>{entry.unread}</Typography>}
+            {entry.unread > 0 && <Typography
+              variant="caption"
+              aria-label={t('{{count}} unread', { count: entry.unread })}
+              sx={{ color: 'text.secondary', ml: 2 }}>{entry.unread}</Typography>}
           </MenuItem>
         ))}
         {accounts.length < 5 && (
@@ -111,7 +114,7 @@ function AccountMenu() {
         <Divider />
         {/* Appearance: laid out like the rest of the menu. The accent colour is in the settings. */}
         <Box sx={{ px: 2, pt: 0.5, pb: 1.5 }}>
-          <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 2.5 }}>
+          <Typography variant="overline" sx={{ color: 'text.secondary', display: 'block', lineHeight: 2.5 }}>
             {t('Appearance')}
           </Typography>
           <ToggleButtonGroup
@@ -167,8 +170,13 @@ export function Copyright({ placement, sx, className }: { placement: 'login' | '
   // The link sends no referrer, so the campaign tags say where the visit came from.
   const href = `https://riko.dev/?utm_source=unomail&utm_medium=referral&utm_campaign=copyright&utm_content=${placement}`;
   return (
-    <Typography variant="caption" color="text.secondary" component="p" className={className} sx={[{ opacity: 0.8 }, ...(Array.isArray(sx) ? sx : [sx])]}>
-      © {new Date().getFullYear()} unoMail by{' '}
+    <Typography
+      variant="caption"
+      component="p"
+      className={className}
+      sx={[{
+        color: "text.secondary"
+      }, { opacity: 0.8 }, ...(Array.isArray(sx) ? sx : [sx])]}>© {new Date().getFullYear()}unoMail by{' '}
       <Link href={href} target="_blank" rel="nofollow noreferrer noopener" color="inherit" underline="hover">
         riko.dev
       </Link>
@@ -211,8 +219,11 @@ function LanguageMenu() {
  */
 export function Logo({ size = 32, sx }: { size?: number; sx?: SxProps<Theme> }) {
   return (
-    <Box component="svg" viewBox="0 0 64 64" aria-hidden width={size} height={size} sx={{ flexShrink: 0, display: 'block', ...sx }}>
-      <Box component="rect" width={64} height={64} rx={18} sx={{ fill: (theme) => theme.palette.primary.main }} />
+    <Box component="svg" viewBox="0 0 64 64" aria-hidden sx={{ width: size, height: size, flexShrink: 0, display: 'block', ...sx }}>
+      <Box
+        component="rect"
+        rx={18}
+        sx={{ width: 64, height: 64, fill: (theme) => theme.palette.primary.main }} />
       <Box component="g" sx={{ fill: 'none', stroke: (theme) => theme.palette.primary.contrastText, strokeWidth: 4.5, strokeLinecap: 'round', strokeLinejoin: 'round' }}>
         <rect x={12} y={18} width={40} height={28} rx={7} />
         <path d="M14 22 26.5 33.5a8 8 0 0 0 11 0L50 22" />
@@ -224,7 +235,16 @@ export function Logo({ size = 32, sx }: { size?: number; sx?: SxProps<Theme> }) 
 
 export function TopBar({ title, children, leading, onHome }: { title: string; children?: ReactNode; leading?: ReactNode; onHome?: () => void }) {
   return (
-    <Stack component="header" direction="row" alignItems="center" spacing={{ xs: 1, sm: 2 }} sx={{ px: { xs: 1, sm: 2 }, height: 64, flexShrink: 0 }}>
+    <Stack
+      component="header"
+      direction="row"
+      spacing={{ xs: 1, sm: 2 }}
+      sx={{
+        alignItems: "center",
+        px: { xs: 1, sm: 2 },
+        height: 64,
+        flexShrink: 0
+      }}>
       {leading}
       {/* The name in the header leads home, to the inbox, from every page. */}
       <Typography
@@ -234,10 +254,18 @@ export function TopBar({ title, children, leading, onHome }: { title: string; ch
         onClick={onHome}
         title={t('Go to the inbox')}
         color="primary"
-        fontWeight={600}
         noWrap
-        sx={{ display: { xs: children ? 'none' : 'flex', sm: 'flex' }, alignItems: 'center', gap: 1.25, minWidth: { sm: 150 }, flexShrink: children ? 0 : 1, textDecoration: 'none', borderRadius: 1, '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 } }}
-      >
+        sx={{
+          fontWeight: 600,
+          display: { xs: children ? 'none' : 'flex', sm: 'flex' },
+          alignItems: 'center',
+          gap: 1.25,
+          minWidth: { sm: 150 },
+          flexShrink: children ? 0 : 1,
+          textDecoration: 'none',
+          borderRadius: 1,
+          '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 }
+        }}>
         <Logo size={32} />
         <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</Box>
       </Typography>

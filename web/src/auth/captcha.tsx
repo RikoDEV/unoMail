@@ -167,7 +167,7 @@ function Altcha({ challenge, onAnswer, onFail }: { challenge: AltchaChallenge; o
   }, [challenge]);
 
   return (
-    <Stack direction="row" spacing={1} alignItems="center" role="status" sx={{ color: 'text.secondary' }}>
+    <Stack direction="row" spacing={1} role="status" sx={{ alignItems: 'center', color: 'text.secondary' }}>
       {done ? <CheckCircle color="success" fontSize="small" /> : <CircularProgress size={18} />}
       <Typography variant="body2">{done ? t('Verified that you are not a robot') : t('Checking that you are not a robot…')}</Typography>
     </Stack>

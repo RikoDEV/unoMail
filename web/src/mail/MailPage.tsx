@@ -990,7 +990,7 @@ export default function MailPage() {
               })}
             </List>
             {!loading && visible.length === 0 && (
-              <Typography color="text.secondary" sx={{ p: 4, textAlign: 'center' }}>
+              <Typography sx={{ color: 'text.secondary', p: 4, textAlign: 'center' }}>
                 {search ? t('No messages match your search.') : t('Nothing here yet.')}
               </Typography>
             )}

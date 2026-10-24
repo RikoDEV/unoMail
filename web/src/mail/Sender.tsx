@@ -68,9 +68,11 @@ export function SenderAvatar({ accountId, email, info }: { accountId: string; em
       alt=""
       // Logos are drawn for a square with their own background; photos fill the circle.
       variant={brand ? 'rounded' : 'circular'}
-      imgProps={{ loading: 'lazy', referrerPolicy: 'no-referrer' }}
       sx={{ bgcolor: picture ? 'background.paper' : 'secondary.main', width: 36, height: 36 }}
       data-avatar-source={info?.source ?? 'initial'}
+      slotProps={{
+        img: { loading: 'lazy', referrerPolicy: 'no-referrer' }
+      }}
     >
       {initial}
     </Avatar>
@@ -130,7 +132,7 @@ function SenderDetails({ email, info }: { email: EmailFull; info: AvatarInfo | n
           <Row label="sender">
             {VERDICTS[security.verdict]}
             {security.origin === 'remote' && (
-              <Typography component="span" variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+              <Typography component="span" variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                 SPF {security.spf ?? t('not checked')} {t('· DKIM')} {security.dkim ?? t('not checked')} {t('· DMARC')} {security.dmarc ?? t('not checked')}
               </Typography>
             )}
@@ -199,7 +201,7 @@ export function SecurityWarnings({ email }: { email: EmailFull }) {
             t('The sending domain offers nothing to check the message against (no valid SPF record, no DKIM signature).')
           )}
           <Typography variant="body2" sx={{ mt: 0.5 }}>{t('Be careful with links, attachments and requests for money or passwords.')}</Typography>
-          <Stack direction="row" spacing={0.5} sx={{ mt: 1 }} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 1 }}>
             {check('SPF', security.spf)}
             {check('DKIM', security.dkim)}
             {check('DMARC', security.dmarc)}

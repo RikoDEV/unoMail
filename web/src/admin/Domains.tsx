@@ -4,8 +4,8 @@ import ArrowForward from '@mui/icons-material/ArrowForward';
 import CheckCircle from '@mui/icons-material/CheckCircle';
 import ContentCopy from '@mui/icons-material/ContentCopy';
 import Delete from '@mui/icons-material/Delete';
-import ErrorOutline from '@mui/icons-material/ErrorOutline';
-import HelpOutline from '@mui/icons-material/HelpOutline';
+import ErrorOutline from '@mui/icons-material/ErrorOutlineOutlined';
+import HelpOutline from '@mui/icons-material/HelpOutlineOutlined';
 import Refresh from '@mui/icons-material/Refresh';
 import WarningAmber from '@mui/icons-material/WarningAmber';
 import {
@@ -103,10 +103,7 @@ export function Domains() {
                   component={RouterLink}
                   to={`/admin/domains/${domain.id}`}
                   underline="hover"
-                  fontWeight={600}
-                  // The lighter shade keeps enough contrast on dark backgrounds.
-                  sx={{ color: (theme) => (theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main) }}
-                >
+                  sx={{ fontWeight: 600, color: (theme) => (theme.palette.mode === 'dark' ? theme.palette.primary.light : theme.palette.primary.main) }}>
                   {domain.name}
                 </Link>
               </TableCell>
@@ -194,13 +191,13 @@ function DnsCheckRow({ check }: { check: Check }) {
       <Box sx={{ minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(210px, 0.7fr) minmax(0, 1.3fr)' }, gap: { xs: 1, md: 2.5 } }}>
         <Box>
           <Typography variant="subtitle2" component="h3">{check.title}</Typography>
-          <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.25 }}>{check.message}</Typography>
+          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.25 }}>{check.message}</Typography>
         </Box>
         <Box sx={{ minWidth: 0 }}>
           {check.record_value && (
             <>
-              <Typography variant="caption" color="text.secondary">{t('Record to publish')}</Typography>
-              <Stack direction="row" alignItems="center" spacing={0.5} flexWrap="wrap" useFlexGap>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Record to publish')}</Typography>
+              <Stack direction="row" spacing={0.5} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <Chip label={check.record_type} size="small" variant="outlined" sx={{ height: 22, flexShrink: 0, fontFamily: 'monospace' }} />
                 <Typography component="code" variant="caption" sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere' }}>{check.record_name}</Typography>
                 <ArrowForward aria-hidden sx={{ fontSize: 16, flexShrink: 0, color: 'text.secondary', userSelect: 'none' }} />
@@ -211,7 +208,7 @@ function DnsCheckRow({ check }: { check: Check }) {
           )}
           {check.found.length > 0 && (
             <Box sx={{ mt: check.record_value ? 0.5 : 0 }}>
-              <Typography variant="caption" color="text.secondary">{t('Found in DNS')}: </Typography>
+              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Found in DNS')}: </Typography>
               {check.found.map((value, index) => (
                 <Typography key={`${value}-${index}`} component="code" variant="caption" sx={{ fontFamily: 'monospace', overflowWrap: 'anywhere', '&:not(:last-child)::after': { content: '", "' } }}>
                   {value}
@@ -228,10 +225,16 @@ function DnsCheckRow({ check }: { check: Check }) {
 function DnsHealth({ checks, error, onReload }: { checks: Check[]; error: string; onReload: () => Promise<unknown> }) {
   return (
     <Box component="section" aria-labelledby="dns-health-title" sx={{ mb: 4 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} spacing={1.5} sx={{ mb: 2 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1.5}
+        sx={{
+          alignItems: { xs: 'stretch', sm: 'center' },
+          mb: 2
+        }}>
         <Box sx={{ flex: 1 }}>
           <Typography id="dns-health-title" variant="h6">{t('DNS health')}</Typography>
-          <Typography variant="body2" color="text.secondary">{t('DNS records')}</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>{t('DNS records')}</Typography>
         </Box>
         <Button variant="outlined" startIcon={<Refresh />} onClick={() => void onReload()} sx={{ alignSelf: { xs: 'flex-start', sm: 'center' } }}>
           {t('Check again')}
@@ -276,7 +279,7 @@ export function DomainDetail() {
       </PageHeader>
       {feedback}
       {/* Top-aligned: the MTA-STS description makes that field taller than the others. */}
-      <Stack direction="row" spacing={3} flexWrap="wrap" useFlexGap alignItems="flex-start" sx={{ mb: 3 }}>
+      <Stack direction="row" spacing={3} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'flex-start', mb: 3 }}>
         <FormControlLabel sx={{ m: 0 }} control={<Switch checked={d.enabled} disabled={!isSuper} onChange={(e) => void update({ enabled: e.target.checked }, t('Domain updated'))} />} label={t('Enabled')} />
         <TextField
           label={t('Catch-all address')}
@@ -311,7 +314,7 @@ export function DomainDetail() {
       <DnsHealth checks={dns.data?.checks ?? []} error={dns.error ?? ''} onReload={dns.reload} />
 
       <Typography variant="h6">{t('DKIM keys')}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('To rotate a key: add a new selector, publish its DNS record, then deactivate and delete the old one. Mail is signed with every active key.')}
       </Typography>
       <ScrollTable size="small" aria-label={t('DKIM keys')}>
@@ -332,7 +335,7 @@ export function DomainDetail() {
               <TableCell>
                 <Switch
                   checked={key.active}
-                  inputProps={{ 'aria-label': t('Active {{selector}}', { selector: key.selector }) }}
+                  slotProps={{ input: { 'aria-label': t('Active {{selector}}', { selector: key.selector }) } }}
                   onChange={async (e) => {
                     if (await run(() => patch(`/api/domains/${id}/dkim/${key.id}`, { active: e.target.checked }), t('Key updated'))) await Promise.all([keys.reload(), dns.reload()]);
                   }}
@@ -358,7 +361,7 @@ export function DomainDetail() {
           ))}
         </TableBody>
       </ScrollTable>
-      <Stack direction="row" spacing={1} sx={{ mt: 2, mb: 4 }} alignItems="flex-start">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', mt: 2, mb: 4 }}>
         <TextField label={t('New selector')} value={selector} onChange={(e) => setSelector(e.target.value.toLowerCase())} placeholder="mail2026" />
         <TextField select label={t('Algorithm')} value={algorithm} onChange={(e) => setAlgorithm(e.target.value)} sx={{ width: 190 }}>
           <MenuItem value="rsa-sha256">RSA 2048</MenuItem>
@@ -381,10 +384,10 @@ export function DomainDetail() {
       {isSuper && (
         <Box>
           <Typography variant="h6">{t('Domain administrators')}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
             {t('Delegated administrators can manage mailboxes and aliases of this domain only.')}
           </Typography>
-          <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
             <TextField
               label={t('Administrator e-mail addresses')}
               value={adminList ?? (admins.data ?? []).join(', ')}

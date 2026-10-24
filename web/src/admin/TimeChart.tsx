@@ -98,13 +98,13 @@ export function TimeChart({ title, headline, hint, points, max, format, series }
   return (
     <Card variant="outlined" sx={{ flex: '1 1 380px', minWidth: 0 }}>
       <CardContent>
-        <Typography variant="body2" color="text.secondary" id={titleId}>
+        <Typography variant="body2" id={titleId} sx={{ color: 'text.secondary' }}>
           {title}
         </Typography>
         <Typography variant="h5" component="div" data-testid={`chart-headline-${title}`}>
           {headline}
         </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', minHeight: 20 }}>
+        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', minHeight: 20 }}>
           {hovered ? `${new Date(hovered.t * 1000).toLocaleString(uiLocale())}: ${format(hovered.v)}` : hint}
         </Typography>
         {series && (
@@ -112,7 +112,7 @@ export function TimeChart({ title, headline, hint, points, max, format, series }
             {series.map((s) => (
               <Box component="li" key={s.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                 <Box sx={{ width: 10, height: 10, borderRadius: '3px', bgcolor: dark ? s.dark : s.light }} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   {s.label}
                   {hovered?.parts ? ` ${format(hovered.parts[s.key] ?? 0)}` : ''}
                 </Typography>
@@ -122,7 +122,7 @@ export function TimeChart({ title, headline, hint, points, max, format, series }
         )}
         <Box ref={holder} sx={{ mt: 1 }}>
           {points.length < 2 ? (
-            <Typography color="text.secondary" sx={{ height: HEIGHT, display: 'grid', placeItems: 'center' }}>
+            <Typography sx={{ color: 'text.secondary', height: HEIGHT, display: 'grid', placeItems: 'center' }}>
               {t('Collecting data. The chart fills in as the server runs.')}
             </Typography>
           ) : (
