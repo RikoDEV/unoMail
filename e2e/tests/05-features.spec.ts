@@ -182,7 +182,7 @@ test.describe('administration features', () => {
     const message = `From: a@remote.test\nTo: ${BOB}\nSubject: Plaintext hop\n\nx\n`;
     await smtpDeliver('a@remote.test', BOB, message);
     // The switch reflects the saved server state, so it flips once the change is stored.
-    const strictTls = page.getByRole('checkbox', { name: 'Require TLS from other servers' });
+    const strictTls = page.getByRole('switch', { name: 'Require TLS from other servers' });
     await strictTls.click();
     await expect(strictTls).toBeChecked();
     await expect(smtpDeliver('a@remote.test', BOB, message)).rejects.toThrow(/530 5\.7\.0 Must issue a STARTTLS/);

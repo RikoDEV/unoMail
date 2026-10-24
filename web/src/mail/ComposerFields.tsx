@@ -1,7 +1,7 @@
 // The address and subject fields of the composer, with recipient suggestions.
 
 import {
-  Box, Chip, InputBase, ListItemText, MenuItem, Paper,
+  Box, Chip, InputBase, ListItemButton, ListItemText, Paper,
   Stack, Typography,
 } from '@mui/material';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -97,8 +97,9 @@ export function RecipientField({ label, placeholder, value, onChange, autoFocus,
       </Stack>
       {open && (
         <Paper id={listId} role="listbox" aria-label={t('Suggested recipients')} elevation={6} sx={{ position: 'absolute', left: 16, right: 16, top: '100%', zIndex: 2, borderRadius: 1, py: 0.5, maxHeight: 260, overflow: 'auto' }}>
+          {/* List items, not MenuItems: those need a surrounding Menu, and the focus stays in the field here. */}
           {options.map((option, index) => (
-            <MenuItem
+            <ListItemButton
               key={`${option.source}-${suggestionText(option)}`}
               role="option"
               aria-selected={index === active}
@@ -113,12 +114,9 @@ export function RecipientField({ label, placeholder, value, onChange, autoFocus,
               <ListItemText
                 primary={option.source === 'group' ? `${option.name} (${option.members.length === 1 ? '1 person' : t('{{count}} people', { count: option.members.length })})` : option.name || option.email}
                 secondary={option.source === 'group' ? t('Group') : option.name ? option.email : undefined}
-                slotProps={{
-                  primary: { noWrap: true },
-                  secondary: { noWrap: true }
-                }} />
+                slotProps={{ primary: { noWrap: true }, secondary: { noWrap: true } }} />
               {option.source !== 'contact' && option.source !== 'group' && <Chip size="small" label={option.source === 'ldap' ? t('Directory') : t('Colleague')} sx={{ ml: 1 }} />}
-            </MenuItem>
+            </ListItemButton>
           ))}
         </Paper>
       )}

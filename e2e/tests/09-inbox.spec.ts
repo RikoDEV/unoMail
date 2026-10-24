@@ -211,7 +211,7 @@ test.describe('inbox tools', () => {
     await page.getByLabel('Sender to block').fill('not an address');
     await page.getByRole('button', { name: 'Block', exact: true }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'enter an e-mail address' })).toBeVisible();
-    await blocked.getByRole('listitem').filter({ hasText: 'pest@pushy.test' }).getByTestId('CancelIcon').click();
+    await blocked.getByRole('listitem').filter({ hasText: 'pest@pushy.test' }).locator('svg').click();
     await expect(blocked.getByText('pest@pushy.test')).toHaveCount(0);
     await smtpDeliver('pest@pushy.test', CAROL, mail('Pushy Sales <pest@pushy.test>', 'Welcome back'));
     await page.goto('/mail');
