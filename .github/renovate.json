@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "packageRules": [
+    {
+      "description": "Group minor and patch updates per project",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "cargo"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchFileNames": ["web/**"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "web"
+    },
+    {
+      "matchManagers": ["npm"],
+      "matchFileNames": ["e2e/**"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "e2e"
+    },
+    {
+      "description": "The RustCrypto stack has to move together: rsa 0.9 (latest stable) is built on der 0.7, digest 0.10 (sha1/sha2 0.10) and rand_core 0.6 (rand 0.8), and cms 0.2 / x509-cert 0.2 share those types. Upgrade them in one change once rsa 0.10 and cms 0.3 are released.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["der", "x509-cert", "cms", "rsa", "sha1", "sha2", "rand"],
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
+    },
+    {
+      "description": "Odd-numbered Node releases are never LTS.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["node"],
+      "allowedVersions": "/^[0-9]*[02468][.]/"
+    }
+  ]
+}
