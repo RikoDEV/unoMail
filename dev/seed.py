@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Fills a development server with sample data: two extra mailboxes and a varied inbox.
+"""Fills a development server with sample data: two extra mailboxes and a varied inbox,
+including orders, bookings and bills that show as summary cards.
 
 Usage (with the dev server from the README running):
 
@@ -97,6 +98,100 @@ def deliver(mail, recipient):
         smtp.send_message(mail, from_addr=mail['From'].addresses[0].addr_spec, to_addrs=[recipient])
 
 
+def set_quotas(shares):
+    """Sets each account's quota so its mail fills the given share of it; None means 1 GB."""
+    status, accounts = api('GET', '/api/accounts')
+    if status != 200:
+        return
+    for account in accounts['items']:
+        if account['email'] not in shares:
+            continue
+        share = shares[account['email']]
+        quota = 1 << 30 if share is None else max(64 * 1024, int(account['used_bytes'] / share))
+        api('PATCH', f"/api/accounts/{account['id']}", {'quota_bytes': quota})
+        if share is not None:
+            print(f"quota of {account['email']}: {quota // 1024} KB ({share:.0%} used)")
+
+
+def card_mails(recipient):
+    """Order, booking and bill mails with schema.org markup, so the inbox shows every kind of summary card."""
+    today = datetime.date.today()
+
+    def day(offset):
+        return (today + datetime.timedelta(days=offset)).isoformat()
+
+    def at(offset, clock):
+        return f'{day(offset)}T{clock}'
+
+    def mail(sender, name, subject, text, markup):
+        html = f'<div style="font-family:sans-serif">{"".join(f"<p>{line}</p>" for line in text.split(chr(10)) if line)}</div>' \
+               f'<script type="application/ld+json">{json.dumps({"@context": "https://schema.org", **markup})}</script>'
+        return message(sender, name, recipient, subject, text, html=html)
+
+    shop = {'@type': 'Order', 'seller': {'name': 'Gadget Store'}, 'orderNumber': 'GS-48213', 'priceCurrency': 'EUR', 'totalPrice': '149.98',
+            'acceptedOffer': [{'itemOffered': {'name': 'Wireless headphones'}}, {'itemOffered': {'name': 'USB-C charger'}}],
+            'url': 'https://shop.example/orders/GS-48213'}
+    return [
+        mail('orders@shop.example', 'Gadget Store', 'Your order GS-48213 has shipped',
+             'Good news: your order is on its way.\nTrack it with ParcelGo, tracking number PG123456789.',
+             {'@type': 'ParcelDelivery', 'partOfOrder': shop, 'carrier': {'name': 'ParcelGo'}, 'trackingNumber': 'PG123456789',
+              'trackingUrl': 'https://parcelgo.example/track/PG123456789', 'expectedArrivalFrom': day(2), 'expectedArrivalUntil': day(3),
+              'deliveryStatus': {'eventType': 'https://schema.org/OrderInTransit'}}),
+        mail('no-reply@books.example', 'Paper & Ink', 'Out for delivery today: order PI-7731',
+             'Your books arrive today.',
+             {'@type': 'ParcelDelivery', 'carrier': {'name': 'CityPost'}, 'trackingNumber': 'CP-55-0192', 'trackingUrl': 'https://citypost.example/CP-55-0192',
+              'expectedArrivalFrom': day(0), 'expectedArrivalUntil': day(0), 'deliveryStatus': {'eventType': 'https://schema.org/OutForDelivery'},
+              'partOfOrder': {'@type': 'Order', 'seller': {'name': 'Paper & Ink'}, 'orderNumber': 'PI-7731', 'priceCurrency': 'EUR', 'totalPrice': '34.50',
+                              'orderedItem': [{'@type': 'OrderItem', 'orderedItem': {'name': 'The Pragmatic Programmer'}}]}}),
+        mail('orders@grocer.example', 'Fresh Grocer', 'Order FG-2210 confirmed',
+             'Thanks for your order. We will let you know when it ships.',
+             {'@type': 'Order', 'seller': {'name': 'Fresh Grocer'}, 'orderNumber': 'FG-2210', 'orderStatus': 'https://schema.org/OrderProcessing',
+              'priceCurrency': 'PLN', 'totalPrice': '212.40', 'acceptedOffer': {'itemOffered': {'name': 'Weekly vegetable box'}}}),
+        mail('booking@skyways.example', 'SkyWays', 'Your flight to Lisbon: booking SW8KQ2',
+             'Your booking is confirmed. Online check-in opens 24 hours before departure.',
+             {'@type': 'FlightReservation', 'reservationNumber': 'SW8KQ2', 'reservationStatus': 'https://schema.org/ReservationConfirmed',
+              'reservationFor': {'@type': 'Flight', 'flightNumber': '412', 'airline': {'name': 'SkyWays', 'iataCode': 'SW'},
+                                 'departureAirport': {'name': 'Warsaw Chopin', 'iataCode': 'WAW'}, 'departureTime': at(9, '07:40:00+02:00'),
+                                 'arrivalAirport': {'name': 'Lisbon', 'iataCode': 'LIS'}, 'arrivalTime': at(9, '10:55:00+01:00')},
+              'url': 'https://skyways.example/manage/SW8KQ2'}),
+        mail('stay@hotels.example', 'Harbour Hotels', 'Booking confirmation H-90311',
+             'We look forward to welcoming you at Harbour View Lisbon.',
+             {'@type': 'LodgingReservation', 'reservationNumber': 'H-90311', 'reservationStatus': 'https://schema.org/ReservationConfirmed',
+              'reservationFor': {'@type': 'LodgingBusiness', 'name': 'Harbour View Lisbon',
+                                 'address': {'streetAddress': 'Rua do Cais 12', 'addressLocality': 'Lisbon', 'addressCountry': 'PT'}},
+              'checkinDate': at(9, '15:00:00'), 'checkoutDate': at(13, '11:00:00'), 'url': 'https://hotels.example/b/H-90311'}),
+        mail('tickets@rail.example', 'National Rail', 'Your e-ticket: Warsaw to Kraków',
+             'Your seat is reserved in coach 7, seat 45.',
+             {'@type': 'TrainReservation', 'reservationNumber': 'NR-604417', 'reservationFor': {'@type': 'TrainTrip', 'trainNumber': 'IC 5321',
+              'trainCompany': {'name': 'National Rail'}, 'departureStation': {'name': 'Warszawa Centralna'}, 'departureTime': at(4, '08:05:00'),
+              'arrivalStation': {'name': 'Kraków Główny'}, 'arrivalTime': at(4, '10:32:00')}}),
+        mail('reservations@bistro.example', 'Bistro Verde', 'Table for 4 on Friday',
+             'Your table is reserved. Let us know if your plans change.',
+             {'@type': 'FoodEstablishmentReservation', 'reservationNumber': 'BV-118', 'partySize': 4,
+              'reservationFor': {'@type': 'FoodEstablishment', 'name': 'Bistro Verde', 'address': {'streetAddress': 'Nowy Świat 21', 'addressLocality': 'Warsaw'}},
+              'startTime': at(6, '19:30:00')}),
+        mail('tickets@events.example', 'TicketHall', 'Your tickets: Jazz Night at the Old Town Hall',
+             '2 tickets, row C. Show the QR code at the entrance.',
+             {'@type': 'EventReservation', 'reservationNumber': 'TH-77120', 'provider': {'name': 'TicketHall'}, 'url': 'https://events.example/t/TH-77120',
+              'reservationFor': {'@type': 'Event', 'name': 'Jazz Night', 'startDate': at(15, '20:00:00'),
+                                 'location': {'name': 'Old Town Hall', 'address': {'addressLocality': 'Warsaw'}}}}),
+        mail('rentals@cars.example', 'DriveNow', 'Car rental confirmed: DN-5521',
+             'Pick up your car at Lisbon Airport, desk 3.',
+             {'@type': 'RentalCarReservation', 'reservationNumber': 'DN-5521', 'reservationFor': {'@type': 'Car', 'name': 'Compact (VW Golf or similar)',
+              'rentalCompany': {'name': 'DriveNow'}}, 'pickupLocation': {'name': 'Lisbon Airport', 'address': {'addressLocality': 'Lisbon'}},
+              'pickupTime': at(9, '11:30:00'), 'dropoffLocation': {'name': 'Lisbon Airport'}, 'dropoffTime': at(13, '09:00:00')}),
+        mail('billing@power.example', 'City Power', 'Your electricity bill is ready',
+             'Amount due: 186.20 PLN. Please pay by the due date.',
+             {'@type': 'Invoice', 'provider': {'name': 'City Power'}, 'accountId': 'CP-0042-118', 'paymentStatus': 'https://schema.org/PaymentDue',
+              'paymentDueDate': day(10), 'totalPaymentDue': {'@type': 'PriceSpecification', 'price': '186.20', 'priceCurrency': 'PLN'},
+              'url': 'https://power.example/pay'}),
+        mail('billing@mobile.example', 'Mobile One', 'Reminder: invoice MO-3391 is overdue',
+             'We have not received your payment yet.',
+             {'@type': 'Invoice', 'provider': {'name': 'Mobile One'}, 'confirmationNumber': 'MO-3391', 'paymentStatus': 'https://schema.org/PaymentPastDue',
+              'paymentDueDate': day(-5), 'totalPaymentDue': {'@type': 'PriceSpecification', 'price': '59.00', 'priceCurrency': 'PLN'}}),
+    ]
+
+
 def calendar_events(user):
     """Stores a few events through CalDAV, the way a calendar program would."""
     today = datetime.date.today()
@@ -138,6 +233,8 @@ def main():
     for local, name in [('alice', 'Alice Example'), ('bob', 'Bob Example')]:
         status, _ = api('POST', '/api/accounts', {'email': f'{local}@{DOMAIN}', 'display_name': name, 'password': USER_PASSWORD})
         print(f'mailbox {local}@{DOMAIN}:', 'created' if status == 200 else 'already there')
+    # Room for the sample mail; the quotas are tightened again at the end (see set_quotas).
+    set_quotas({ADMIN: None, f'alice@{DOMAIN}': None, f'bob@{DOMAIN}': None})
     status, _ = api('POST', '/api/aliases', {'source': f'team@{DOMAIN}', 'destinations': [ADMIN, f'alice@{DOMAIN}']})
     print(f'alias team@{DOMAIN}:', 'created' if status == 200 else 'already there')
 
@@ -173,7 +270,10 @@ def main():
         deliver(message('billing@hosting.example', 'Hosting Billing', recipient, 'Invoice 2026-10 is ready',
                         'Your invoice for October is attached.\n\nAmount due: 12.00 EUR\nDue date: 2026-10-31\n',
                         attachments=[('invoice-2026-10.pdf', 'application/pdf', tiny_pdf('Invoice 2026-10: 12.00 EUR'))]), recipient)
-        print(f'9 messages delivered to {recipient}')
+        cards = card_mails(recipient)
+        for card in cards:
+            deliver(card, recipient)
+        print(f'{9 + len(cards)} messages delivered to {recipient} ({len(cards)} with summary cards)')
 
     for user in [ADMIN, f'alice@{DOMAIN}', f'bob@{DOMAIN}']:
         calendar_events(user)
@@ -184,6 +284,8 @@ def main():
         deliver(message('stranger@remote.example', 'Stranger', f'nobody@{DOMAIN}', 'Is anyone there?', 'Hello?'), f'nobody@{DOMAIN}')
     except smtplib.SMTPException:
         pass
+    # Quotas sized from the mail just delivered, so the usage bars show a visible share.
+    set_quotas({ADMIN: 0.08, f'alice@{DOMAIN}': 0.35, f'bob@{DOMAIN}': 0.8})
     print(f'\nSign in at the dev client with {ADMIN} / {PASSWORD}')
     print(f'or as alice@{DOMAIN} / bob@{DOMAIN} with the password {USER_PASSWORD}')
 
