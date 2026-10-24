@@ -1,0 +1,22 @@
+{
+  "name": "unoMail",
+  "short_name": "unoMail",
+  "description": "Mail, calendar and contacts",
+  "id": "/mail",
+  "start_url": "/mail",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#fef7ff",
+  "theme_color": "#6750a4",
+  "categories": ["productivity", "communication"],
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Inbox", "url": "/mail" },
+    { "name": "Calendar", "url": "/calendar" },
+    { "name": "Contacts", "url": "/contacts" }
+  ]
+}

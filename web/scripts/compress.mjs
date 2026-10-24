@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
 
-const COMPRESSIBLE = /\.(js|mjs|css|html|svg|json|txt|map)$/;
+const COMPRESSIBLE = /\.(js|mjs|css|html|svg|json|webmanifest|txt|map)$/;
 const MIN_SIZE = 1024;
 
 function walk(dir) {

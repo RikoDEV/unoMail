@@ -1,8 +1,70 @@
-// Service worker of the web mail: shows a notification when the server pushes word of new
-// mail (JMAP StateChange with EmailDelivery, delivered through the browser's push service).
+// Service worker of the web mail: keeps the application shell so the installed app starts
+// offline, and shows a notification when the server pushes word of new mail (JMAP StateChange
+// with EmailDelivery, delivered through the browser's push service).
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+const SHELL = 'unomail-shell-v1';
+const ASSETS = 'unomail-assets-v1';
+// Served by the server itself, never by the application shell; mail data is never cached here.
+const SERVER_PATHS = /^\/(api|jmap|dav|lists|\.well-known)(\/|$)/;
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(SHELL);
+      await Promise.all(['/', '/favicon.svg', '/manifest.webmanifest'].map((url) => cache.add(url).catch(() => {})));
+      await self.skipWaiting();
+    })(),
+  );
+});
+
+self.addEventListener('activate', (event) =>
+  event.waitUntil(
+    (async () => {
+      for (const name of await caches.keys()) if (name.startsWith('unomail-') && name !== SHELL && name !== ASSETS) await caches.delete(name);
+      await self.clients.claim();
+    })(),
+  ),
+);
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || SERVER_PATHS.test(url.pathname)) return;
+  if (request.mode === 'navigate') event.respondWith(page(request));
+  else if (url.pathname.startsWith('/assets/')) event.respondWith(asset(request));
+});
+
+/** Pages come from the network; offline, the last application shell starts instead. */
+async function page(request) {
+  const cache = await caches.open(SHELL);
+  try {
+    const response = await fetch(request);
+    if (response.ok && (response.headers.get('content-type') || '').includes('text/html')) {
+      const previous = await cache.match('/');
+      const fresh = response.clone();
+      const text = await fresh.clone().text();
+      // A new build names new assets: the ones of the old build are no longer needed.
+      if (previous && (await previous.text()) !== text) await caches.delete(ASSETS);
+      await cache.put('/', fresh);
+    }
+    return response;
+  } catch (error) {
+    const shell = await cache.match('/');
+    if (shell) return shell;
+    throw error;
+  }
+}
+
+/** Built assets carry a content hash in their name, so a cached copy is always right. */
+async function asset(request) {
+  const cache = await caches.open(ASSETS);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response.ok) cache.put(request, response.clone()).catch(() => {});
+  return response;
+}
 
 self.addEventListener('push', (event) => {
   let data = {};
