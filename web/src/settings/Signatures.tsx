@@ -14,7 +14,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { errorText } from '../lib/api';
 import { t } from '../i18n';
-import { chooseSignatures, deleteSignature, type Signature, type SignatureChoice, type Signatures, listSignatures, saveSignature } from '../mail/extra';
+import { chooseSignatures, deleteSignature, type Identity, listIdentities, type Signature, type SignatureChoice, type Signatures, listSignatures, saveSignature } from '../mail/extra';
 import { htmlToText } from '../mail/jmapClient';
 import { sanitizeEmailHtml } from '../mail/sanitize';
 import { updatePrefs, usePrefs } from '../lib/prefs';
@@ -161,15 +161,17 @@ export function SignaturesCard() {
   const [data, setData] = useState<Signatures | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<Signature | null | undefined>(undefined);
+  const [identities, setIdentities] = useState<Identity[]>([]);
   const reload = useCallback(() => listSignatures().then(setData, (err) => setError(errorText(err, t('Signatures could not be loaded')))), []);
+  useEffect(() => void listIdentities().then(setIdentities, () => {}), []);
   useEffect(() => void reload(), [reload]);
 
   const signatures = data?.signatures ?? [];
   const remove = (id: number) => void deleteSignature(id).then(reload).catch((err) => setError(errorText(err, t('Could not delete'))));
-  async function choose(email: string, choice: SignatureChoice) {
-    setData((current) => current && { ...current, defaults: { ...current.defaults, [email]: choice } });
+  async function choose(identityId: number, choice: SignatureChoice) {
+    setData((current) => current && { ...current, defaults: { ...current.defaults, [identityId]: choice } });
     try {
-      await chooseSignatures(email, choice);
+      await chooseSignatures(identityId, choice);
     } catch (err) {
       setError(errorText(err, t('The choice could not be saved')));
       void reload();
@@ -212,23 +214,31 @@ export function SignaturesCard() {
             <Table size="small" aria-label={t('Signature defaults')}>
               <TableHead>
                 <TableRow>
-                  <TableCell>{t('Address')}</TableCell>
+                  <TableCell>{t('Identity')}</TableCell>
                   <TableCell>{t('New messages')}</TableCell>
                   <TableCell>{t('Replies and forwards')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {Object.entries(data.defaults).map(([email, choice]) => (
-                  <TableRow key={email}>
-                    <TableCell sx={{ wordBreak: 'break-all' }}>{email}</TableCell>
-                    <TableCell>
-                      <SignatureSelect label={t('For new messages from {{email}}', { email })} value={choice.new_signature_id} signatures={signatures} onChange={(id) => void choose(email, { ...choice, new_signature_id: id })} />
-                    </TableCell>
-                    <TableCell>
-                      <SignatureSelect label={t('For replies from {{email}}', { email })} value={choice.reply_signature_id} signatures={signatures} onChange={(id) => void choose(email, { ...choice, reply_signature_id: id })} />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {identities.filter((identity) => data.defaults[identity.id]).map((identity) => {
+                  const choice = data.defaults[identity.id];
+                  // Several identities may share an address, so the name tells them apart.
+                  const email = identity.name ? `${identity.name} <${identity.email}>` : identity.email;
+                  return (
+                    <TableRow key={identity.id}>
+                      <TableCell sx={{ wordBreak: 'break-all' }}>
+                        {identity.name || identity.email}
+                        {identity.name && <Typography variant="body2" sx={{ color: 'text.secondary' }}>{identity.email}</Typography>}
+                      </TableCell>
+                      <TableCell>
+                        <SignatureSelect label={t('For new messages from {{email}}', { email })} value={choice.new_signature_id} signatures={signatures} onChange={(id) => void choose(identity.id, { ...choice, new_signature_id: id })} />
+                      </TableCell>
+                      <TableCell>
+                        <SignatureSelect label={t('For replies from {{email}}', { email })} value={choice.reply_signature_id} signatures={signatures} onChange={(id) => void choose(identity.id, { ...choice, reply_signature_id: id })} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

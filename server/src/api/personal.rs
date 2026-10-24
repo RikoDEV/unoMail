@@ -49,6 +49,8 @@ pub struct IdentityRow {
     #[sqlx(skip)]
     pub signature_html: String,
     pub is_default: bool,
+    /// The account's own address, which every account has and cannot remove.
+    pub is_primary: bool,
     pub smtp_host: Option<String>,
     pub smtp_port: Option<i64>,
     pub smtp_security: Option<String>,
@@ -56,7 +58,7 @@ pub struct IdentityRow {
     pub smtp_password: String,
 }
 
-const IDENTITY_COLUMNS: &str = "id, name, email, reply_to, is_default, smtp_host, smtp_port, smtp_security, smtp_username, smtp_password";
+const IDENTITY_COLUMNS: &str = "id, name, email, reply_to, is_default, is_primary, smtp_host, smtp_port, smtp_security, smtp_username, smtp_password";
 
 impl IdentityRow {
     fn view(&self) -> Value {
@@ -67,6 +69,7 @@ impl IdentityRow {
             "reply_to": self.reply_to,
             "signature_html": self.signature_html,
             "is_default": self.is_default,
+            "primary": self.is_primary,
             // The stored password is never returned, only whether one is set.
             "smtp": self.smtp_host.as_ref().map(|host| json!({
                 "host": host,
@@ -84,46 +87,82 @@ impl IdentityRow {
     }
 }
 
-/// The identities of an account. The account's own address is always available, even before
-/// the user saved anything for it (`id` 0).
+/// The identities of an account: its primary identity (its own address) first among equals,
+/// then the ones the user added, then masked addresses without an identity of their own.
 pub async fn identity_rows(state: &AppState, account: &crate::auth::Account) -> sqlx::Result<Vec<IdentityRow>> {
+    ensure_primary(&state.db, account).await?;
     let mut rows: Vec<IdentityRow> =
-        sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {IDENTITY_COLUMNS} FROM identities WHERE account_id = ? ORDER BY is_default DESC, id")))
+        sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {IDENTITY_COLUMNS} FROM identities WHERE account_id = ? ORDER BY is_default DESC, is_primary DESC, id")))
             .bind(account.id)
             .fetch_all(&state.db)
             .await?;
-    if !rows.iter().any(|row| row.email == account.email) {
-        let primary = IdentityRow {
-            masked: false,
-            available: true,
-            id: 0,
-            name: account.display_name.clone(),
-            email: account.email.clone(),
-            reply_to: String::new(),
-            signature_html: String::new(),
-            is_default: !rows.iter().any(|row| row.is_default),
-            smtp_host: None,
-            smtp_port: None,
-            smtp_security: None,
-            smtp_username: String::new(),
-            smtp_password: String::new(),
-        };
-        let at = if primary.is_default { 0 } else { rows.len() };
-        rows.insert(at, primary);
-    }
     for row in &mut rows {
         row.available=true;
         if let Some(address)=Address::parse(&row.email)&& let Some(owned)=crate::masked_email::owned(state,account.id,&address).await?{row.masked=true;row.available=owned;}
     }
     let masks:Vec<(i64,String,bool,Option<i64>,bool)>=sqlx::query_as("SELECT m.id,m.email,m.enabled,m.expires_at,d.enabled FROM masked_addresses m JOIN domains d ON d.id=m.domain_id WHERE m.account_id=? ORDER BY m.id DESC").bind(account.id).fetch_all(&state.db).await?;
     for (id,email,enabled,expires,domain) in masks{
-        if !rows.iter().any(|r|r.email==email){rows.push(IdentityRow{id:-id,name:String::new(),email:email.clone(),reply_to:email,signature_html:String::new(),is_default:false,smtp_host:None,smtp_port:None,smtp_security:None,smtp_username:String::new(),smtp_password:String::new(),masked:true,available:enabled && domain && expires.is_none_or(|t|t>now())});}
+        if !rows.iter().any(|r|r.email==email){rows.push(IdentityRow{id:-id,name:String::new(),email:email.clone(),reply_to:email,signature_html:String::new(),is_default:false,is_primary:false,smtp_host:None,smtp_port:None,smtp_security:None,smtp_username:String::new(),smtp_password:String::new(),masked:true,available:enabled && domain && expires.is_none_or(|t|t>now())});}
     }
     let signatures = new_message_signatures(&state.db, account.id).await?;
     for row in &mut rows {
-        row.signature_html = signatures.get(&row.email).cloned().unwrap_or_default();
+        row.signature_html = signatures.get(&row.id).cloned().unwrap_or_default();
     }
     Ok(rows)
+}
+
+/// Creates the account's primary identity if it has none yet (a new account), and keeps its
+/// address the account's own (an administrator may rename the mailbox).
+async fn ensure_primary(db: &sqlx::SqlitePool, account: &crate::auth::Account) -> sqlx::Result<()> {
+    sqlx::query("UPDATE identities SET email = ? WHERE account_id = ? AND is_primary = 1 AND email != ?")
+        .bind(&account.email)
+        .bind(account.id)
+        .bind(&account.email)
+        .execute(db)
+        .await?;
+    sqlx::query(
+        "INSERT OR IGNORE INTO identities (account_id, name, email, is_default, is_primary, created_at)
+         SELECT ?1, ?2, ?3, NOT EXISTS (SELECT 1 FROM identities WHERE account_id = ?1 AND is_default = 1), 1, ?4
+         WHERE NOT EXISTS (SELECT 1 FROM identities WHERE account_id = ?1 AND is_primary = 1)",
+    )
+    .bind(account.id)
+    .bind(&account.display_name)
+    .bind(&account.email)
+    .bind(now())
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// The addresses an account may send from through this server: its own, the aliases that
+/// deliver to it and its active masked addresses. Any other address needs its own SMTP server.
+pub async fn sendable_addresses(state: &AppState, account: &crate::auth::Account) -> sqlx::Result<Vec<(String, &'static str)>> {
+    let mut out = vec![(account.email.clone(), "own")];
+    let aliases: Vec<(String, String)> = sqlx::query_as("SELECT source, destinations FROM aliases WHERE enabled = 1 AND destinations LIKE ? ESCAPE '\\'")
+        .bind(like_pattern(&account.email))
+        .fetch_all(&state.db)
+        .await?;
+    for (source, destinations) in aliases {
+        let list: Vec<String> = serde_json::from_str(&destinations).unwrap_or_default();
+        if list.iter().any(|d| d.eq_ignore_ascii_case(&account.email)) && !out.iter().any(|(email, _)| *email == source) {
+            out.push((source, "alias"));
+        }
+    }
+    let masks: Vec<String> = sqlx::query_scalar(
+        "SELECT m.email FROM masked_addresses m JOIN domains d ON d.id = m.domain_id
+         WHERE m.account_id = ? AND m.enabled = 1 AND d.enabled = 1 AND (m.expires_at IS NULL OR m.expires_at > ?) ORDER BY m.email",
+    )
+    .bind(account.id)
+    .bind(now())
+    .fetch_all(&state.db)
+    .await?;
+    out.extend(masks.into_iter().map(|email| (email, "masked")));
+    Ok(out)
+}
+
+pub async fn identity_addresses(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
+    let addresses = sendable_addresses(&state, &session.account).await?;
+    Ok(Json(json!(addresses.into_iter().map(|(email, kind)| json!({ "email": email, "kind": kind })).collect::<Vec<_>>())))
 }
 
 #[derive(Deserialize)]
@@ -171,6 +210,23 @@ async fn save_identity(state: &AppState, session: &Session, id: Option<i64>, inp
         ),
         None => None,
     };
+    let primary = existing.as_ref().is_some_and(|row| row.is_primary);
+    if primary && address.to_string() != session.account.email {
+        return Err(ApiError::bad("the address of your primary identity is your account's own address"));
+    }
+    if primary && input.smtp.is_some() {
+        return Err(ApiError::bad("your own address is always sent by this server"));
+    }
+    // An address that sends through its own SMTP server has one server, shared by all of the
+    // identities with that address: SMTP clients name only the address, not the identity.
+    let sibling: Option<IdentityRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {IDENTITY_COLUMNS} FROM identities WHERE account_id = ? AND email = ? AND smtp_host IS NOT NULL AND id != ? ORDER BY id LIMIT 1"
+    )))
+    .bind(session.account.id)
+    .bind(address.to_string())
+    .bind(id.unwrap_or(0))
+    .fetch_optional(&state.db)
+    .await?;
 
     let smtp = match &input.smtp {
         None => None,
@@ -192,19 +248,25 @@ async fn save_identity(state: &AppState, session: &Session, id: Option<i64>, inp
                 Some(password) if password.len() > 500 => return Err(ApiError::bad("the password is too long")),
                 Some(password) => state.secrets.seal(password),
                 // Keep the stored password only while it still goes to the same server.
-                None => existing.as_ref().filter(|e| e.smtp_host.as_deref() == Some(host.as_str())).map(|e| e.smtp_password.clone()).unwrap_or_default(),
+                None => existing.iter().chain(&sibling).find(|e| e.smtp_host.as_deref() == Some(host.as_str())).map(|e| e.smtp_password.clone()).unwrap_or_default(),
             };
             Some((host, smtp.port as i64, smtp.security.clone(), username, password))
         }
     };
+    let owned = owns_address(state, &session.account, &address).await?;
+    // Another identity with this address already names its server: this one uses it too.
+    let smtp = match (smtp, &sibling) {
+        (None, Some(other)) if !owned => other.smtp_host.clone().map(|host| (host, other.smtp_port.unwrap_or(465), other.smtp_security.clone().unwrap_or_else(|| "tls".into()), other.smtp_username.clone(), other.smtp_password.clone())),
+        (smtp, _) => smtp,
+    };
     // Without a server of its own the identity is sent by us and must be an address the
     // account really owns; anything else would let users impersonate each other.
-    if smtp.is_none() && !owns_address(state, &session.account, &address).await? {
+    if smtp.is_none() && !owned {
         return Err(ApiError::bad("this address does not belong to your account; add an SMTP server to send through its own provider"));
     }
     // An address in a domain hosted here belongs to someone on this server: an SMTP server of
     // the user's choosing (this one included) must not make it theirs.
-    if smtp.is_some() && hosted_domain(&state.db, &address.domain).await? && !owns_address(state, &session.account, &address).await? {
+    if smtp.is_some() && hosted_domain(&state.db, &address.domain).await? && !owned {
         return Err(ApiError::bad("this address belongs to another mailbox on this server"));
     }
 
@@ -265,10 +327,23 @@ async fn save_identity(state: &AppState, session: &Session, id: Option<i64>, inp
             .last_insert_rowid()
         }
     };
+    if host.is_some() && !owned {
+        sqlx::query("UPDATE identities SET smtp_host = ?, smtp_port = ?, smtp_security = ?, smtp_username = ?, smtp_password = ? WHERE account_id = ? AND email = ? AND id != ?")
+            .bind(&host)
+            .bind(port)
+            .bind(&security)
+            .bind(&username)
+            .bind(&password)
+            .bind(session.account.id)
+            .bind(&email)
+            .bind(saved_id)
+            .execute(&mut *tx)
+            .await?;
+    }
     tx.commit().await?;
     session.audit(state, "identity.saved", &email, host.as_deref().unwrap_or("")).await;
     let mut row: IdentityRow = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT {IDENTITY_COLUMNS} FROM identities WHERE id = ?"))).bind(saved_id).fetch_one(&state.db).await?;
-    row.signature_html = new_message_signatures(&state.db, session.account.id).await?.remove(&row.email).unwrap_or_default();
+    row.signature_html = new_message_signatures(&state.db, session.account.id).await?.remove(&row.id).unwrap_or_default();
     Ok(row.view())
 }
 
@@ -288,9 +363,22 @@ pub async fn identity_update(State(state): State<AppState>, session: Session, Pa
     Ok(Json(save_identity(&state, &session, Some(id), input).await?))
 }
 
+/// Deletes an identity the user added; the primary one stays. When the default goes, the
+/// primary identity becomes the default.
 pub async fn identity_delete(State(state): State<AppState>, session: Session, Path(id): Path<i64>) -> JsonResult<Value> {
-    let removed = sqlx::query("DELETE FROM identities WHERE id = ? AND account_id = ?").bind(id).bind(session.account.id).execute(&state.db).await?.rows_affected();
-    if removed == 0 { Err(ApiError::NotFound) } else { Ok(Json(json!({ "ok": true }))) }
+    let mut tx = state.db.begin().await?;
+    let removed = sqlx::query("DELETE FROM identities WHERE id = ? AND account_id = ? AND is_primary = 0").bind(id).bind(session.account.id).execute(&mut *tx).await?.rows_affected();
+    if removed == 0 {
+        let primary: Option<i64> = sqlx::query_scalar("SELECT 1 FROM identities WHERE id = ? AND account_id = ? AND is_primary = 1").bind(id).bind(session.account.id).fetch_optional(&mut *tx).await?;
+        return Err(if primary.is_some() { ApiError::bad("your primary identity cannot be deleted") } else { ApiError::NotFound });
+    }
+    sqlx::query("DELETE FROM signature_defaults WHERE account_id = ? AND identity_id = ?").bind(session.account.id).bind(id).execute(&mut *tx).await?;
+    sqlx::query("UPDATE identities SET is_default = 1 WHERE account_id = ?1 AND is_primary = 1 AND NOT EXISTS (SELECT 1 FROM identities WHERE account_id = ?1 AND is_default = 1)")
+        .bind(session.account.id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 // --- Address book --------------------------------------------------------------------------
@@ -821,9 +909,10 @@ fn clean_signature(input: &SignatureInput) -> Result<String, ApiError> {
     Ok(name)
 }
 
-/// The signature each sender address uses for new messages, by address.
-async fn new_message_signatures(db: &sqlx::SqlitePool, account_id: i64) -> sqlx::Result<std::collections::HashMap<String, String>> {
-    let rows: Vec<(String, String)> = sqlx::query_as("SELECT d.email, s.html FROM signature_defaults d JOIN signatures s ON s.id = d.new_signature_id WHERE d.account_id = ?")
+/// The signature each sender identity uses for new messages, by identity id (a masked address
+/// without an identity of its own by the negated id of the mask).
+async fn new_message_signatures(db: &sqlx::SqlitePool, account_id: i64) -> sqlx::Result<std::collections::HashMap<i64, String>> {
+    let rows: Vec<(i64, String)> = sqlx::query_as("SELECT d.identity_id, s.html FROM signature_defaults d JOIN signatures s ON s.id = d.new_signature_id WHERE d.account_id = ?")
         .bind(account_id)
         .fetch_all(db)
         .await?;
@@ -837,14 +926,14 @@ pub async fn signatures_list(State(state): State<AppState>, session: Session) ->
         .bind(session.account.id)
         .fetch_all(&state.db)
         .await?;
-    let chosen: Vec<(String, Option<i64>, Option<i64>)> = sqlx::query_as("SELECT email, new_signature_id, reply_signature_id FROM signature_defaults WHERE account_id = ?")
+    let chosen: Vec<(i64, Option<i64>, Option<i64>)> = sqlx::query_as("SELECT identity_id, new_signature_id, reply_signature_id FROM signature_defaults WHERE account_id = ?")
         .bind(session.account.id)
         .fetch_all(&state.db)
         .await?;
     let mut defaults = serde_json::Map::new();
     for identity in identity_rows(&state, &session.account).await? {
-        let (new, reply) = chosen.iter().find(|(email, ..)| *email == identity.email).map_or((None, None), |(_, new, reply)| (*new, *reply));
-        defaults.insert(identity.email, json!({ "new_signature_id": new, "reply_signature_id": reply }));
+        let (new, reply) = chosen.iter().find(|(id, ..)| *id == identity.id).map_or((None, None), |(_, new, reply)| (*new, *reply));
+        defaults.insert(identity.id.to_string(), json!({ "new_signature_id": new, "reply_signature_id": reply }));
     }
     Ok(Json(json!({ "signatures": signatures, "defaults": defaults })))
 }
@@ -889,15 +978,14 @@ pub async fn signature_delete(State(state): State<AppState>, session: Session, P
 
 #[derive(Deserialize)]
 pub struct SignatureDefaultsInput {
-    email: String,
+    identity_id: i64,
     new_signature_id: Option<i64>,
     reply_signature_id: Option<i64>,
 }
 
 /// Chooses the signatures one sender identity uses.
 pub async fn signature_defaults_put(State(state): State<AppState>, session: Session, Json(input): Json<SignatureDefaultsInput>) -> JsonResult<Value> {
-    let email = input.email.trim().to_lowercase();
-    if !identity_rows(&state, &session.account).await?.iter().any(|identity| identity.email == email) {
+    if !identity_rows(&state, &session.account).await?.iter().any(|identity| identity.id == input.identity_id) {
         return Err(ApiError::bad("not one of your sender identities"));
     }
     for id in [input.new_signature_id, input.reply_signature_id].into_iter().flatten() {
@@ -907,16 +995,16 @@ pub async fn signature_defaults_put(State(state): State<AppState>, session: Sess
         }
     }
     sqlx::query(
-        "INSERT INTO signature_defaults (account_id, email, new_signature_id, reply_signature_id) VALUES (?, ?, ?, ?)
-         ON CONFLICT (account_id, email) DO UPDATE SET new_signature_id = excluded.new_signature_id, reply_signature_id = excluded.reply_signature_id",
+        "INSERT INTO signature_defaults (account_id, identity_id, new_signature_id, reply_signature_id) VALUES (?, ?, ?, ?)
+         ON CONFLICT (account_id, identity_id) DO UPDATE SET new_signature_id = excluded.new_signature_id, reply_signature_id = excluded.reply_signature_id",
     )
     .bind(session.account.id)
-    .bind(&email)
+    .bind(input.identity_id)
     .bind(input.new_signature_id)
     .bind(input.reply_signature_id)
     .execute(&state.db)
     .await?;
-    Ok(Json(json!({ "email": email, "new_signature_id": input.new_signature_id, "reply_signature_id": input.reply_signature_id })))
+    Ok(Json(json!({ "identity_id": input.identity_id, "new_signature_id": input.new_signature_id, "reply_signature_id": input.reply_signature_id })))
 }
 
 // --- Preferences ---------------------------------------------------------------------------

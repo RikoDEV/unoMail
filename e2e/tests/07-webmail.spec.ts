@@ -89,18 +89,37 @@ test.describe('web mail extras', () => {
     await login(page, BOB, USER_PASSWORD);
     await openSettings(page, 'Identities');
 
-    // An alias that delivers to Bob can become an identity; a stranger's address cannot.
+    // Bob's own address is his primary identity from the start.
+    const identities = page.getByRole('table', { name: 'Identities' });
+    await expect(identities.getByRole('row', { name: new RegExp(BOB) })).toContainText('Primary');
+    await expect(identities.getByRole('button', { name: new RegExp(`Delete identity.*${BOB}`) })).toHaveCount(0);
+
+    // An alias that delivers to Bob is offered as an address to send from.
     await page.getByRole('button', { name: 'Add identity' }).click();
     let dialog = page.getByRole('dialog');
     await dialog.getByLabel('Display name').fill('Team Example');
-    await dialog.getByLabel('E-mail address').fill(`team@${DOMAIN}`);
+    await dialog.getByLabel('Send from').click();
+    await page.getByRole('option', { name: `team@${DOMAIN} (alias)` }).click();
     await dialog.getByRole('button', { name: 'Save identity' }).click();
-    await expect(page.getByRole('table', { name: 'Identities' }).getByRole('row', { name: new RegExp(`team@${DOMAIN}`) })).toContainText('Team Example');
+    await expect(identities.getByRole('row', { name: new RegExp(`team@${DOMAIN}`) })).toContainText('Team Example');
+
+    // Another name for his own address is a second identity; the primary one stays as it was.
     await page.getByRole('button', { name: 'Add identity' }).click();
     dialog = page.getByRole('dialog');
-    await dialog.getByLabel('E-mail address').fill('ceo@elsewhere.test');
+    await dialog.getByLabel('Display name').fill('Bob · Support');
     await dialog.getByRole('button', { name: 'Save identity' }).click();
-    await expect(dialog.getByRole('alert')).toContainText('does not belong to your account');
+    await expect(identities.getByRole('row', { name: new RegExp(BOB) })).toHaveCount(2);
+    await expect(identities.getByRole('row', { name: /Bob · Support/ })).not.toContainText('Primary');
+
+    // Any other address can only be sent through its own provider's SMTP server.
+    await page.getByRole('button', { name: 'Add identity' }).click();
+    dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Send from').click();
+    await page.getByRole('option', { name: 'Another address (send through its SMTP server)…' }).click();
+    await dialog.getByLabel('E-mail address').fill('ceo@elsewhere.test');
+    await expect(dialog.getByRole('button', { name: 'Save identity' })).toBeDisabled();
+    await dialog.getByLabel('SMTP host').fill('smtp.elsewhere.test');
+    await expect(dialog.getByRole('button', { name: 'Save identity' })).toBeEnabled();
     await dialog.getByRole('button', { name: 'Cancel' }).click();
 
     // A signature, used by the team address for new messages.
@@ -111,9 +130,11 @@ test.describe('web mail extras', () => {
     await dialog.getByRole('textbox', { name: 'Signature text' }).fill('Kind regards,\nThe whole team');
     await dialog.getByRole('button', { name: 'Save signature' }).click();
     await expect(page.getByRole('table', { name: 'Signatures' }).getByRole('row', { name: /Team/ })).toContainText('The whole team');
-    await page.getByRole('combobox', { name: `For new messages from team@${DOMAIN}` }).click();
+    // Signatures are chosen per identity, which the name tells apart.
+    const teamDefault = page.getByRole('combobox', { name: `For new messages from Team Example <team@${DOMAIN}>` });
+    await teamDefault.click();
     await page.getByRole('option', { name: 'Team' }).click();
-    await expect(page.getByRole('combobox', { name: `For new messages from team@${DOMAIN}` })).toHaveText('Team');
+    await expect(teamDefault).toHaveText('Team');
 
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Templates' }).click();
     await page.getByRole('button', { name: 'Add template' }).click();

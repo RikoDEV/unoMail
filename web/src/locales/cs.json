@@ -2250,5 +2250,21 @@
   "the stored private key cannot be decrypted; save it again": "Uložený soukromý klíč nelze dešifrovat; uložte ho znovu",
   "an armored public key is required": "Je vyžadován veřejný klíč ve formátu ASCII (armored)",
   "the private key must be an armored, passphrase-protected key": "Soukromý klíč musí být ve formátu ASCII (armored) a chráněný heslem",
-  "a contact with this address already exists": "Kontakt s touto adresou už existuje"
+  "a contact with this address already exists": "Kontakt s touto adresou už existuje",
+  "{{email}} (your address)": "{{email}} (vaše adresa)",
+  "{{email}} (alias)": "{{email}} (alias)",
+  "{{email}} (masked address)": "{{email}} (maskovaná adresa)",
+  "How recipients see you, for example “Anna Smith” or “Anna · Support”": "Jak vás vidí příjemci, například „Anna Nováková“ nebo „Anna · Podpora“",
+  "Send from": "Odesílat z",
+  "Your primary identity always uses your own address.": "Vaše hlavní identita vždy používá vaši vlastní adresu.",
+  "Addresses that reach your mailbox. Another address needs its provider’s SMTP server.": "Adresy, které vedou do vaší schránky. Jiná adresa potřebuje server SMTP svého poskytovatele.",
+  "Another address (send through its SMTP server)…": "Jiná adresa (odesílání přes její server SMTP)…",
+  "Optional: where replies go, if not to the address above": "Volitelné: kam mají chodit odpovědi, pokud ne na adresu výše",
+  "Sent through {{host}}, the SMTP server already set up for this address.": "Odesílá se přes {{host}}, server SMTP již nastavený pro tuto adresu.",
+  "Messages from this address are handed to its provider’s SMTP server only. The password is stored encrypted and is never shown again.": "Zprávy z této adresy se předávají pouze serveru SMTP jejího poskytovatele. Heslo je uloženo zašifrované a už se nikdy nezobrazí.",
+  "An identity is how you appear when you send: a name and an address, with its own reply-to address and signature. Add one to send under another name, from an alias, or from an address at another provider. One address can have several identities.": "Identita určuje, jak vystupujete při odesílání: jméno a adresa, s vlastní adresou pro odpověď a podpisem. Přidejte ji, chcete-li posílat pod jiným jménem, z aliasu nebo z adresy u jiného poskytovatele. Jedna adresa může mít více identit.",
+  "Identity": "Identita",
+  "the address of your primary identity is your account's own address": "Adresa vaší hlavní identity je vlastní adresa vašeho účtu",
+  "your own address is always sent by this server": "Poštu z vaší vlastní adresy vždy odesílá tento server",
+  "your primary identity cannot be deleted": "Hlavní identitu nelze smazat"
 }

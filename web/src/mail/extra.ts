@@ -15,8 +15,10 @@ export interface IdentitySmtp {
 export interface Identity {
   masked?: boolean;
   available?: boolean;
-  /** 0 for the account's own address before it was first saved. */
+  /** Negative for a masked address without an identity of its own (the mask's id). */
   id: number;
+  /** The account's own address: always there, its address fixed. */
+  primary?: boolean;
   name: string;
   email: string;
   reply_to: string;
@@ -37,6 +39,13 @@ export const listIdentities = () => get<Identity[]>('/api/me/identities');
 export const saveIdentity = (id: number, input: IdentityInput) => (id ? put<Identity>(`/api/me/identities/${id}`, input) : post<Identity>('/api/me/identities', input));
 export const deleteIdentity = (id: number) => del(`/api/me/identities/${id}`);
 
+/** An address the account can send from through this server. */
+export interface IdentityAddress {
+  email: string;
+  kind: 'own' | 'alias' | 'masked';
+}
+export const listIdentityAddresses = () => get<IdentityAddress[]>('/api/me/identities/addresses');
+
 export interface Signature {
   id: number;
   name: string;
@@ -49,14 +58,14 @@ export interface SignatureChoice {
 }
 export interface Signatures {
   signatures: Signature[];
-  /** By identity address. */
+  /** By identity id. */
   defaults: Record<string, SignatureChoice>;
 }
 
 export const listSignatures = () => get<Signatures>('/api/me/signatures');
 export const saveSignature = (id: number, input: { name: string; html: string }) => (id ? put<Signature>(`/api/me/signatures/${id}`, input) : post<Signature>('/api/me/signatures', input));
 export const deleteSignature = (id: number) => del(`/api/me/signatures/${id}`);
-export const chooseSignatures = (email: string, choice: SignatureChoice) => put<SignatureChoice>('/api/me/signatures/defaults', { email, ...choice });
+export const chooseSignatures = (identityId: number, choice: SignatureChoice) => put<SignatureChoice>('/api/me/signatures/defaults', { identity_id: identityId, ...choice });
 
 export interface Template {
   id: number;

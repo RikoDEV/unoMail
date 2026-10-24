@@ -188,7 +188,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     (chosen: Identity | undefined, list: Signatures | null) => {
       if (!chosen) return '';
       if (!list) return chosen.signature_html;
-      const choice = list.defaults[chosen.email];
+      const choice = list.defaults[String(chosen.id)];
       const id = initial.answer ? choice?.reply_signature_id : choice?.new_signature_id;
       return list.signatures.find((signature) => signature.id === id)?.html ?? '';
     },

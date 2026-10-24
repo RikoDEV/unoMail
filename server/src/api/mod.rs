@@ -488,6 +488,7 @@ pub fn router(state: AppState) -> Router {
         .route("/me/snoozes/{id}", delete(snooze::wake))
         .route("/me/labels/rename", post(me::label_rename))
         .route("/me/identities", get(personal::identities_list).post(personal::identity_create))
+        .route("/me/identities/addresses", get(personal::identity_addresses))
         .route("/me/identities/{id}", put(personal::identity_update).delete(personal::identity_delete))
         .route("/me/contacts", get(personal::contacts_list).post(personal::contact_create))
         .route("/me/contacts/suggest", get(personal::contacts_suggest))

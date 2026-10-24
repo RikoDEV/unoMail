@@ -620,20 +620,9 @@ pub async fn thread_get(ctx: &mut Context<'_>, args: &Map<String, Value>) -> Met
     Ok(json!({ "accountId": account_id(ctx.account), "state": ctx.state().await?, "list": list, "notFound": not_found }))
 }
 
-/// Addresses the account may send from: its own, plus aliases that deliver to it.
+/// Addresses the account may send from through this server: its own, plus aliases that deliver to it.
 async fn identities(app: &AppState, account: &Account) -> Result<Vec<String>, MethodError> {
-    let mut out = vec![account.email.clone()];
-    let aliases: Vec<(String, String)> = sqlx::query_as("SELECT source, destinations FROM aliases WHERE enabled = 1 AND destinations LIKE ? ESCAPE '\\'")
-        .bind(like_pattern(&account.email))
-        .fetch_all(&app.db)
-        .await?;
-    for (source, destinations) in aliases {
-        let list: Vec<String> = serde_json::from_str(&destinations).unwrap_or_default();
-        if list.iter().any(|d| d.eq_ignore_ascii_case(&account.email)) {
-            out.push(source);
-        }
-    }
-    Ok(out)
+    Ok(crate::api::personal::sendable_addresses(app, account).await?.into_iter().filter(|(_, kind)| *kind != "masked").map(|(email, _)| email).collect())
 }
 
 pub async fn identity_get(ctx: &mut Context<'_>, _args: &Map<String, Value>) -> MethodResult {
@@ -644,7 +633,7 @@ pub async fn identity_get(ctx: &mut Context<'_>, _args: &Map<String, Value>) -> 
         .filter(|row|row.available)
         .map(|row| {
             let reply_to = if row.reply_to.is_empty() { Value::Null } else { json!([{ "name": null, "email": row.reply_to }]) };
-            json!({ "id": format!("i{}", row.id), "name": row.name, "email": row.email, "replyTo": reply_to, "bcc": null, "textSignature": "", "htmlSignature": row.signature_html, "mayDelete": row.id > 0 })
+            json!({ "id": format!("i{}", row.id), "name": row.name, "email": row.email, "replyTo": reply_to, "bcc": null, "textSignature": "", "htmlSignature": row.signature_html, "mayDelete": row.id > 0 && !row.is_primary })
         })
         .collect();
     for email in identities(ctx.app, ctx.account).await? {

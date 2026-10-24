@@ -2250,5 +2250,21 @@
   "the stored private key cannot be decrypted; save it again": "Nie można odszyfrować zapisanego klucza prywatnego; zapisz go ponownie",
   "an armored public key is required": "Wymagany jest klucz publiczny w formacie ASCII (armored)",
   "the private key must be an armored, passphrase-protected key": "Klucz prywatny musi być w formacie ASCII (armored) i chroniony hasłem",
-  "a contact with this address already exists": "Kontakt z tym adresem już istnieje"
+  "a contact with this address already exists": "Kontakt z tym adresem już istnieje",
+  "{{email}} (your address)": "{{email}} (Twój adres)",
+  "{{email}} (alias)": "{{email}} (alias)",
+  "{{email}} (masked address)": "{{email}} (adres maskowany)",
+  "How recipients see you, for example “Anna Smith” or “Anna · Support”": "Jak widzą Cię odbiorcy, na przykład „Anna Kowalska” lub „Anna · Wsparcie”",
+  "Send from": "Wysyłaj z",
+  "Your primary identity always uses your own address.": "Twoja główna tożsamość zawsze używa Twojego własnego adresu.",
+  "Addresses that reach your mailbox. Another address needs its provider’s SMTP server.": "Adresy, które trafiają do Twojej skrzynki. Inny adres wymaga serwera SMTP jego dostawcy.",
+  "Another address (send through its SMTP server)…": "Inny adres (wysyłka przez jego serwer SMTP)…",
+  "Optional: where replies go, if not to the address above": "Opcjonalnie: dokąd mają trafiać odpowiedzi, jeśli nie na adres powyżej",
+  "Sent through {{host}}, the SMTP server already set up for this address.": "Wysyłane przez {{host}}, serwer SMTP już skonfigurowany dla tego adresu.",
+  "Messages from this address are handed to its provider’s SMTP server only. The password is stored encrypted and is never shown again.": "Wiadomości z tego adresu trafiają wyłącznie do serwera SMTP jego dostawcy. Hasło jest przechowywane w postaci zaszyfrowanej i nigdy więcej nie zostanie pokazane.",
+  "An identity is how you appear when you send: a name and an address, with its own reply-to address and signature. Add one to send under another name, from an alias, or from an address at another provider. One address can have several identities.": "Tożsamość to sposób, w jaki występujesz jako nadawca: nazwa i adres, z własnym adresem do odpowiedzi i podpisem. Dodaj ją, aby wysyłać pod inną nazwą, z aliasu lub z adresu u innego dostawcy. Jeden adres może mieć kilka tożsamości.",
+  "Identity": "Tożsamość",
+  "the address of your primary identity is your account's own address": "Adres Twojej głównej tożsamości to własny adres Twojego konta",
+  "your own address is always sent by this server": "Pocztę z Twojego własnego adresu zawsze wysyła ten serwer",
+  "your primary identity cannot be deleted": "Nie można usunąć głównej tożsamości"
 }

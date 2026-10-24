@@ -159,6 +159,7 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("put", "/api/oauth", "integrations", "Configure single sign-on (OpenID Connect)", "super_admin"),
     ("get", "/api/me/identities", "webmail", "List sender identities", "user"),
     ("post", "/api/me/identities", "webmail", "Create a sender identity, optionally with its own SMTP server", "user"),
+    ("get", "/api/me/identities/addresses", "webmail", "Addresses the account may send from through this server", "user"),
     ("put", "/api/me/identities/{id}", "webmail", "Update a sender identity", "user"),
     ("delete", "/api/me/identities/{id}", "webmail", "Delete a sender identity", "user"),
     ("get", "/api/me/contacts", "address book", "List or search contacts", "user"),

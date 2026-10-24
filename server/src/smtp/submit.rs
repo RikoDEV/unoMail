@@ -81,7 +81,8 @@ pub async fn relay_identity(app: &App, account: &Account, address: &Address) -> 
     if hosted_domain(&app.db, &address.domain).await? {
         return Ok(None);
     }
-    sqlx::query_scalar("SELECT id FROM identities WHERE account_id = ? AND email = ? AND smtp_host IS NOT NULL")
+    // Identities sharing an address share its server; the oldest one names it.
+    sqlx::query_scalar("SELECT id FROM identities WHERE account_id = ? AND email = ? AND smtp_host IS NOT NULL ORDER BY id LIMIT 1")
         .bind(account.id)
         .bind(address.to_string())
         .fetch_optional(&app.db)

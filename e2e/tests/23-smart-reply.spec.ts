@@ -56,7 +56,8 @@ test('smart replies use owned context and open editable, safe, auto-saved replie
     const userHeaders = await auth(user);
     const signature = await user.request.post('/api/me/signatures', { headers: userHeaders, data: { name: 'Reply sign-off', html: '<p>Regards, Smart Reader</p>' } });
     expect(signature.ok()).toBe(true);
-    expect((await user.request.put('/api/me/signatures/defaults', { headers: userHeaders, data: { email: 'smart-reader@e2e.test', new_signature_id: null, reply_signature_id: (await signature.json()).id } })).ok()).toBe(true);
+    const primary = (await (await user.request.get('/api/me/identities')).json())[0].id;
+    expect((await user.request.put('/api/me/signatures/defaults', { headers: userHeaders, data: { identity_id: primary, new_signature_id: null, reply_signature_id: (await signature.json()).id } })).ok()).toBe(true);
 
     await importMail(user, 'From: Earlier Sender <earlier@remote.test>\r\nTo: smart-reader@e2e.test\r\nSubject: Smart reply meeting\r\nMessage-ID: <root@smart.test>\r\n\r\nProject ORCHID is the topic of our meeting.');
     await importMail(user, 'From: unrelated@remote.test\r\nSubject: Other conversation\r\n\r\nUNRELATED-SECRET');

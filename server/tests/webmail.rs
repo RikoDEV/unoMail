@@ -84,9 +84,15 @@ async fn identities_are_limited_to_owned_addresses_unless_they_bring_their_own_s
     env.account("carol@example.org").await;
     env.alias("sales@example.org", &["bob@example.org"]).await;
 
-    // The account's own address is always there, without having been saved.
+    // The account's own address is its primary identity, there from the start.
     let list = api.get("/api/me/identities").await.body;
-    assert_eq!(list, json!([{ "id": 0, "name": "", "email": "bob@example.org", "reply_to": "", "signature_html": "", "is_default": true, "smtp": null }]));
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!((list[0]["email"].as_str(), list[0]["primary"].as_bool(), list[0]["is_default"].as_bool()), (Some("bob@example.org"), Some(true), Some(true)));
+    let primary_id = list[0]["id"].as_i64().unwrap();
+    assert!(primary_id > 0, "the primary identity is stored like any other");
+    assert_eq!(api.delete(&format!("/api/me/identities/{primary_id}")).await.status, StatusCode::BAD_REQUEST, "and cannot be deleted");
+    let moved = api.put(&format!("/api/me/identities/{primary_id}"), json!({ "name": "Bob", "email": "sales@example.org" })).await;
+    assert_eq!(moved.status, StatusCode::BAD_REQUEST, "its address is the account's own");
 
     let sales = api.post("/api/me/identities", json!({ "name": "Sales Team", "email": "Sales@Example.org", "reply_to": "bob@example.org", "is_default": true })).await;
     assert_eq!(sales.status, StatusCode::OK, "{}", sales.text);
@@ -96,16 +102,30 @@ async fn identities_are_limited_to_owned_addresses_unless_they_bring_their_own_s
         let refused = api.post("/api/me/identities", json!({ "email": foreign })).await;
         assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{foreign}");
     }
-    for bad in [json!({ "email": "not an address" }), json!({ "email": "sales@example.org" }), json!({ "email": "bob@example.org", "reply_to": "nope" })] {
+    for bad in [json!({ "email": "not an address" }), json!({ "email": "bob@example.org", "reply_to": "nope" })] {
         assert_ne!(api.post("/api/me/identities", bad.clone()).await.status, StatusCode::OK, "{bad}");
     }
     let list = api.get("/api/me/identities").await.body;
     assert_eq!(list.as_array().unwrap().len(), 2);
     assert_eq!((list[0]["email"].as_str(), list[1]["is_default"].as_bool()), (Some("sales@example.org"), Some(false)), "the default identity comes first");
 
+    // One address may have several identities: another name, without touching the primary one.
+    let support = api.post("/api/me/identities", json!({ "name": "Bob · Support", "email": "bob@example.org", "reply_to": "sales@example.org" })).await;
+    assert_eq!(support.status, StatusCode::OK, "{}", support.text);
+    let list = api.get("/api/me/identities").await.body;
+    assert_eq!(list.as_array().unwrap().len(), 3);
+    let primary = list.as_array().unwrap().iter().find(|identity| identity["primary"] == true).unwrap();
+    assert_eq!((primary["id"].as_i64(), primary["name"].as_str()), (Some(primary_id), Some("")), "the primary identity keeps its name");
+    let support_id = support.body["id"].as_i64().unwrap();
+    assert_eq!(api.delete(&format!("/api/me/identities/{support_id}")).await.status, StatusCode::OK);
+
+    // The addresses this account can send from without a server of its own.
+    let addresses = api.get("/api/me/identities/addresses").await.body;
+    assert_eq!(addresses, json!([{ "email": "bob@example.org", "kind": "own" }, { "email": "sales@example.org", "kind": "alias" }]));
+
     // JMAP clients see the same identities, with the signature chosen for new messages.
     let signature = api.post("/api/me/signatures", json!({ "name": "Sales", "html": "<p>-- <br>Sales</p>" })).await.body;
-    let chosen = api.put("/api/me/signatures/defaults", json!({ "email": "sales@example.org", "new_signature_id": signature["id"], "reply_signature_id": null })).await;
+    let chosen = api.put("/api/me/signatures/defaults", json!({ "identity_id": sales.body["id"], "new_signature_id": signature["id"], "reply_signature_id": null })).await;
     assert_eq!(chosen.status, StatusCode::OK, "{}", chosen.text);
     let account = api.jmap_account().await;
     let identities = api.jmap(json!([["Identity/get", { "accountId": account }, "i"]])).await[0][1]["list"].clone();
@@ -138,11 +158,20 @@ async fn identities_are_limited_to_owned_addresses_unless_they_bring_their_own_s
     assert!(!received[0].data.contains("DKIM-Signature"), "the other provider signs its own mail");
     assert_eq!(env.inbox(&carol).await.len(), 1, "nothing was delivered directly");
 
-    // Editing keeps the stored password; removing the identity takes the permission away.
+    // Editing keeps the stored password.
     let id = created.body["id"].as_i64().unwrap();
     let edited = api.put(&format!("/api/me/identities/{id}"), json!({ "email": "bob@elsewhere.example", "smtp": { "host": "127.0.0.1", "port": sink.addr.port(), "security": "none" } })).await;
     assert_eq!(edited.body["smtp"]["has_password"], true, "{}", edited.text);
+    // A second identity with that address shares its server, password included.
+    let twin = api.post("/api/me/identities", json!({ "name": "Bob privately", "email": "bob@elsewhere.example" })).await;
+    assert_eq!(twin.status, StatusCode::OK, "{}", twin.text);
+    assert_eq!((twin.body["smtp"]["host"].as_str(), twin.body["smtp"]["has_password"].as_bool()), (Some("127.0.0.1"), Some(true)));
+    // Sending as the address works while any of its identities remains; then it stops.
     assert_eq!(api.delete(&format!("/api/me/identities/{id}")).await.status, StatusCode::OK);
+    let still = send_as(&api, json!([{ "email": "bob@elsewhere.example" }]), "carol@example.org", "Still").await;
+    assert!(still[1][1]["created"]["s"].is_object(), "{still}");
+    let twin_id = twin.body["id"].as_i64().unwrap();
+    assert_eq!(api.delete(&format!("/api/me/identities/{twin_id}")).await.status, StatusCode::OK);
     let after = send_as(&api, json!([{ "email": "bob@elsewhere.example" }]), "carol@example.org", "Again").await;
     assert_eq!(after[1][1]["notCreated"]["s"]["type"], "forbiddenToSend");
 
@@ -158,8 +187,10 @@ async fn identities_are_limited_to_owned_addresses_unless_they_bring_their_own_s
 async fn signatures_are_named_and_chosen_per_identity() {
     let (env, api) = env_with_bob().await;
     env.account("carol@example.org").await;
+    let primary = api.get("/api/me/identities").await.body[0]["id"].as_i64().unwrap();
+    let key = primary.to_string();
     let empty = api.get("/api/me/signatures").await.body;
-    assert_eq!(empty, json!({ "signatures": [], "defaults": { "bob@example.org": { "new_signature_id": null, "reply_signature_id": null } } }), "the account's own address is listed before it is saved");
+    assert_eq!(empty, json!({ "signatures": [], "defaults": { &key: { "new_signature_id": null, "reply_signature_id": null } } }), "the primary identity is listed from the start");
 
     for bad in [json!({ "name": "" }), json!({ "name": "Long", "html": "x".repeat(300_000) })] {
         assert_eq!(api.post("/api/me/signatures", bad.clone()).await.status, StatusCode::BAD_REQUEST, "{bad}");
@@ -170,17 +201,18 @@ async fn signatures_are_named_and_chosen_per_identity() {
     let (full_id, short_id) = (full["id"].as_i64().unwrap(), short["id"].as_i64().unwrap());
 
     // New messages and replies can use different signatures.
-    let chosen = api.put("/api/me/signatures/defaults", json!({ "email": "Bob@Example.org", "new_signature_id": full_id, "reply_signature_id": short_id })).await;
+    let chosen = api.put("/api/me/signatures/defaults", json!({ "identity_id": primary, "new_signature_id": full_id, "reply_signature_id": short_id })).await;
     assert_eq!(chosen.status, StatusCode::OK, "{}", chosen.text);
     let listed = api.get("/api/me/signatures").await.body;
     assert_eq!(listed["signatures"].as_array().unwrap().len(), 2);
-    assert_eq!(listed["defaults"]["bob@example.org"], json!({ "new_signature_id": full_id, "reply_signature_id": short_id }));
+    assert_eq!(listed["defaults"][&key], json!({ "new_signature_id": full_id, "reply_signature_id": short_id }));
     assert_eq!(api.get("/api/me/identities").await.body[0]["signature_html"], "<p>Bob<br><b>Example Org</b></p>");
 
     // Only one's own identities and signatures.
-    assert_eq!(api.put("/api/me/signatures/defaults", json!({ "email": "carol@example.org", "new_signature_id": full_id })).await.status, StatusCode::BAD_REQUEST);
     let carol = Api::logged_in(&env, "carol@example.org").await;
-    assert_eq!(carol.put("/api/me/signatures/defaults", json!({ "email": "carol@example.org", "new_signature_id": full_id })).await.status, StatusCode::BAD_REQUEST);
+    let carol_primary = carol.get("/api/me/identities").await.body[0]["id"].as_i64().unwrap();
+    assert_eq!(api.put("/api/me/signatures/defaults", json!({ "identity_id": carol_primary, "new_signature_id": full_id })).await.status, StatusCode::BAD_REQUEST);
+    assert_eq!(carol.put("/api/me/signatures/defaults", json!({ "identity_id": carol_primary, "new_signature_id": full_id })).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(carol.put(&format!("/api/me/signatures/{full_id}"), json!({ "name": "Mine" })).await.status, StatusCode::NOT_FOUND);
     assert_eq!(carol.delete(&format!("/api/me/signatures/{full_id}")).await.status, StatusCode::NOT_FOUND);
 
@@ -188,7 +220,7 @@ async fn signatures_are_named_and_chosen_per_identity() {
     assert_eq!(api.put(&format!("/api/me/signatures/{full_id}"), json!({ "name": "Full", "html": "<p>Bob</p>" })).await.status, StatusCode::OK);
     assert_eq!(api.get("/api/me/identities").await.body[0]["signature_html"], "<p>Bob</p>");
     assert_eq!(api.delete(&format!("/api/me/signatures/{full_id}")).await.status, StatusCode::OK);
-    assert_eq!(api.get("/api/me/signatures").await.body["defaults"]["bob@example.org"], json!({ "new_signature_id": null, "reply_signature_id": short_id }));
+    assert_eq!(api.get("/api/me/signatures").await.body["defaults"][&key], json!({ "new_signature_id": null, "reply_signature_id": short_id }));
     assert_eq!(api.get("/api/me/identities").await.body[0]["signature_html"], "");
 }
 
