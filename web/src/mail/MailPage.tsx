@@ -1,18 +1,22 @@
 import { LinearProgress } from '../ui/progress';
+import DeleteOutline from '@mui/icons-material/DeleteOutlineOutlined';
+import Download from '@mui/icons-material/Download';
 import Edit from '@mui/icons-material/Edit';
 import MenuIcon from '@mui/icons-material/Menu';
 import Search from '@mui/icons-material/Search';
+import Share from '@mui/icons-material/Share';
 import Tune from '@mui/icons-material/Tune';
+import Upload from '@mui/icons-material/Upload';
 import {
   Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, List,
-  Menu, MenuItem, Paper, Snackbar, TextField, Tooltip, Typography, useMediaQuery, useTheme,
+  ListItemIcon, ListItemText, Menu, MenuItem, Paper, Snackbar, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { ABOVE_SWIPE, SWIPE } from '../lib/swipe';
 import { Subscriptions } from './Subscriptions';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { del, post, errorText } from '../lib/api';
+import { del, get, post, errorText } from '../lib/api';
 import { useAuth } from '../app';
 import { setPluginNotifier, usePlugins } from '../lib/plugins';
 import { usePrefs } from '../lib/prefs';
@@ -33,6 +37,7 @@ import { AdvancedSearch } from './AdvancedSearch';
 import { type BulkAction, ListToolbar } from './ListToolbar';
 import { LabelDialog } from './LabelDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
+import { EmptyState, type EmptyKind } from './EmptyState';
 import { CategoryTabs } from './CategoryTabs';
 import { type LabelDialogState, MailSidebar } from './MailSidebar';
 import { EmailRow, type RowHandlers } from './EmailRow';
@@ -125,6 +130,7 @@ export default function MailPage() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [folderMenu, setFolderMenu] = useState<{ anchor: HTMLElement; mailbox: Mailbox } | null>(null);
   const [sharing, setSharing] = useState<Mailbox | null>(null);
+  const [retention, setRetention] = useState<{ trash_days: number; junk_days: number } | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const importTarget = useRef<Mailbox | null>(null);
 
@@ -264,6 +270,16 @@ export default function MailPage() {
     setCursorShown(false);
     void load(0);
   }, [load]);
+
+  // How long Trash and Junk keep mail, for the notice above those folders.
+  useEffect(() => {
+    get<{ trash_days: number; junk_days: number }>('/api/me/retention').then(setRetention).catch(() => {});
+  }, []);
+  // What an empty list says, by what is being shown.
+  const emptyKind: EmptyKind = search || serverSearch ? 'search' : label ? 'label' : allMail || subscriptionsPage ? 'other'
+    : activeCategory && activeCategory !== 'general' ? 'category'
+    : (({ inbox: 'inbox', trash: 'trash', junk: 'junk', sent: 'sent', drafts: 'drafts' } as Record<string, EmptyKind>)[mailbox?.role ?? ''] ?? (mailbox ? 'folder' : 'other'));
+  const retentionDays = (mailbox?.role === 'trash' ? retention?.trash_days : mailbox?.role === 'junk' ? retention?.junk_days : 0) ?? 0;
 
   // Any mouse click puts the keyboard cursor away again until j, k or x is used.
   useEffect(() => {
@@ -973,7 +989,15 @@ export default function MailPage() {
           {categorised && !serverSearch && (
             <CategoryTabs category={category} onChange={setCategoryTab} counts={counts} latest={latest} dropProps={dropProps} dropStyle={dropStyle} />
           )}
-          {loading && <LinearProgress />}
+          {/* Laid over the top of the list, not above it, so loading never moves the rows. */}
+          <Box sx={{ position: 'relative', height: 0, zIndex: 2 }}>
+            {loading && <LinearProgress sx={{ position: 'absolute', top: -3, left: 0, right: 0 }} />}
+          </Box>
+          {retentionDays > 0 && !serverSearch && (
+            <Typography variant="body2" sx={{ textAlign: 'center', py: 1.25, px: 2, my: 1, borderRadius: '16px', bgcolor: 'm3.surfaceContainerHigh', color: 'text.secondary' }}>
+              {t('Messages that have been in {{folder}} more than {{count}} days will be automatically deleted.', { folder: folderName(mailbox!), count: retentionDays })}
+            </Typography>
+          )}
           {offline && (
             <Alert severity="warning" sx={{ borderRadius: 0 }}>
               {t('You are offline. Showing the copy saved on this device.')}{pending > 0 ? ` ${t('{{count}} changes waiting to be synchronised.', { count: pending })}` : ''}
@@ -1008,9 +1032,7 @@ export default function MailPage() {
               })}
             </List>
             {!loading && visible.length === 0 && (
-              <Typography sx={{ color: 'text.secondary', p: 4, textAlign: 'center' }}>
-                {search ? t('No messages match your search.') : t('Nothing here yet.')}
-              </Typography>
+              <EmptyState kind={emptyKind} />
             )}
             {loading && emails.length > 0 && <Box sx={{ p: 2, textAlign: 'center' }}><CircularProgress size={24} /></Box>}
           </Box>
@@ -1129,18 +1151,28 @@ export default function MailPage() {
       )}
       <Menu anchorEl={folderMenu?.anchor} open={Boolean(folderMenu)} onClose={() => setFolderMenu(null)}>
         {folderMenu && !folderMenu.mailbox.shareOwner && (
-          <MenuItem onClick={() => { setSharing(folderMenu.mailbox); setFolderMenu(null); }}>{t('Share…')}</MenuItem>
+          <MenuItem onClick={() => { setSharing(folderMenu.mailbox); setFolderMenu(null); }}>
+            <ListItemIcon><Share fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('Share…')}</ListItemText>
+          </MenuItem>
         )}
         {folderMenu && (
           <MenuItem component="a" href={exportUrl(folderMenu.mailbox.id)} download onClick={() => setFolderMenu(null)}>
-            {t('Export as mbox')}
+            <ListItemIcon><Download fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('Export as mbox')}</ListItemText>
           </MenuItem>
         )}
         {folderMenu && (!folderMenu.mailbox.shareOwner || folderMenu.mailbox.myRights?.mayAddItems) && (
-          <MenuItem onClick={() => { importTarget.current = folderMenu.mailbox; setFolderMenu(null); importInput.current?.click(); }}>{t('Import messages…')}</MenuItem>
+          <MenuItem onClick={() => { importTarget.current = folderMenu.mailbox; setFolderMenu(null); importInput.current?.click(); }}>
+            <ListItemIcon><Upload fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('Import messages…')}</ListItemText>
+          </MenuItem>
         )}
         {folderMenu && !folderMenu.mailbox.role && !folderMenu.mailbox.shareOwner && (
-          <MenuItem onClick={() => { const target = folderMenu.mailbox; setFolderMenu(null); void removeFolder(target); }}>{t('Delete folder')}</MenuItem>
+          <MenuItem onClick={() => { const target = folderMenu.mailbox; setFolderMenu(null); void removeFolder(target); }}>
+            <ListItemIcon><DeleteOutline fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('Delete folder')}</ListItemText>
+          </MenuItem>
         )}
       </Menu>
       <input ref={importInput} type="file" accept=".eml,.mbox,message/rfc822,application/mbox" hidden aria-label={t('Messages to import')} onChange={(e) => { void importInto(e.target.files?.[0]); e.target.value = ''; }} />

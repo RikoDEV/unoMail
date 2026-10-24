@@ -19,6 +19,12 @@ use crate::{
     vacation::{self, Vacation},
 };
 
+/// Days after which Trash and Junk are emptied (0: never), so the client can say so.
+pub async fn retention(State(state): State<AppState>, _session: Session) -> JsonResult<Value> {
+    let rt = state.rt();
+    Ok(Json(json!({ "trash_days": rt.trash_retention_days, "junk_days": rt.junk_retention_days })))
+}
+
 /// Mail sent over the last hour against this mailbox's hourly sending limits.
 pub async fn sending(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
     let (messages, recipients, max_messages, max_recipients, blocked) = crate::security::outbound::usage(&state, session.account.id).await?;

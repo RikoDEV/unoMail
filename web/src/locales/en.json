@@ -42,5 +42,7 @@
   "{{count}} people_one": "{{count}} person",
   "{{count}} seconds_one": "{{count}} second",
   "{{count}} new_one": "{{count}} new",
-  "{{count}} new_other": "{{count}} new"
+  "{{count}} new_other": "{{count}} new",
+  "Messages that have been in {{folder}} more than {{count}} days will be automatically deleted._one": "Messages that have been in {{folder}} more than {{count}} day will be automatically deleted.",
+  "Messages that have been in {{folder}} more than {{count}} days will be automatically deleted._other": "Messages that have been in {{folder}} more than {{count}} days will be automatically deleted."
 }

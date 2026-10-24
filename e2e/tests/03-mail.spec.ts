@@ -23,7 +23,7 @@ test.describe('web mail', () => {
     await folders.getByText('Sent', { exact: true }).click();
     await expect(page.getByTestId('email-row').filter({ hasText: 'Lunch on Friday?' })).toHaveCount(1);
     await folders.getByText('Drafts', { exact: true }).click();
-    await expect(page.getByText('Nothing here yet.')).toBeVisible();
+    await expect(page.getByText('No drafts')).toBeVisible();
     await logout(page);
 
     await login(page, BOB, USER_PASSWORD);

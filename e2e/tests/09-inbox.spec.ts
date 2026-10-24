@@ -128,7 +128,7 @@ test.describe('inbox tools', () => {
     await tabs.getByRole('tab', { name: /Forums/ }).click();
     await expect(row(page, '[dev] Release plan')).toBeVisible();
     await tabs.getByRole('tab', { name: /Communities/ }).click();
-    await expect(page.getByText('Nothing here yet.')).toBeVisible();
+    await expect(page.getByText('No messages in this tab')).toBeVisible();
 
     // A wrongly sorted message is moved by its menu, or by dropping it on a tab.
     await tabs.getByRole('tab', { name: /Notifications/ }).click();
@@ -137,7 +137,7 @@ test.describe('inbox tools', () => {
     await page.getByRole('menuitem', { name: 'Primary', exact: true }).click();
     await expect(page.getByText('Moved to Primary.')).toBeVisible();
     await page.getByRole('button', { name: 'Back to list' }).click();
-    await expect(page.getByText('Nothing here yet.')).toBeVisible();
+    await expect(page.getByText('No messages in this tab')).toBeVisible();
     await tabs.getByRole('tab', { name: /Primary/ }).click();
     await expect(row(page, 'Your statement is ready')).toBeVisible();
     await row(page, 'Your statement is ready').dragTo(tabs.getByRole('tab', { name: /Notifications/ }));
@@ -196,6 +196,8 @@ test.describe('inbox tools', () => {
     await expect(row(page, 'Did you see my last mail?')).toHaveCount(0);
     await page.getByRole('navigation', { name: 'Folders' }).getByText('Junk', { exact: true }).click();
     await expect(row(page, 'Did you see my last mail?')).toBeVisible({ timeout: 20_000 });
+    // Like Trash, Junk says when old mail goes (the server default is 30 days).
+    await expect(page.getByText('Messages that have been in Junk more than 30 days will be automatically deleted.')).toBeVisible();
 
     // The menu now offers to unblock; the list is managed in Settings too.
     await row(page, 'Did you see my last mail?').click();

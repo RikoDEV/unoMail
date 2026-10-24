@@ -140,6 +140,7 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("delete", "/api/me/labels", "user", "Remove a label from every message (?name=)", "user"),
     ("post", "/api/me/labels/rename", "user", "Rename a label", "user"),
     ("get", "/api/me/sending", "user", "Mail sent over the last hour against the hourly sending limits", "user"),
+    ("get", "/api/me/retention", "user", "Days after which Trash and Junk are emptied", "user"),
     ("get", "/api/me/vacation", "user", "Out-of-office settings", "user"),
     ("put", "/api/me/vacation", "user", "Update out-of-office settings", "user"),
     ("get", "/health", "monitoring", "Liveness probe", "public"),

@@ -475,6 +475,7 @@ pub fn router(state: AppState) -> Router {
         .route("/dmarc/reports/{id}", get(admin::dmarc_report))
         .route("/accounts/{id}/import", get(admin::import_list).post(admin::import_start))
         .route("/me/sending", get(me::sending))
+        .route("/me/retention", get(me::retention))
         .route("/me/vacation", get(me::vacation_get).put(me::vacation_put))
         .route("/me/sieve", get(me::sieve_get).put(me::sieve_put).delete(me::sieve_delete))
         .route("/me/sieve/scripts", get(me::sieve_list))

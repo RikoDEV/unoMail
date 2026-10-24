@@ -101,7 +101,7 @@ test.describe('user features', () => {
     await expect(reader.getByText('reading-list')).toBeHidden();
     await page.getByRole('button', { name: 'Back to list' }).click();
     await page.getByRole('button', { name: 'Refresh' }).click();
-    await expect(page.getByText('Nothing here yet.')).toBeVisible();
+    await expect(page.getByText('No messages with this label')).toBeVisible();
   });
 
   test('rich text formatting and links survive sending', async ({ page }) => {
