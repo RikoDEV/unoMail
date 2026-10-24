@@ -60,8 +60,9 @@ the jobs for the changed parts run.
 
 ## Dependencies
 
-[Renovate](https://docs.renovatebot.com/) opens update PRs on Mondays
-([config](../.github/renovate.json)). Minor and patch updates are grouped per project.
+[Renovate](https://docs.renovatebot.com/) runs as a weekly workflow
+([`renovate.yml`](../.github/workflows/renovate.yml), [config](../.github/renovate.json))
+and opens update PRs. It needs a `RENOVATE_TOKEN` secret. Minor and patch updates are grouped per project.
 RustCrypto crates are held back on purpose; the config explains why.
 
 Advisories ignored by `./audit.sh` are justified in `server/.cargo/audit.toml`.

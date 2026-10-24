@@ -1,0 +1,31 @@
+name: Renovate
+
+# Self-hosted Renovate: dependency updates without the hosted app. The config is .github/renovate.json.
+# Needs the RENOVATE_TOKEN secret: a fine-grained token for this repository with read and write
+# access to Contents, Pull requests, Issues and Workflows. GITHUB_TOKEN would not do: pull requests
+# it opens do not trigger CI, and it cannot change files under .github/workflows.
+on:
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: renovatebot/github-action@v46.3.9
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
+        env:
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: required
+          LOG_LEVEL: info

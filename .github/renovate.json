@@ -1,7 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "schedule": ["before 6am on monday"],
   "packageRules": [
     {
       "description": "Group minor and patch updates per project",
