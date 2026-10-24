@@ -474,6 +474,14 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
   };
 
   const tint = alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08);
+  const dark = theme.palette.mode === 'dark';
+  // Material 3 raises a window by its tone, not only its shadow (which a dark page hides): the
+  // composer takes the dialog surface, and in dark themes an outline, since some skins give
+  // every surface the same colour.
+  const raised = {
+    bgcolor: theme.palette.m3.surfaceContainerHigh,
+    ...(dark ? { border: 1, borderColor: theme.palette.m3.outlineVariant } : {}),
+  };
   return (
     <Paper
       elevation={8}
@@ -489,8 +497,8 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
       }}
       sx={
         fullScreen && !minimized
-          ? { position: 'fixed', inset: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 0, zIndex: 1300, overflow: 'hidden' }
-          : { position: 'fixed', right: { xs: 0, sm: 24 }, bottom: 0, width: minimized ? { xs: '100%', sm: 320 } : { xs: '100%', sm: 600 }, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '16px 16px 0 0', zIndex: 1300, overflow: 'hidden' }
+          ? { position: 'fixed', inset: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 0, zIndex: 1300, overflow: 'hidden', bgcolor: raised.bgcolor }
+          : { position: 'fixed', right: { xs: 0, sm: 24 }, bottom: 0, width: minimized ? { xs: '100%', sm: 320 } : { xs: '100%', sm: 600 }, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: '16px 16px 0 0', zIndex: 1300, overflow: 'hidden', ...raised, borderBottom: 0 }
       }
     >
       <Stack
