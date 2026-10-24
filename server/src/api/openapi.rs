@@ -141,6 +141,7 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("post", "/api/me/labels/rename", "user", "Rename a label", "user"),
     ("get", "/api/me/sending", "user", "Mail sent over the last hour against the hourly sending limits", "user"),
     ("get", "/api/me/retention", "user", "Days after which Trash and Junk are emptied", "user"),
+    ("get", "/api/admin/update-check", "system", "The running version and the latest unoMail release", "super_admin"),
     ("get", "/api/me/vacation", "user", "Out-of-office settings", "user"),
     ("put", "/api/me/vacation", "user", "Update out-of-office settings", "user"),
     ("get", "/health", "monitoring", "Liveness probe", "public"),
@@ -293,7 +294,7 @@ pub fn document(hostname: &str) -> Value {
         "openapi": "3.1.0",
         "info": {
             "title": "unoMail API",
-            "version": env!("CARGO_PKG_VERSION"),
+            "version": crate::update_check::VERSION,
             "description": "Management API of the unoMail server. Sign in with POST /api/auth/login; the session is an HttpOnly cookie and every state-changing request must carry the CSRF token returned at login in the X-CSRF-Token header. Mail access uses JMAP.",
         },
         "servers": [{ "url": format!("https://{hostname}") }],

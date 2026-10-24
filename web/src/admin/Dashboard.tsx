@@ -5,6 +5,7 @@ import { formatTime } from '../lib/api';
 import { PageHeader, StatusChip, useLoad, ScrollTable } from './common';
 import { RemoteAddress } from './RemoteAddress';
 import { DailyStatsChart } from './DailyStatsChart';
+import { UpdateNotice, useUpdateCheck, VersionChip } from './UpdateCheck';
 import { type ChartSeries, TimeChart } from './TimeChart';
 
 import { t, uiLocale } from '../i18n';
@@ -253,6 +254,7 @@ function duration(seconds: number): string {
 export function DashboardPage() {
   const { data, error, reload } = useLoad(() => get<DashboardData>('/api/dashboard'), []);
   const activity = useLoad(() => get<Activity>('/api/dashboard/activity'), []);
+  const update = useUpdateCheck();
   const reloadActivity = activity.reload;
   // Real-time overview: poll every few seconds while the page is open.
   useEffect(() => {
@@ -272,7 +274,9 @@ export function DashboardPage() {
       <PageHeader title={t('Dashboard')}>
         <Chip label={data.hostname} />
         <Chip label={t('up {{duration}}', { duration: duration(data.uptime_seconds) })} variant="outlined" />
+        <VersionChip status={update.status} refreshing={update.refreshing} onRecheck={() => void update.recheck()} />
       </PageHeader>
+      <UpdateNotice status={update.status} />
       {!cert.healthy && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {cert.kind === 'self_signed' ? t('The server is using a self-signed certificate. Configure Let’s Encrypt or upload a certificate.') : t('The TLS certificate expires in {{days}} days.', { days })}

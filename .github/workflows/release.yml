@@ -88,7 +88,8 @@ jobs:
           workspaces: server
           key: ${{ matrix.target }}
       - run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo build --release --locked --target ${{ matrix.target }}
+      # The binary reports the release it was built from (and compares it with newer ones).
+      - run: UNOMAIL_VERSION="${TAG#v}" cargo build --release --locked --target ${{ matrix.target }}
         working-directory: server
       - uses: actions/download-artifact@v8
         with:
@@ -139,6 +140,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
+          build-args: UNOMAIL_VERSION=${{ env.TAG }}
           pull: true
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}

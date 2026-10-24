@@ -267,7 +267,7 @@ async fn backup(app: &App, target: &Target, id: &str) -> anyhow::Result<Outcome>
     let manifest = Manifest {
         id: id.to_owned(),
         created_at: now(),
-        version: env!("CARGO_PKG_VERSION").to_owned(),
+        version: crate::update_check::VERSION.to_owned(),
         hostname: app.cfg.hostname.clone(),
         blobs: listed.len(),
         database_bytes,

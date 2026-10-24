@@ -2048,5 +2048,15 @@
   "No messages in this tab": "Keine Nachrichten in diesem Tab",
   "Mail sorted into this tab will show up here.": "E-Mails, die diesem Tab zugeordnet werden, erscheinen hier.",
   "No messages with this label": "Keine Nachrichten mit diesem Label",
-  "Messages you give this label will show up here.": "Nachrichten mit diesem Label erscheinen hier."
+  "Messages you give this label will show up here.": "Nachrichten mit diesem Label erscheinen hier.",
+  "unoMail {{version}}": "unoMail {{version}}",
+  "checking…": "wird geprüft…",
+  "update check failed": "Update-Prüfung fehlgeschlagen",
+  "update available": "Update verfügbar",
+  "up to date": "aktuell",
+  "Last checked {{time}}. Click to check again.": "Zuletzt geprüft {{time}}. Zum erneuten Prüfen klicken.",
+  "Check for updates": "Nach Updates suchen",
+  "Release notes": "Versionshinweise",
+  "unoMail {{latest}} is available. You are running {{current}}.": "unoMail {{latest}} ist verfügbar. Sie verwenden {{current}}.",
+  "Ask GitHub a few times a day whether a newer unoMail release is out, and say so on the dashboard": "Einige Male am Tag bei GitHub nachfragen, ob eine neuere unoMail-Version erschienen ist, und es im Dashboard anzeigen"
 }

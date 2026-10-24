@@ -205,6 +205,7 @@ const GROUPS: Group[] = [
     fields: [
       { key: 'privacy_remove_x_headers', label: t('Remove X-* headers'), help: t('From mail users send: X-Mailer, X-Originating-IP and similar fields'), kind: 'bool' },
       { key: 'privacy_remove_user_agent', label: t('Remove User-Agent header'), help: t('The name and version of the mail program, often with the operating system'), kind: 'bool' },
+      { key: 'update_check_enabled', label: t('Check for updates'), help: t('Ask GitHub a few times a day whether a newer unoMail release is out, and say so on the dashboard'), kind: 'bool' },
       { key: 'privacy_hide_client_ip', label: t('Set the last “Received:” header to localhost'), help: t('If not selected, your IP address will be visible to the recipient.'), kind: 'bool' },
     ],
   },

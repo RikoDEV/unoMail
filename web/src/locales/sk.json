@@ -2136,5 +2136,15 @@
   "No messages in this tab": "Na tejto karte nie sú žiadne správy",
   "Mail sorted into this tab will show up here.": "Tu sa zobrazí pošta zaradená na túto kartu.",
   "No messages with this label": "Žiadne správy s týmto štítkom",
-  "Messages you give this label will show up here.": "Tu sa zobrazia správy s týmto štítkom."
+  "Messages you give this label will show up here.": "Tu sa zobrazia správy s týmto štítkom.",
+  "unoMail {{version}}": "unoMail {{version}}",
+  "checking…": "kontrola…",
+  "update check failed": "kontrola aktualizácií zlyhala",
+  "update available": "k dispozícii aktualizácia",
+  "up to date": "aktuálna",
+  "Last checked {{time}}. Click to check again.": "Naposledy skontrolované {{time}}. Kliknutím skontrolujete znova.",
+  "Check for updates": "Kontrolovať aktualizácie",
+  "Release notes": "Poznámky k vydaniu",
+  "unoMail {{latest}} is available. You are running {{current}}.": "Je k dispozícii unoMail {{latest}}. Používate verziu {{current}}.",
+  "Ask GitHub a few times a day whether a newer unoMail release is out, and say so on the dashboard": "Niekoľkokrát denne sa pýtať GitHubu, či vyšla novšia verzia unoMail, a ukázať to na nástenke"
 }

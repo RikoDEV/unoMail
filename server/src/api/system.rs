@@ -39,6 +39,24 @@ fn disk_usage(path: &std::path::Path) -> u64 {
     total
 }
 
+#[derive(Deserialize)]
+pub struct UpdateQuery {
+    #[serde(default)]
+    refresh: bool,
+}
+
+/// The running version and, unless the check is switched off, the latest release.
+pub async fn update_check(State(state): State<AppState>, session: Session, Query(query): Query<UpdateQuery>) -> JsonResult<Value> {
+    session.require_super()?;
+    if !state.rt().update_check_enabled {
+        return Ok(Json(json!({ "enabled": false, "current": crate::update_check::VERSION })));
+    }
+    let status = crate::update_check::status(&state, query.refresh).await;
+    let mut value = serde_json::to_value(status).map_err(anyhow::Error::from)?;
+    value["enabled"] = json!(true);
+    Ok(Json(value))
+}
+
 pub async fn dashboard(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
     session.require_super()?;
     let day_ago = now() - 86400;

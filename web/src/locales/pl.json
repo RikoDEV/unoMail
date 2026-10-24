@@ -2136,5 +2136,15 @@
   "No messages in this tab": "Brak wiadomości w tej karcie",
   "Mail sorted into this tab will show up here.": "Tutaj pojawi się poczta przydzielona do tej karty.",
   "No messages with this label": "Brak wiadomości z tą etykietą",
-  "Messages you give this label will show up here.": "Tutaj pojawią się wiadomości oznaczone tą etykietą."
+  "Messages you give this label will show up here.": "Tutaj pojawią się wiadomości oznaczone tą etykietą.",
+  "unoMail {{version}}": "unoMail {{version}}",
+  "checking…": "sprawdzanie…",
+  "update check failed": "nie udało się sprawdzić aktualizacji",
+  "update available": "dostępna aktualizacja",
+  "up to date": "aktualna",
+  "Last checked {{time}}. Click to check again.": "Ostatnio sprawdzono {{time}}. Kliknij, aby sprawdzić ponownie.",
+  "Check for updates": "Sprawdzaj aktualizacje",
+  "Release notes": "Informacje o wydaniu",
+  "unoMail {{latest}} is available. You are running {{current}}.": "Dostępny jest unoMail {{latest}}. Używasz wersji {{current}}.",
+  "Ask GitHub a few times a day whether a newer unoMail release is out, and say so on the dashboard": "Kilka razy dziennie pytaj GitHub, czy jest nowsze wydanie unoMail, i pokazuj to na pulpicie"
 }

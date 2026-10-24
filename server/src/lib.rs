@@ -51,6 +51,7 @@ pub mod smime;
 pub mod snapshot;
 pub mod snooze;
 pub mod subscriptions;
+pub mod update_check;
 pub mod store;
 pub mod summary_cards;
 pub mod sysstat;

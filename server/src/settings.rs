@@ -42,6 +42,9 @@ pub struct Runtime {
     /// Send daily DMARC aggregate reports to the domains asking for them.
     #[serde(default = "yes")]
     pub dmarc_reports_enabled: bool,
+    /// Ask GitHub whether a newer unoMail release is out (shown on the dashboard).
+    #[serde(default = "yes")]
+    pub update_check_enabled: bool,
     /// Days a message stays in Trash before it is deleted for good (0: forever).
     #[serde(default = "thirty")]
     pub trash_retention_days: i64,

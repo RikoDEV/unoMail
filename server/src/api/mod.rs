@@ -447,6 +447,7 @@ pub fn router(state: AppState) -> Router {
         .route("/tls/acme", put(tls::configure_acme).delete(tls::disable_acme))
         .route("/tls/acme/renew", post(tls::renew_acme))
         .route("/dashboard", get(system::dashboard))
+        .route("/admin/update-check", get(system::update_check))
         .route("/dashboard/activity", get(access::activity))
         .route("/dashboard/system", get(access::system_history))
         .route("/dashboard/daily", get(access::daily_stats))

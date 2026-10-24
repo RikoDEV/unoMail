@@ -12,6 +12,8 @@ test.describe('administration', () => {
     await expect(page.getByTestId('metric-Queue size')).toHaveText('0');
     await expect(page.getByTestId('metric-Mailboxes')).toBeVisible();
     await expect(page.getByText('self-signed certificate')).toBeVisible();
+    // The running version, with the result of the update check (which depends on GitHub).
+    await expect(page.getByRole('button', { name: 'Check for updates' })).toContainText(/unoMail \d+\.\d+\.\d+/);
   });
 
   test('creating a domain generates DKIM and shows the DNS records to publish', async ({ page }) => {

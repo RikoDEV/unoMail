@@ -20,7 +20,9 @@ COPY server/Cargo.toml server/Cargo.lock ./
 RUN mkdir src && echo 'fn main() {}' > src/main.rs && touch src/lib.rs \
     && cargo build --release --locked && rm -rf src
 COPY server/ ./
-RUN touch src/main.rs src/lib.rs && cargo build --release --locked
+# A release image is built with its tag (v1.2.3); a local build reports the crate version.
+ARG UNOMAIL_VERSION
+RUN touch src/main.rs src/lib.rs && UNOMAIL_VERSION="${UNOMAIL_VERSION#v}" cargo build --release --locked
 
 # --- Runtime ------------------------------------------------------------------------------
 FROM alpine:3.24

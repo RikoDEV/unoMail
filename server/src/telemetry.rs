@@ -183,8 +183,8 @@ pub fn export_body(service: &str, host: &str, spans: &[SpanRecord]) -> Value {
         .collect();
     json!({
         "resourceSpans": [{
-            "resource": { "attributes": attributes(&[("service.name".into(), service.into()), ("host.name".into(), host.into()), ("service.version".into(), env!("CARGO_PKG_VERSION").into())]) },
-            "scopeSpans": [{ "scope": { "name": "unomail", "version": env!("CARGO_PKG_VERSION") }, "spans": spans }],
+            "resource": { "attributes": attributes(&[("service.name".into(), service.into()), ("host.name".into(), host.into()), ("service.version".into(), crate::update_check::VERSION.into())]) },
+            "scopeSpans": [{ "scope": { "name": "unomail", "version": crate::update_check::VERSION }, "spans": spans }],
         }]
     })
 }
