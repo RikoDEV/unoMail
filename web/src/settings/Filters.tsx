@@ -43,9 +43,7 @@ function ConditionRow({ condition, onChange, onRemove }: { condition: Condition;
       direction={{ xs: 'column', sm: 'row' }}
       spacing={1}
       data-testid="condition"
-      sx={[{
-        alignItems: { sm: 'center' }
-      }, (theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })]}>
+      sx={[{ alignItems: { sm: 'center' } }, (theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })]}>
       <TextField
         select
         size="small"
@@ -99,9 +97,7 @@ function ActionRow({ action, folders, labels, onChange, onRemove }: { action: Ac
       direction={{ xs: 'column', sm: 'row' }}
       spacing={1}
       data-testid="action"
-      sx={[{
-        alignItems: { sm: 'center' }
-      }, (theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })]}>
+      sx={[{ alignItems: { sm: 'center' } }, (theme) => ({ p: { xs: 1.5, sm: 0 }, border: { xs: `1px solid ${theme.palette.divider}`, sm: 'none' }, borderRadius: 2 })]}>
       <TextField
         select
         size="small"

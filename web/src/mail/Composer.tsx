@@ -526,9 +526,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
         {identities.length > 1 && (
           <Stack
             direction="row"
-            sx={[{
-              alignItems: "center"
-            }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
+            sx={[{ alignItems: 'center' }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
             <Typography variant="body2" sx={{ color: 'text.secondary', mr: 1 }}>
               {t('From')}
             </Typography>

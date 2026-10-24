@@ -16,9 +16,7 @@ export function Field({ label, value, onChange, autoFocus }: { label: string; va
   return (
     <Stack
       direction="row"
-      sx={[{
-        alignItems: "center"
-      }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
+      sx={[{ alignItems: 'center' }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
       <InputBase fullWidth value={value} placeholder={label} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus} inputProps={{ 'aria-label': label }} />
     </Stack>
   );
@@ -64,9 +62,7 @@ export function RecipientField({ label, placeholder, value, onChange, autoFocus,
     <Box sx={{ position: 'relative' }}>
       <Stack
         direction="row"
-        sx={[{
-          alignItems: "center"
-        }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
+        sx={[{ alignItems: 'center' }, ...(Array.isArray(FIELD_ROW) ? FIELD_ROW : [FIELD_ROW])]}>
         {value && (
           <Typography variant="body2" sx={{ color: 'text.secondary', mr: 1 }}>
             {label}

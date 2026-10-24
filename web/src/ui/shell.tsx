@@ -170,13 +170,8 @@ export function Copyright({ placement, sx, className }: { placement: 'login' | '
   // The link sends no referrer, so the campaign tags say where the visit came from.
   const href = `https://riko.dev/?utm_source=unomail&utm_medium=referral&utm_campaign=copyright&utm_content=${placement}`;
   return (
-    <Typography
-      variant="caption"
-      component="p"
-      className={className}
-      sx={[{
-        color: "text.secondary"
-      }, { opacity: 0.8 }, ...(Array.isArray(sx) ? sx : [sx])]}>© {new Date().getFullYear()}unoMail by{' '}
+    <Typography variant="caption" component="p" className={className} sx={[{ color: 'text.secondary', opacity: 0.8 }, ...(Array.isArray(sx) ? sx : [sx])]}>
+      © {new Date().getFullYear()} unoMail by{' '}
       <Link href={href} target="_blank" rel="nofollow noreferrer noopener" color="inherit" underline="hover">
         riko.dev
       </Link>
