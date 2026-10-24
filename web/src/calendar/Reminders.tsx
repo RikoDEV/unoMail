@@ -1,12 +1,12 @@
 import NotificationsActive from '@mui/icons-material/NotificationsActive';
 import { Alert, Snackbar, Stack } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { get, put } from '../api';
-import { loadPrefs, type Prefs } from '../prefs';
+import { get, put } from '../lib/api';
+import { loadPrefs, type Prefs } from '../lib/prefs';
 import { formatTime } from './dates';
 
 import { t, uiLocale } from '../i18n';
-import { readLocalJson, writeLocal } from '../storage';
+import { readLocalJson, writeLocal } from '../lib/storage';
 interface Reminder {
   id: number;
   calendar_id: number;

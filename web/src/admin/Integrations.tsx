@@ -4,9 +4,9 @@
 import Delete from '@mui/icons-material/Delete';
 import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, FormControlLabel, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { del, formatTime, get, post, put, errorText } from '../api';
+import { del, formatTime, get, post, put, errorText } from '../lib/api';
 import { useAppearance } from '../app';
-import { BUILT_IN_SKINS } from '../skins';
+import { BUILT_IN_SKINS } from '../ui/skins';
 import { PageHeader, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';

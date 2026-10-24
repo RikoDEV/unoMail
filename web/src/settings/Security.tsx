@@ -7,11 +7,11 @@ import {
   TableHead, TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { api, del, formatTime, get, post, put, errorText } from './api';
-import { createPasskey, keepOnlyAcceptedPasskeys, passkeysAvailable, type CreationOptions, wasDismissed } from './webauthn';
+import { api, del, formatTime, get, post, put, errorText } from '../lib/api';
+import { createPasskey, keepOnlyAcceptedPasskeys, passkeysAvailable, type CreationOptions, wasDismissed } from '../auth/webauthn';
 
-import { t } from './i18n';
-import { DialogButtons } from './admin/common';
+import { t } from '../i18n';
+import { DialogButtons } from '../admin/common';
 interface Overview {
   enabled: boolean;
   totp: boolean;

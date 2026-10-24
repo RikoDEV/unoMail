@@ -2,7 +2,7 @@ import Delete from '@mui/icons-material/Delete';
 import Replay from '@mui/icons-material/Replay';
 import { Alert, Button, FormControlLabel, IconButton, MenuItem, Stack, Switch, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField, Tooltip, Typography } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { del, formatBytes, formatTime, get, post, errorText } from '../api';
+import { del, formatBytes, formatTime, get, post, errorText } from '../lib/api';
 import { useAuth } from '../app';
 import { PageHeader, rowWithDetail, StatusChip, useAction, useCompactTable, useLoad, ScrollTable } from './common';
 

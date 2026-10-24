@@ -1,18 +1,18 @@
 // Inbox settings: categories, the personal spam filter and blocked senders.
 
-import { LinearProgress } from './progress';
+import { LinearProgress } from '../ui/progress';
 import {
   Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, Stack, Switch,
   TextField, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { blockSender, CATEGORIES, categoryLearning, type CategoryLearning, listBlockedSenders, resetCategoryLearning, resetSpamFilter, spamFilterState, type SpamFilterState, unblockSender } from './mail/extra';
-import { updatePrefs, usePrefs } from './prefs';
-import { errorText } from './api';
+import { blockSender, CATEGORIES, categoryLearning, type CategoryLearning, listBlockedSenders, resetCategoryLearning, resetSpamFilter, spamFilterState, type SpamFilterState, unblockSender } from '../mail/extra';
+import { updatePrefs, usePrefs } from '../lib/prefs';
+import { errorText } from '../lib/api';
 
-import { t } from './i18n';
-import { useList } from './useLoad';
-import { ConfirmDialog } from './admin/common';
+import { t } from '../i18n';
+import { useList } from '../lib/useLoad';
+import { ConfirmDialog } from '../admin/common';
 
 // --- Inbox ---------------------------------------------------------------------------------
 

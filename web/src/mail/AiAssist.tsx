@@ -2,7 +2,7 @@ import AutoAwesome from '@mui/icons-material/AutoAwesome';
 import Translate from '@mui/icons-material/Translate';
 import { Alert, Box, Button, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { errorText, get, post } from '../api';
+import { errorText, get, post } from '../lib/api';
 import { currentLanguage, t } from '../i18n';
 import type { EmailFull } from './jmapClient';
 import { canTranslateLocally, localTranslationSupported, translateLocally } from './localTranslator';

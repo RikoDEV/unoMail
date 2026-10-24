@@ -5,7 +5,7 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import Delete from '@mui/icons-material/Delete';
 import { Alert, Badge, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
-import { del, formatTime, get, patch, post } from '../api';
+import { del, formatTime, get, patch, post } from '../lib/api';
 import { ConfirmDialog, PageHeader, routeBy, useAction, useFormAction, useLoad, UsageBar, validators, ScrollTable } from './common';
 
 import { t } from '../i18n';

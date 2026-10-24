@@ -8,7 +8,7 @@
 import { useSyncExternalStore } from 'react';
 import { get } from './api';
 
-import { t } from './i18n';
+import { t } from '../i18n';
 const PLUGIN_API_VERSION = 1;
 
 export interface PluginMessage {

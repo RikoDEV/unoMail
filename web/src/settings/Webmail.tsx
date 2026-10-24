@@ -6,15 +6,15 @@ import {
   TextField, Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { SEEDS, useAppearance, useAuth } from './app';
-import { updatePrefs, usePrefs } from './prefs';
-import { errorText } from './api';
-import { mailtoHandlerSupported, registerMailtoHandler } from './mail/mailto';
-import { disableNotifications, enableNotifications, notificationsEnabled, notificationsSupported, pageNotificationsOn } from './mail/notifications';
-import { persistentCacheEnabled, setPersistentCache } from './mail/cache';
-import { BUILT_IN_SKINS, skinIsDark } from './skins';
+import { SEEDS, useAppearance, useAuth } from '../app';
+import { updatePrefs, usePrefs } from '../lib/prefs';
+import { errorText } from '../lib/api';
+import { mailtoHandlerSupported, registerMailtoHandler } from '../mail/mailto';
+import { disableNotifications, enableNotifications, notificationsEnabled, notificationsSupported, pageNotificationsOn } from '../mail/notifications';
+import { persistentCacheEnabled, setPersistentCache } from '../mail/cache';
+import { BUILT_IN_SKINS, skinIsDark } from '../ui/skins';
 
-import { t } from './i18n';
+import { t } from '../i18n';
 /** Plain text typed into a settings field, as the HTML that is stored. */
 
 /** Sending: the time to call a message back, and answering read receipt requests. */

@@ -9,7 +9,7 @@ import MoreVert from '@mui/icons-material/MoreVert';
 import Unsubscribe from '@mui/icons-material/Unsubscribe';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, IconButton, ListItemIcon, ListSubheader, Menu, MenuItem, Snackbar, Stack, Table, TableBody, TableCell, TableRow, Tooltip } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { downloadUrl, formatBytes, post, errorText } from '../api';
+import { downloadUrl, formatBytes, post, errorText } from '../lib/api';
 import { blockSender, CATEGORIES, type CategoryName, listBlockedSenders, unblockSender } from './extra';
 import { type EmailFull, setCategory } from './jmapClient';
 import type { Security } from './Sender';

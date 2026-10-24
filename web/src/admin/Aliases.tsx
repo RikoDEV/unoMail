@@ -3,7 +3,7 @@ import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import { Alert, Button, Dialog, DialogContent, DialogTitle, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip } from '@mui/material';
 import { useState } from 'react';
-import { del, get, patch, post } from '../api';
+import { del, get, patch, post } from '../lib/api';
 import { ConfirmDialog, DialogButtons, PageHeader, routeBy, ScrollTable, UsageBar, useAction, useFormAction, useLoad, validators } from './common';
 
 import { t } from '../i18n';

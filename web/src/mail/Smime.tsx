@@ -6,7 +6,7 @@ import GppGood from '@mui/icons-material/GppGood';
 import GppMaybe from '@mui/icons-material/GppMaybe';
 import Lock from '@mui/icons-material/Lock';
 import { Alert, Chip, Stack, Tooltip } from '@mui/material';
-import { del, get, put } from '../api';
+import { del, get, put } from '../lib/api';
 
 import { t } from '../i18n';
 export interface CertInfo {

@@ -12,12 +12,12 @@ import {
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { del, get, post, postRaw, put, errorText } from './api';
-import type { Contact, ContactGroup } from './mail/extra';
-import { TopBar, useTitle } from './shell';
+import { del, get, post, postRaw, put, errorText } from '../lib/api';
+import type { Contact, ContactGroup } from '../mail/extra';
+import { TopBar, useTitle } from '../ui/shell';
 
-import { t } from './i18n';
-import { DialogButtons } from './admin/common';
+import { t } from '../i18n';
+import { DialogButtons } from '../admin/common';
 const EMPTY: Omit<Contact, 'id'> = { name: '', email: '', phone: '', organization: '', notes: '', pgp_key: '' };
 
 function ContactDialog({ contact, groups, onClose }: { contact: Contact | null; groups: ContactGroup[]; onClose: (saved: boolean) => void }) {

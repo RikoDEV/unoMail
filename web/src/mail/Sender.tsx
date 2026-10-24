@@ -3,7 +3,7 @@ import Verified from '@mui/icons-material/Verified';
 import { Alert, AlertTitle, Avatar, Badge, Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
 import { senderNameWarning } from './risk';
 import { useEffect, useState, type ReactNode } from 'react';
-import { get } from '../api';
+import { get } from '../lib/api';
 import { type EmailFull, formatAddress } from './jmapClient';
 
 import { t, uiLocale } from '../i18n';

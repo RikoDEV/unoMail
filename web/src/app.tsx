@@ -1,23 +1,23 @@
 import { Alert, Button, CssBaseline, ThemeProvider, useMediaQuery } from '@mui/material';
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { type Account, get, post, setCsrfToken, setUnauthorizedHandler } from './api';
-import { PageBoundary } from './errorBoundary';
-import { Login } from './login';
+import { type Account, get, post, setCsrfToken, setUnauthorizedHandler } from './lib/api';
+import { PageBoundary } from './ui/errorBoundary';
+import { Login } from './auth/login';
 import { clearAccountCache, closeCache } from './mail/cache';
-import { clearSensitiveSessionState } from './sessionCleanup';
+import { clearSensitiveSessionState } from './auth/sessionCleanup';
 import { lock as lockPgp } from './mail/pgp';
-import { loadPlugins } from './plugins';
-import { loadPrefs, type Prefs, primePrefs, updatePrefs, usePrefs } from './prefs';
-import { BUILT_IN_SKINS, buildTheme, sanitizeSkin, type Skin } from './skins';
+import { loadPlugins } from './lib/plugins';
+import { loadPrefs, type Prefs, primePrefs, updatePrefs, usePrefs } from './lib/prefs';
+import { BUILT_IN_SKINS, buildTheme, sanitizeSkin, type Skin } from './ui/skins';
 
 import { chosenLanguage, setLanguage } from './i18n';
-import { readLocal, writeLocal } from './storage';
+import { readLocal, writeLocal } from './lib/storage';
 const LOGOUT_PENDING = 'unomail.logoutPending';
 const MailPage = lazy(() => import('./mail/MailPage'));
 const AdminApp = lazy(() => import('./admin/AdminApp'));
-const SettingsPage = lazy(() => import('./settings'));
-const ContactsPage = lazy(() => import('./contacts'));
+const SettingsPage = lazy(() => import('./settings/SettingsPage'));
+const ContactsPage = lazy(() => import('./contacts/ContactsPage'));
 const CalendarPage = lazy(() => import('./calendar/CalendarPage'));
 const Reminders = lazy(() => import('./calendar/Reminders').then((module) => ({ default: module.Reminders })));
 
@@ -25,7 +25,7 @@ const Reminders = lazy(() => import('./calendar/Reminders').then((module) => ({ 
 export interface SecondFactorChallenge {
   token: string;
   methods: { totp: boolean; passkey: boolean; recovery: boolean };
-  passkey: import('./webauthn').RequestOptions | null;
+  passkey: import('./auth/webauthn').RequestOptions | null;
 }
 
 /** An account this browser is signed in to. */

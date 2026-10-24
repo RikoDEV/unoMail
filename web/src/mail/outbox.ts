@@ -5,8 +5,8 @@ import { destroyEmails, type Draft, moveEmails, sendEmail, setKeyword } from './
 import { isPendingId, removePendingFiles } from './pendingFiles';
 
 import { t } from '../i18n';
-import { errorText } from '../api';
-import { readLocalJson, writeLocal } from '../storage';
+import { errorText } from '../lib/api';
+import { readLocalJson, writeLocal } from '../lib/storage';
 export type OutboxAction =
   | { type: 'keyword'; ids: string[]; keyword: string; value: boolean }
   | { type: 'move'; ids: string[]; mailboxId: string }

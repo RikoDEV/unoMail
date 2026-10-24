@@ -3,7 +3,7 @@ import EventAvailable from '@mui/icons-material/EventAvailable';
 import EventBusy from '@mui/icons-material/EventBusy';
 import { Box, Button, Paper, Stack, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { get, post, postRaw, errorText } from '../api';
+import { get, post, postRaw, errorText } from '../lib/api';
 import { STATUS_LABELS, formatSpan, type Attendee } from './dates';
 
 import { t } from '../i18n';

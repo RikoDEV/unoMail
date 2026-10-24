@@ -3,7 +3,7 @@ import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import { Alert, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
-import { del, get, post, put } from '../api';
+import { del, get, post, put } from '../lib/api';
 import { t } from '../i18n';
 import { ConfirmDialog, DialogButtons, PageHeader, useAction, useFormAction, useLoad } from './common';
 

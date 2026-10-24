@@ -1,5 +1,5 @@
 
-import { readLocal, writeLocal } from '../storage';// Offline cache: the folder list, the first page of each folder and recently opened
+import { readLocal, writeLocal } from '../lib/storage';// Offline cache: the folder list, the first page of each folder and recently opened
 // conversations are kept in the browser so the client opens instantly and stays readable
 // without a connection. The cache is per account and is wiped on sign-out.
 

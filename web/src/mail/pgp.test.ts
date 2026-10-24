@@ -2,7 +2,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const saved: { public_key?: string; private_key?: string } = {};
-vi.mock('../api', () => ({
+vi.mock('../lib/api', () => ({
   get: vi.fn(),
   del: vi.fn(),
   put: vi.fn(async (_path: string, body: { public_key: string; private_key: string }) => Object.assign(saved, body)),

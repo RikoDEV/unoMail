@@ -1,7 +1,7 @@
 // Passkeys in the browser: the server's options (base64url text) turned into what the
 // WebAuthn API takes, and its answers back into text for the server.
 
-import { t } from './i18n';
+import { t } from '../i18n';
 
 function fromB64url(text: string): ArrayBuffer {
   const base64 = text.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(text.length / 4) * 4, '=');

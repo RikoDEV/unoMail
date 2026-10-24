@@ -4,8 +4,8 @@
 import CheckCircle from '@mui/icons-material/CheckCircle';
 import { Alert, Box, CircularProgress, Stack, Typography, useTheme } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { get } from './api';
-import { currentLanguage, t } from './i18n';
+import { get } from '../lib/api';
+import { currentLanguage, t } from '../i18n';
 
 interface AltchaChallenge {
   algorithm: string;

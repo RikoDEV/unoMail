@@ -12,7 +12,7 @@ import {
   Tooltip, Typography,
 } from '@mui/material';
 import { useState } from 'react';
-import { del, formatTime, get, post, put } from '../api';
+import { del, formatTime, get, post, put } from '../lib/api';
 import { DialogButtons, PageHeader, routeBy, ScrollTable, useAction, useFormAction, useLoad, usePaged } from './common';
 import { RemoteAddress } from './RemoteAddress';
 

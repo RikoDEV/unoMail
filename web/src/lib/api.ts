@@ -1,5 +1,5 @@
 
-import { t, uiLocale } from './i18n';// HTTP client for the management API and JMAP. Authentication is an HttpOnly session cookie;
+import { t, uiLocale } from '../i18n';// HTTP client for the management API and JMAP. Authentication is an HttpOnly session cookie;
 // every state-changing request additionally carries the per-session CSRF token.
 
 export interface Account {

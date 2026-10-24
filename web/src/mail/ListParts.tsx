@@ -5,7 +5,7 @@ import PictureAsPdf from '@mui/icons-material/PictureAsPdf';
 import WarningAmber from '@mui/icons-material/WarningAmber';
 import { Avatar, Chip, Stack, Tooltip } from '@mui/material';
 import { type MouseEvent, useEffect, useSyncExternalStore } from 'react';
-import { downloadUrl, formatBytes, get } from '../api';
+import { downloadUrl, formatBytes, get } from '../lib/api';
 import type { BodyPart, EmailSummary } from './jmapClient';
 import { previewKind, type PreviewFile } from './Preview';
 import { attachmentRisk } from './risk';

@@ -11,11 +11,11 @@ import {
   Box, Button, Checkbox, SwipeableDrawer, Fab, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Select, Snackbar, Stack, ToggleButton, ToggleButtonGroup, Typography,
   useMediaQuery, useTheme,
 } from '@mui/material';
-import { ABOVE_SWIPE, SWIPE } from '../swipe';
+import { ABOVE_SWIPE, SWIPE } from '../lib/swipe';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { del, get, postRaw, errorText } from '../api';
-import { TopBar, useTitle } from '../shell';
+import { del, get, postRaw, errorText } from '../lib/api';
+import { TopBar, useTitle } from '../ui/shell';
 import {
   COLORS, addDays, dayKey, daysOf, draft, formatSpan, formatTime, formatTitle, isBanner, layoutDay, onDay, sameDay, shift, startOfDay, type Calendar, type EventForm, type Occurrence,
   type View,
@@ -24,7 +24,7 @@ import { CalendarDialog, ConnectDialog, EventDetails, EventDialog, NotificationP
 import { TasksView } from './Tasks';
 
 import { t, uiLocale } from '../i18n';
-import { readLocalJson, writeLocal } from '../storage';
+import { readLocalJson, writeLocal } from '../lib/storage';
 const HOUR = 48;
 const VIEWS: View[] = ['month', 'week', 'day', 'agenda', 'tasks'];
 const VIEW_LABELS: Record<View, string> = { month: t('Month'), week: t('Week'), day: t('Day'), agenda: t('Agenda'), tasks: t('Tasks') };

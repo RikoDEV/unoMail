@@ -3,14 +3,14 @@ import LanguageIcon from '@mui/icons-material/Language';
 import { Alert, Box, Button, Card, CardContent, Divider, Link, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ApiError, get, post, type Account, errorText } from './api';
-import { announceAccountChange, type SecondFactorChallenge, useAuth } from './app';
+import { ApiError, get, post, type Account, errorText } from '../lib/api';
+import { announceAccountChange, type SecondFactorChallenge, useAuth } from '../app';
 import { Link as RouterLink } from 'react-router-dom';
 import { Captcha } from './captcha';
 import { autofillAvailable, forgetUnknownPasskey, type PasskeyAnswer, passkeysAvailable, type RequestOptions, signWithPasskey, wasDismissed } from './webauthn';
 
-import { currentLanguage, LANGUAGES, setLanguage, t } from './i18n';
-import { Copyright, Logo, useTitle } from './shell';
+import { currentLanguage, LANGUAGES, setLanguage, t } from '../i18n';
+import { Copyright, Logo, useTitle } from '../ui/shell';
 /** The second step of a sign-in: a code from the authenticator app, a passkey, or a recovery code. */
 function SecondStep({ challenge, onDone, onCancel }: { challenge: SecondFactorChallenge; onDone: (data: { account: Account; csrf_token: string }) => void; onCancel: () => void }) {
   const [mode, setMode] = useState<'totp' | 'recovery'>(challenge.methods.totp ? 'totp' : 'recovery');

@@ -12,14 +12,14 @@ import {
   TableRow, TextField, Tooltip, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { errorText } from './api';
-import { t } from './i18n';
-import { chooseSignatures, deleteSignature, type Signature, type SignatureChoice, type Signatures, listSignatures, saveSignature } from './mail/extra';
-import { htmlToText } from './mail/jmapClient';
-import { sanitizeEmailHtml } from './mail/sanitize';
-import { updatePrefs, usePrefs } from './prefs';
-import { ListCard, RowActions } from './settingsParts';
-import { DialogButtons } from './admin/common';
+import { errorText } from '../lib/api';
+import { t } from '../i18n';
+import { chooseSignatures, deleteSignature, type Signature, type SignatureChoice, type Signatures, listSignatures, saveSignature } from '../mail/extra';
+import { htmlToText } from '../mail/jmapClient';
+import { sanitizeEmailHtml } from '../mail/sanitize';
+import { updatePrefs, usePrefs } from '../lib/prefs';
+import { ListCard, RowActions } from './parts';
+import { DialogButtons } from '../admin/common';
 
 /** Images are kept inside the signature; a logo should be small. */
 const MAX_IMAGE_BYTES = 100 * 1024;

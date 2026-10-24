@@ -1,4 +1,4 @@
-import { LinearProgress } from '../progress';
+import { LinearProgress } from '../ui/progress';
 import Edit from '@mui/icons-material/Edit';
 import MenuIcon from '@mui/icons-material/Menu';
 import Search from '@mui/icons-material/Search';
@@ -7,16 +7,16 @@ import {
   Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, List,
   Menu, MenuItem, Paper, Snackbar, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { ABOVE_SWIPE, SWIPE } from '../swipe';
+import { ABOVE_SWIPE, SWIPE } from '../lib/swipe';
 import { Subscriptions } from './Subscriptions';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { del, post, errorText } from '../api';
+import { del, post, errorText } from '../lib/api';
 import { useAuth } from '../app';
-import { setPluginNotifier, usePlugins } from '../plugins';
-import { usePrefs } from '../prefs';
-import { TopBar, useTitle } from '../shell';
+import { setPluginNotifier, usePlugins } from '../lib/plugins';
+import { usePrefs } from '../lib/prefs';
+import { TopBar, useTitle } from '../ui/shell';
 import { cachedList, cachedMailboxes, cachedThread, cacheList, cacheMailboxes, cacheThread, openCache } from './cache';
 import { Composer, type SentInfo } from './Composer';
 import { CATEGORIES, type CategoryLatest, type CategoryName, categoryCounts, categoryLatest, exportUrl, importMessages, type LabelDetail, listLabelDetails, saveLabel } from './extra';
@@ -44,7 +44,7 @@ import { draftFor, EMPTY_DRAFT } from './replyDraft';
 import { parseQuery, withScope } from './searchQuery';
 
 import { t, uiLocale } from '../i18n';
-import { readLocal, writeLocal } from '../storage';
+import { readLocal, writeLocal } from '../lib/storage';
 import { DialogButtons } from '../admin/common';
 const PAGE_SIZE = 50;
 

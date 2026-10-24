@@ -19,10 +19,10 @@ import {
   Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { downloadUrl, formatBytes, errorText } from '../api';
+import { downloadUrl, formatBytes, errorText } from '../lib/api';
 import { Invitation } from '../calendar/Invitation';
-import { emit, type PluginMessage, usePlugins } from '../plugins';
-import { updatePrefs, usePrefs } from '../prefs';
+import { emit, type PluginMessage, usePlugins } from '../lib/plugins';
+import { updatePrefs, usePrefs } from '../lib/prefs';
 import { imageProxyUrl } from './extra';
 import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel } from './jmapClient';
 import { SmimeBadges } from './Smime';

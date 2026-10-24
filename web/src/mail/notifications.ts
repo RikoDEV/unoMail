@@ -5,10 +5,10 @@
 // Where Web Push is missing (the browser lacks it, or the server has no push key), an open
 // unoMail tab shows the notifications itself while it is in the background.
 
-import { get, jmap } from '../api';
+import { get, jmap } from '../lib/api';
 
 import { t } from '../i18n';
-import { readLocal, writeLocal } from '../storage';
+import { readLocal, writeLocal } from '../lib/storage';
 /** Each signed-in account registers this browser on its own. */
 const storageKey = (account: string) => `unomail.pushSubscription.${account}`;
 /** Notifications from the open tab only, for an account without Web Push. */

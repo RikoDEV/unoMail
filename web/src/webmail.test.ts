@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./api', () => ({ get: vi.fn(async () => []), put: vi.fn(async () => ({})), post: vi.fn(), del: vi.fn(), postRaw: vi.fn() }));
+vi.mock('./lib/api', () => ({ get: vi.fn(async () => []), put: vi.fn(async () => ({})), post: vi.fn(), del: vi.fn(), postRaw: vi.fn() }));
 
 import { applySuggestion, imageProxyUrl, shareLevel, splitRecipients, suggestionText } from './mail/extra';
 import { buildFrameDocument, sanitizeEmail } from './mail/sanitize';
-import { createPluginApi, emit, registrySnapshot, resetPlugins, setPluginNotifier } from './plugins';
-import { BUILT_IN_SKINS, buildTheme, colorScheme, sanitizeSkin, skinIsDark, spring } from './skins';
+import { createPluginApi, emit, registrySnapshot, resetPlugins, setPluginNotifier } from './lib/plugins';
+import { BUILT_IN_SKINS, buildTheme, colorScheme, sanitizeSkin, skinIsDark, spring } from './ui/skins';
 
 describe('remote images', () => {
   const html = '<p>Hi</p><img src="https://tracker.example/pixel.gif?id=42"><img src="http://cdn.example/logo.png" alt="Logo"><img src="data:image/png;base64,AAAA"><img src="javascript:alert(1)">';

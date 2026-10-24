@@ -11,9 +11,9 @@ import type { SvgIconComponent } from '@mui/icons-material';
 import { Alert, Box, Button, CircularProgress, Collapse, Link, Stack, Typography } from '@mui/material';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { ApiError, errorText, get, patch, post } from '../api';
+import { ApiError, errorText, get, patch, post } from '../lib/api';
 import { t, uiLocale } from '../i18n';
-import { usePrefs } from '../prefs';
+import { usePrefs } from '../lib/prefs';
 
 type Status = 'ordered' | 'processing' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'returned' | 'refunded';
 const STATUSES: Record<Status, string> = {

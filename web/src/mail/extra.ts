@@ -1,7 +1,7 @@
 // Web mail data beyond the mailbox itself: sender identities, response templates, recipient
 // suggestions, folder import/export and sharing.
 
-import { del, get, post, postRaw, put } from '../api';
+import { del, get, post, postRaw, put } from '../lib/api';
 
 import { t } from '../i18n';
 export interface IdentitySmtp {

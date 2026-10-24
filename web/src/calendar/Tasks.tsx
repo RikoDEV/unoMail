@@ -1,7 +1,7 @@
 import Delete from '@mui/icons-material/Delete';
 import { Box, Button, Checkbox, IconButton, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { del, get, post, put, errorText } from '../api';
+import { del, get, post, put, errorText } from '../lib/api';
 import { COLORS, dayKey, type Calendar, type Task } from './dates';
 import {  } from './dialogs';
 

@@ -1,11 +1,11 @@
-import { LinearProgress } from '../progress';
+import { LinearProgress } from '../ui/progress';
 import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, type TableProps, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Children, cloneElement, Fragment, isValidElement, type ReactElement, type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { t, uiLocale } from '../i18n';
-import { useTitle } from '../shell';
-import { errorText } from '../api';
-export { useLoad } from '../useLoad';
+import { useTitle } from '../ui/shell';
+import { errorText } from '../lib/api';
+export { useLoad } from '../lib/useLoad';
 
 /** Wraps mutations: shows failures inline and successes as a toast. */
 export function useAction() {

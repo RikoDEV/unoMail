@@ -13,12 +13,12 @@ import SettingsBrightness from '@mui/icons-material/SettingsBrightness';
 import { Avatar, Link, type SxProps, type Theme, Badge, Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Stack, SwipeableDrawer, ToggleButton, ToggleButtonGroup, Tooltip, Typography, useMediaQuery } from '@mui/material';
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { useAppearance, useAuth } from './app';
-import { pendingCount } from './mail/outbox';
+import { useAppearance, useAuth } from '../app';
+import { pendingCount } from '../mail/outbox';
 
-import { chosenLanguage, LANGUAGES, setLanguage, t } from './i18n';
-import { updatePrefs } from './prefs';
-import { ABOVE_SWIPE, SWIPE } from './swipe';
+import { chosenLanguage, LANGUAGES, setLanguage, t } from '../i18n';
+import { updatePrefs } from '../lib/prefs';
+import { ABOVE_SWIPE, SWIPE } from '../lib/swipe';
 /** Account menu shown in the top-right corner of every page. */
 /** A round picture for an account: its first letter, in a colour of its own. */
 function AccountAvatar({ email, size }: { email: string; size: number }) {

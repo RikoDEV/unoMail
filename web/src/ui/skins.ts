@@ -10,7 +10,7 @@ import { argbFromHex, hexFromArgb, Hct, SchemeTonalSpot } from '@material/materi
 import { alpha, createTheme, type Theme, type ThemeOptions } from '@mui/material';
 import '@fontsource-variable/roboto-flex';
 
-import { t } from './i18n';
+import { t } from '../i18n';
 export interface Skin {
   id: string;
   name: string;

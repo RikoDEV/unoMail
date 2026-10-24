@@ -12,14 +12,14 @@ import {
   MenuItem, Stack, Switch, Tab, Tabs, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
-import { del, errorText, get, put } from './api';
+import { del, errorText, get, put } from '../lib/api';
 import {
   ACTION_LABELS, ACTIONS, actionTarget, type Action, type Condition, emptyRule, FIELD_LABELS, FIELDS, generate, needsValue, OPERATOR_LABELS, operatorsFor, parseRules, problems, type Rule,
   summary,
-} from './filters/sieveRules';
-import { t } from './i18n';
-import { folderName, listMailboxes, type Mailbox, normalizeLabel } from './mail/jmapClient';
-import { DialogButtons } from './admin/common';
+} from '../filters/sieveRules';
+import { t } from '../i18n';
+import { folderName, listMailboxes, type Mailbox, normalizeLabel } from '../mail/jmapClient';
+import { DialogButtons } from '../admin/common';
 
 const SIEVE_EXAMPLE = `require ["fileinto", "mailbox", "imap4flags"];
 

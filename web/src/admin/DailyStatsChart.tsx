@@ -9,7 +9,7 @@
 import { Box, Card, CardContent, Stack, Table, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Typography, useTheme } from '@mui/material';
 import { useEffect, useId, useMemo, useState } from 'react';
 
-import { get } from '../api';
+import { get } from '../lib/api';
 import { t, uiLocale } from '../i18n';
 import { useElementWidth, useLoad } from './common';
 

@@ -10,7 +10,7 @@
 import i18next from 'i18next';
 import en from './locales/en.json';
 
-import { readLocal, writeLocal } from './storage';
+import { readLocal, writeLocal } from './lib/storage';
 export const LANGUAGES: { code: string; name: string }[] = [
   { code: 'en', name: 'English' },
   { code: 'pl', name: 'Polski' },

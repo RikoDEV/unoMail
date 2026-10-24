@@ -108,7 +108,7 @@ JSON design tokens only, so a skin can't carry CSS or code:
 ### Plug-ins
 
 A plug-in is `plugins/<id>/` in the data directory with `plugin.json` (`name`, `version`,
-`description`) and `plugin.js`. Enable it in the admin panel. API: [`web/src/plugins.ts`](../web/src/plugins.ts).
+`description`) and `plugin.js`. Enable it in the admin panel. API: [`web/src/lib/plugins.ts`](../web/src/lib/plugins.ts).
 
 ```js
 export default function (api) {

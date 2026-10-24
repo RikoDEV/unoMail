@@ -6,11 +6,11 @@
 // and are kept in memory only, until the tab is closed or the user signs out.
 
 import type { Key, PrivateKey } from 'openpgp';
-import { del, get, put } from '../api';
+import { del, get, put } from '../lib/api';
 import { buildEntity, type MimeAttachment } from './mime';
 
 import { t } from '../i18n';
-import { readLocal, writeLocal } from '../storage';
+import { readLocal, writeLocal } from '../lib/storage';
 export interface StoredKeys {
   public_key: string;
   private_key: string;

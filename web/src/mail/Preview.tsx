@@ -7,7 +7,7 @@
 import Download from '@mui/icons-material/Download';
 import { Alert, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { formatBytes, errorText } from '../api';
+import { formatBytes, errorText } from '../lib/api';
 import { previewScale, readPreview } from './previewLimits';
 import type { PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist';
 

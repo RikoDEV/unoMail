@@ -1,7 +1,7 @@
 import { Alert, Button } from '@mui/material';
 import { Component, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { t } from './i18n';
+import { t } from '../i18n';
 
 interface State {
   failed: boolean;

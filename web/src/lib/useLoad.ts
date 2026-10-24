@@ -2,7 +2,7 @@
 
 import { type DependencyList, useCallback, useEffect, useState } from 'react';
 import { errorText } from './api';
-import { t } from './i18n';
+import { t } from '../i18n';
 
 /** Loads data on mount and whenever `deps` change; `reload` loads again on demand. */
 export function useLoad<T>(loader: () => Promise<T>, deps: DependencyList) {

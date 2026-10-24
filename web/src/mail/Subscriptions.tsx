@@ -3,7 +3,7 @@
 
 import { Alert, Avatar, Box, Button, CircularProgress, Paper, Snackbar, Typography } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { errorText, get, post } from '../api';
+import { errorText, get, post } from '../lib/api';
 import { t } from '../i18n';
 
 interface Subscription {

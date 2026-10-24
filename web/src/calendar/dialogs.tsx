@@ -12,7 +12,7 @@ import {
   Tooltip, Typography,
 } from '@mui/material';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { get, patch, post, put, errorText } from '../api';
+import { get, patch, post, put, errorText } from '../lib/api';
 import {
   COLORS, REMINDERS, REPEAT_LABELS, STATUS_LABELS, buildRule, conflicts, describeRule, formatSpan, reminderLabel, toggleAllDay, type Calendar, type EventForm, type Occurrence,
   type Repeat as RepeatKind,

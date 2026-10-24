@@ -1,9 +1,9 @@
 import AutoAwesome from '@mui/icons-material/AutoAwesome';
 import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
-import { errorText, post } from '../api';
+import { errorText, post } from '../lib/api';
 import { currentLanguage, LANGUAGES, t } from '../i18n';
-import { usePrefs } from '../prefs';
+import { usePrefs } from '../lib/prefs';
 import { useAiModel } from './AiAssist';
 
 interface Suggestion { label: string; text: string }

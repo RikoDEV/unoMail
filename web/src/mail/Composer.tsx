@@ -19,10 +19,10 @@ import {
   Stack, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { formatBytes, uploadBlob, errorText } from '../api';
+import { formatBytes, uploadBlob, errorText } from '../lib/api';
 import { useAuth } from '../app';
-import { type ComposerHandle, emit, usePlugins } from '../plugins';
-import { updatePrefs, usePrefs } from '../prefs';
+import { type ComposerHandle, emit, usePlugins } from '../lib/plugins';
+import { updatePrefs, usePrefs } from '../lib/prefs';
 import { type Identity, listIdentities, listSignatures, listTemplates, type Signatures, saveTemplate, type Template } from './extra';
 import { type Draft, type DraftAttachment, destroyEmails, draftRecipients, saveDraft, type Sent, type SendOptions, sendEmail, sendEncrypted } from './jmapClient';
 import { EmojiPicker } from './EmojiPicker';

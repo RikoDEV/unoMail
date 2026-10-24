@@ -1,8 +1,8 @@
 import { Alert, Button, Card, CardContent, FormControlLabel, Stack, Switch, Typography } from '@mui/material';
 import { useState } from 'react';
-import { errorText, post } from './api';
-import { updatePrefs, usePrefs, type Prefs } from './prefs';
-import { t } from './i18n';
+import { errorText, post } from '../lib/api';
+import { updatePrefs, usePrefs, type Prefs } from '../lib/prefs';
+import { t } from '../i18n';
 
 export function SummaryCardsSettings() {
   const prefs = usePrefs();

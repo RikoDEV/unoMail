@@ -4,9 +4,9 @@ import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import { Alert, Box, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
-import { del, formatTime, get, patch, post } from './api';
-import { ConfirmDialog, DialogButtons, useAction, useFormAction, useLoad } from './admin/common';
-import { t } from './i18n';
+import { del, formatTime, get, patch, post } from '../lib/api';
+import { ConfirmDialog, DialogButtons, useAction, useFormAction, useLoad } from '../admin/common';
+import { t } from '../i18n';
 
 interface Mask { id: number; email: string; description: string; for_domain: string; integration_url: string; enabled: boolean; status: 'active' | 'disabled' | 'expired'; created_at: number; expires_at: number | null; created_by: string }
 interface Listing { items: Mask[]; used: number; limit: number; domains: string[]; creation_enabled: boolean }

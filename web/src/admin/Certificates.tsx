@@ -2,7 +2,7 @@ import Autorenew from '@mui/icons-material/Autorenew';
 import UploadFile from '@mui/icons-material/UploadFile';
 import { Alert, Box, Button, Card, CardContent, Chip, MenuItem, Stack, Tab, Tabs, TextField, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { get, post, put } from '../api';
+import { get, post, put } from '../lib/api';
 import { ConfirmDialog, PageHeader, useAction, useLoad } from './common';
 
 import { t, uiLocale } from '../i18n';

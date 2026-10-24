@@ -2,7 +2,7 @@
 
 import { Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, MenuItem, Stack, Switch, TableBody, TableCell, TableRow, TextField, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { del, get, patch, put } from '../api';
+import { del, get, patch, put } from '../lib/api';
 import { PageHeader, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';

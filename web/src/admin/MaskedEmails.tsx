@@ -1,9 +1,9 @@
 import { Alert, Autocomplete, Box, Button, FormControlLabel, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useState } from 'react';
-import { get, put } from '../api';
+import { get, put } from '../lib/api';
 import { useAuth } from '../app';
 import { t } from '../i18n';
-import { MaskedAddresses } from '../settingsMaskedEmail';
+import { MaskedAddresses } from '../settings/MaskedEmail';
 import { PageHeader, useAction, useLoad } from './common';
 
 function AccountPolicy({ id, onSaved }: { id: number; onSaved: () => void }) {

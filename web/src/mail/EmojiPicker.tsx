@@ -1,7 +1,7 @@
 import { Box, ButtonBase, Popover, Tab, Tabs, Typography } from '@mui/material';
 import { useState } from 'react';
 import { t } from '../i18n';
-import { readLocalJson, writeLocal } from '../storage';
+import { readLocalJson, writeLocal } from '../lib/storage';
 
 const RECENT_KEY = 'unomail.emoji.recent';
 const RECENT_MAX = 24;

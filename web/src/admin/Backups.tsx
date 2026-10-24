@@ -3,7 +3,7 @@
 
 import { Alert, Button, Card, CardContent, Chip, TableBody, TableCell, TableHead, TableRow, Typography } from '@mui/material';
 import { useEffect } from 'react';
-import { formatBytes, formatTime, get, post } from '../api';
+import { formatBytes, formatTime, get, post } from '../lib/api';
 import { PageHeader, useAction, useLoad, ScrollTable } from './common';
 
 import { t } from '../i18n';

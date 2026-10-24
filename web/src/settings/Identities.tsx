@@ -5,15 +5,15 @@ import {
   TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { useState } from 'react';
-import { deleteIdentity, deleteTemplate, type Identity, type IdentityInput, listIdentities, listTemplates, saveIdentity, saveTemplate, type Template } from './mail/extra';
-import { errorText } from './api';
-import { htmlToText } from './mail/jmapClient';
+import { deleteIdentity, deleteTemplate, type Identity, type IdentityInput, listIdentities, listTemplates, saveIdentity, saveTemplate, type Template } from '../mail/extra';
+import { errorText } from '../lib/api';
+import { htmlToText } from '../mail/jmapClient';
 
-import { t } from './i18n';
-import { useList } from './useLoad';
-import { DialogButtons } from './admin/common';
-import { escapeHtml } from './mail/sanitize';
-import { ListCard, RowActions } from './settingsParts';
+import { t } from '../i18n';
+import { useList } from '../lib/useLoad';
+import { DialogButtons } from '../admin/common';
+import { escapeHtml } from '../mail/sanitize';
+import { ListCard, RowActions } from './parts';
 
 const textToStoredHtml = (text: string) => (text.trim() ? escapeHtml(text.trim()).replace(/\n/g, '<br>') : '');
 

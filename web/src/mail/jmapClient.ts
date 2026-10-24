@@ -1,6 +1,6 @@
 // Typed helpers over the JMAP API for the operations the web client needs.
 
-import { downloadUrl, get, jmap, type MethodCall, type MethodResponse, post, uploadBlob } from '../api';
+import { downloadUrl, get, jmap, type MethodCall, type MethodResponse, post, uploadBlob } from '../lib/api';
 import { buildEncryptedMessage, type MimeAddress, type MimeAttachment } from './mime';
 import { isPendingId, loadPendingFile } from './pendingFiles';
 import { encryptEntity } from './pgp';

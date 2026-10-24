@@ -19,7 +19,7 @@ import Security from '@mui/icons-material/Security';
 import { type ReactElement } from 'react';
 import { Navigate, NavLink, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../app';
-import { SideNavPage } from '../shell';
+import { SideNavPage } from '../ui/shell';
 import { Aliases } from './Aliases';
 import { Certificates } from './Certificates';
 import { DashboardPage } from './Dashboard';

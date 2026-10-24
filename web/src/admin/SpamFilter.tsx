@@ -3,7 +3,7 @@
 import Edit from '@mui/icons-material/Edit';
 import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogContent, DialogTitle, IconButton, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
-import { formatTime, get, put } from '../api';
+import { formatTime, get, put } from '../lib/api';
 import { DialogButtons, PageHeader, routeBy, ScrollTable, useAction, useFormAction, useLoad, usePaged } from './common';
 
 import { t } from '../i18n';

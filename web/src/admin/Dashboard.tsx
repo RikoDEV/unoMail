@@ -1,7 +1,7 @@
 import { Alert, Box, Card, CardContent, Chip, Stack, TableBody, TableCell, TableHead, TableRow, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
-import { formatBytes, get } from '../api';
-import { formatTime } from '../api';
+import { formatBytes, get } from '../lib/api';
+import { formatTime } from '../lib/api';
 import { PageHeader, StatusChip, useLoad, ScrollTable } from './common';
 import { RemoteAddress } from './RemoteAddress';
 import { DailyStatsChart } from './DailyStatsChart';

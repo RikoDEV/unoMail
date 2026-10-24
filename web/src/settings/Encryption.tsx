@@ -5,12 +5,12 @@ import {
   TextField, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from './app';
-import { get, put, errorText } from './api';
-import { type CertInfo, fetchSmime, importSmime, removeSmime } from './mail/Smime';
-import { fetchKeys, fingerprint, generateKeys, importKeys, isUnlocked, localPrivateKey, lock, removeKeys, type StoredKeys, unlock } from './mail/pgp';
+import { useAuth } from '../app';
+import { get, put, errorText } from '../lib/api';
+import { type CertInfo, fetchSmime, importSmime, removeSmime } from '../mail/Smime';
+import { fetchKeys, fingerprint, generateKeys, importKeys, isUnlocked, localPrivateKey, lock, removeKeys, type StoredKeys, unlock } from '../mail/pgp';
 
-import { t, uiLocale } from './i18n';
+import { t, uiLocale } from '../i18n';
 
 /** The user's S/MIME certificate: signing and encrypting mail, reading encrypted mail. */
 export function SmimeCard() {

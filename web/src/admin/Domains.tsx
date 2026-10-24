@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
-import { del, formatBytes, get, patch, post, put } from '../api';
+import { del, formatBytes, get, patch, post, put } from '../lib/api';
 import { useAuth } from '../app';
 import { ConfirmDialog, DialogButtons, PageHeader, routeBy, ScrollTable, StatusChip, useAction, useFormAction, useLoad, validators } from './common';
 

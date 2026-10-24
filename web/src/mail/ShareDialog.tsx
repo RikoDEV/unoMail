@@ -5,7 +5,7 @@ import { type AclEntry, getAcl, setAcl, SHARE_LEVELS, shareLevel } from './extra
 import { folderName, type Mailbox } from './jmapClient';
 
 import { t } from '../i18n';
-import { errorText } from '../api';
+import { errorText } from '../lib/api';
 /** Lets the owner of a folder share it with colleagues, or with everyone in the domain. */
 export function ShareDialog({ mailbox, onClose }: { mailbox: Mailbox; onClose: (changed: boolean) => void }) {
   const [entries, setEntries] = useState<AclEntry[]>([]);
