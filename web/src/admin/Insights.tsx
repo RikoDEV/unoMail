@@ -14,6 +14,7 @@ import { useAuth } from '../app';
 import { PageHeader, StatusChip, useAction, useLoad, ScrollTable } from './common';
 
 import { t, uiLocale } from '../i18n';
+import { serverText } from './serverTexts';
 interface DomainSummary {
   domain: string;
   reports: number;
@@ -268,11 +269,11 @@ export function Diagnostics() {
           <Typography variant="h6">{t('Outbound delivery')}</Typography>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 3 }}>
             <StatusChip status={data.outbound_port_25} />
-            <Typography variant="body2">{data.outbound_message}</Typography>
+            <Typography variant="body2">{serverText(data.outbound_message)}</Typography>
           </Stack>
           <Typography variant="h6">{t('Blocklists')}</Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>
-            {t('Public addresses:')} {data.public_addresses.join(', ') || 'unknown'} {t('· checked against')} {data.blocklists_checked.join(', ') || t('no blocklists (none configured)')}
+            {t('Public addresses:')} {data.public_addresses.join(', ') || t('unknown')} {t('· checked against')} {data.blocklists_checked.join(', ') || t('no blocklists (none configured)')}
           </Typography>
           {data.blocklisted.length > 0 ? (
             <Alert severity="error" sx={{ mb: 3 }}>{t('Listed on: {{value}}. Other servers may reject mail from this server.', { value: data.blocklisted.join(', ') })}</Alert>
@@ -286,7 +287,7 @@ export function Diagnostics() {
           </Stack>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 1 }} data-testid="virus-scanner-status">
             <StatusChip status={data.virus_scanner} />
-            <Typography variant="body2">{data.virus_message}</Typography>
+            <Typography variant="body2">{serverText(data.virus_message)}</Typography>
           </Stack>
         </>
       )}

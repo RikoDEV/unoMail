@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { t } from './i18n';
+import { SERVER_TEXTS } from './admin/serverTexts';
 import en from './locales/en.json';
 import cs from './locales/cs.json';
 import de from './locales/de.json';
@@ -22,9 +23,9 @@ function sources(dir: string): string[] {
   });
 }
 
-/** Every literal key passed to t() in the web client. */
+/** Every literal key passed to t() in the web client, and the texts the server sends. */
 function usedKeys(): Set<string> {
-  const keys = new Set<string>();
+  const keys = new Set<string>(SERVER_TEXTS);
   for (const file of sources(join(__dirname))) {
     const code = readFileSync(file, 'utf8');
     for (const match of code.matchAll(/\bt\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g)) {

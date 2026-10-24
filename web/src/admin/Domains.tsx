@@ -19,6 +19,7 @@ import { useAuth } from '../app';
 import { ConfirmDialog, DialogButtons, PageHeader, routeBy, ScrollTable, StatusChip, useAction, useFormAction, useLoad, validators } from './common';
 
 import { t } from '../i18n';
+import { serverText } from './serverTexts';
 interface Domain {
   id: number;
   name: string;
@@ -34,9 +35,14 @@ interface Domain {
 
 interface Check {
   id: string;
+  /** English; `title_key` and `title_params` give the text to translate (see serverTexts.ts). */
   title: string;
+  title_key?: string;
+  title_params?: Record<string, string>;
   status: string;
   message: string;
+  message_key?: string;
+  message_params?: Record<string, string>;
   record_type: string;
   record_name: string;
   record_value: string;
@@ -183,6 +189,8 @@ function DnsCheckRow({ check }: { check: Check }) {
   const status = DNS_STATUS[check.status as keyof typeof DNS_STATUS] ?? DNS_STATUS.unknown;
   const StatusIcon = status.icon;
   const optional = check.status === 'warning' && (check.message.startsWith('Optional:') || check.message.startsWith('No TLS reporting record:'));
+  const title = check.title_key ? serverText(check.title_key, check.title_params, check.title) : check.title;
+  const message = check.message_key ? serverText(check.message_key, check.message_params, check.message) : check.message;
   return (
     <Box component="article" role="listitem" sx={{ display: 'flex', gap: 1.5, px: { xs: 1.5, sm: 2 }, py: 1.5, '&:not(:last-child)': { borderBottom: 1, borderColor: 'divider' } }}>
       <Box sx={{ display: 'grid', placeItems: 'center', width: 30, height: 30, mt: 0.25, flexShrink: 0, borderRadius: 1, bgcolor: optional ? 'action.selected' : `${status.color}.main`, color: optional ? 'text.secondary' : `${status.color}.contrastText` }}>
@@ -190,8 +198,8 @@ function DnsCheckRow({ check }: { check: Check }) {
       </Box>
       <Box sx={{ minWidth: 0, flex: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'minmax(210px, 0.7fr) minmax(0, 1.3fr)' }, gap: { xs: 1, md: 2.5 } }}>
         <Box>
-          <Typography variant="subtitle2" component="h3">{check.title}</Typography>
-          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.25 }}>{check.message}</Typography>
+          <Typography variant="subtitle2" component="h3">{title}</Typography>
+          <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary', mt: 0.25 }}>{message}</Typography>
         </Box>
         <Box sx={{ minWidth: 0 }}>
           {check.record_value && (

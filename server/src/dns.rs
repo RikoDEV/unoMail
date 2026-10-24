@@ -87,6 +87,19 @@ pub async fn ips(resolver: &MessageAuthenticator, host: &str) -> Result<Vec<IpAd
         .map_err(map_err)
 }
 
+/// Every address of `host`, IPv4 and IPv6 alike. [`ips`] stops at the IPv4 addresses when there
+/// are any; a server that sends over both needs both checked.
+pub async fn all_ips(resolver: &MessageAuthenticator, host: &str) -> Result<Vec<IpAddr>, DnsError> {
+    let lookup = |strategy| {
+        resolver.ip_lookup(host, strategy, 8, None::<&NoCache<Box<str>, RecordSet<std::net::Ipv4Addr>>>, None::<&NoCache<Box<str>, RecordSet<std::net::Ipv6Addr>>>)
+    };
+    let (v4, v6) = tokio::join!(lookup(IpLookupStrategy::Ipv4Only), lookup(IpLookupStrategy::Ipv6Only));
+    match (v4.map_err(map_err), v6.map_err(map_err)) {
+        (Err(DnsError::Temporary(e)), _) | (_, Err(DnsError::Temporary(e))) => Err(DnsError::Temporary(e)),
+        (v4, v6) => Ok(v4.unwrap_or_default().into_iter().chain(v6.unwrap_or_default()).collect()),
+    }
+}
+
 pub async fn ptr(resolver: &MessageAuthenticator, ip: IpAddr) -> Result<Vec<String>, DnsError> {
     let records = resolver.ptr_lookup(ip, None::<&NoCache<IpAddr, RecordSet<Box<str>>>>).await.map_err(map_err)?;
     Ok(records.rrset.iter().map(|name| name.trim_end_matches('.').to_ascii_lowercase()).collect())
