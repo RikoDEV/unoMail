@@ -107,7 +107,9 @@ fn validate(input: &ModelInput) -> Result<(), ApiError> {
     Ok(())
 }
 
-async fn save(state: &AppState, id: String, input: ModelInput, previous: Option<Model>) -> Result<Model, ApiError> {
+/// The model `input` describes. Without a new key, the saved one is kept only while it still
+/// goes to the same provider and address.
+fn configure(state: &AppState, id: String, input: ModelInput, previous: Option<Model>) -> Result<Model, ApiError> {
     validate(&input)?;
     let key = match input.api_key {
         Some(key) => state.secrets.seal(key.trim()),
@@ -116,8 +118,12 @@ async fn save(state: &AppState, id: String, input: ModelInput, previous: Option<
     if key.is_empty() && !matches!(input.provider.as_str(), "ollama" | "custom") {
         return Err(ApiError::bad("API key is required for this provider"));
     }
-    let model = Model { id, name: input.name.trim().into(), provider: input.provider, model: input.model.trim().into(),
-        base_url: input.base_url.trim().trim_end_matches('/').into(), enabled: input.enabled, api_key: key };
+    Ok(Model { id, name: input.name.trim().into(), provider: input.provider, model: input.model.trim().into(),
+        base_url: input.base_url.trim().trim_end_matches('/').into(), enabled: input.enabled, api_key: key })
+}
+
+async fn save(state: &AppState, id: String, input: ModelInput, previous: Option<Model>) -> Result<Model, ApiError> {
+    let model = configure(state, id, input, previous)?;
     crate::db::set_setting(&state.db, &format!("{PREFIX}{}", model.id), &serde_json::to_string(&model).map_err(anyhow::Error::from)?).await?;
     Ok(model)
 }
@@ -215,10 +221,34 @@ fn admit(account: i64) -> Result<(), ApiError> {
 pub async fn test(State(state): State<AppState>, session: Session, Path(id): Path<String>) -> JsonResult<Value> {
     session.require_super()?;
     let model = load(&state, &id).await?;
-    admit(session.account.id)?;
+    connection_test(&state, session.account.id, &model).await
+}
+
+#[derive(Deserialize)]
+pub struct DraftInput {
+    /// The model being edited, whose saved key is used when none is entered.
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(flatten)]
+    input: ModelInput,
+}
+
+/// Tests settings before they are saved, so that a model is not added only to fail later.
+pub async fn test_draft(State(state): State<AppState>, session: Session, Json(draft): Json<DraftInput>) -> JsonResult<Value> {
+    session.require_super()?;
+    let previous = match draft.id.as_deref().filter(|id| !id.is_empty()) {
+        Some(id) => Some(load(&state, id).await?),
+        None => None,
+    };
+    let model = configure(&state, String::new(), draft.input, previous)?;
+    connection_test(&state, session.account.id, &model).await
+}
+
+async fn connection_test(state: &AppState, account: i64, model: &Model) -> JsonResult<Value> {
+    admit(account)?;
     let _slot = SLOTS.try_acquire().map_err(|_| ApiError::RateLimited)?;
-    let key = state.secrets.open(&model.api_key).ok_or_else(|| ApiError::bad("could not decrypt the API key; enter it again"))?;
-    complete(&model, &key, "Reply with the word OK.", "Connection test.").await?;
+    let key = if model.api_key.is_empty() { String::new() } else { state.secrets.open(&model.api_key).ok_or_else(|| ApiError::bad("could not decrypt the API key; enter it again"))? };
+    complete(model, &key, "Reply with the word OK.", "Connection test.").await?;
     Ok(Json(json!({ "ok": true })))
 }
 

@@ -536,6 +536,7 @@ pub fn router(state: AppState) -> Router {
         .route("/me/ai/replies", post(smart_reply::suggest))
         .route("/models", get(models::list).post(models::create))
         .route("/models/{id}", put(models::update).delete(models::remove))
+        .route("/models/test", post(models::test_draft))
         .route("/models/{id}/test", post(models::test))
         .route("/models/summary-cards", get(summary_cards::config_get).put(summary_cards::config_put))
         .route("/me/summary-cards", get(summary_cards::list))

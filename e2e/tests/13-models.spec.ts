@@ -46,7 +46,7 @@ async function provider() {
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, requests, fail: () => { fail = true; }, close: () => server.close() };
+  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, requests, fail: (on = true) => { fail = on; }, close: () => server.close() };
 }
 
 test('models can be configured and used for summaries and translation of owned mail', async ({ page, browser }) => {
@@ -68,8 +68,19 @@ test('models can be configured and used for summaries and translation of owned m
     await dialog.getByLabel('Model ID').fill('test-model');
     await dialog.getByLabel('Base URL').fill(`${remote.url}/v1`);
     await dialog.getByLabel('API key', { exact: true }).fill('secret-provider-key');
+    // Saving tests the settings first: a failing provider keeps the dialog open with the reason.
+    remote.fail();
+    await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('HTTP 401');
+    await expect(dialog).not.toContainText('DO-NOT-LEAK');
+    await expect(dialog.getByRole('button', { name: 'Save anyway', exact: true })).toBeVisible();
+    expect((await (await page.request.get('/api/models')).json()).some((m: { name: string }) => m.name === 'Mail assistant')).toBe(false);
+    remote.fail(false);
+    await dialog.getByRole('button', { name: 'Test connection', exact: true }).click();
+    await expect(dialog.getByRole('status')).toContainText('Model connection successful');
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dialog).toBeHidden();
+    expect(remote.requests).toHaveLength(2); // A passed test is not repeated when saving.
     const configured = await (await page.request.get('/api/models')).json();
     const model = configured.find((m: { name: string }) => m.name === 'Mail assistant');
     expect(model.has_api_key).toBe(true);
@@ -78,8 +89,8 @@ test('models can be configured and used for summaries and translation of owned m
 
     await page.getByRole('button', { name: 'Test connection', exact: true }).click();
     await expect(page.getByText('Model connection successful')).toBeVisible();
-    expect(remote.requests[0].headers.authorization).toBe('Bearer secret-provider-key');
-    expect(remote.requests[0].url).toBe('/v1/chat/completions');
+    expect(remote.requests[2].headers.authorization).toBe('Bearer secret-provider-key');
+    expect(remote.requests[2].url).toBe('/v1/chat/completions');
     // Renaming preserves the sealed API key without disclosing it to the form.
     await page.getByRole('button', { name: 'Edit Mail assistant', exact: true }).click();
     dialog = page.getByRole('dialog');
@@ -87,6 +98,7 @@ test('models can be configured and used for summaries and translation of owned m
     await dialog.getByLabel('Display name').fill('Mail helper');
     await dialog.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dialog).toBeHidden();
+    expect(remote.requests).toHaveLength(3); // A rename does not test the connection again.
 
     const user = await userContext.newPage();
     await login(user, 'ai-reader@e2e.test', USER_PASSWORD);
@@ -99,30 +111,30 @@ test('models can be configured and used for summaries and translation of owned m
     expect(JSON.stringify(available)).not.toContain(remote.url);
     const forbidden = await user.request.post('/api/me/ai/assist', { headers: userHeaders, data: { model_id: model.id, email_id: adminMessage, language: 'en', task: 'summary' } });
     expect(forbidden.status()).toBe(404);
-    expect(remote.requests).toHaveLength(1);
+    expect(remote.requests).toHaveLength(3);
 
     const emailId = await importMail(user, 'AI meeting notes', 'Meeting Friday at 14:00. Please bring the report.');
     await user.reload();
     await user.getByTestId('email-row').filter({ hasText: 'AI meeting notes' }).click();
     const assistant = user.getByRole('region', { name: 'AI assistance', exact: true });
     await expect(assistant).toBeVisible();
-    expect(remote.requests).toHaveLength(1); // Opening mail never sends it to a provider.
+    expect(remote.requests).toHaveLength(3); // Opening mail never sends it to a provider.
     await assistant.getByRole('button', { name: 'Summarize', exact: true }).click();
     await expect(assistant.getByText('Meeting on Friday at 14:00. Bring the report.', { exact: true })).toBeVisible();
     await expect(assistant.getByRole('button', { name: /^Translate to / })).toHaveCount(0);
     await expect(assistant.getByLabel('Target language')).toHaveCount(0);
-    expect(remote.requests[1].headers.authorization).toBe('Bearer secret-provider-key');
-    expect(remote.requests[1].body.messages[1].content).toContain('Meeting Friday at 14:00');
+    expect(remote.requests[3].headers.authorization).toBe('Bearer secret-provider-key');
+    expect(remote.requests[3].body.messages[1].content).toContain('Meeting Friday at 14:00');
     await importMail(user, 'Notes de réunion', 'Bonjour, notre réunion aura lieu vendredi à quatorze heures. Merci de préparer le rapport et de confirmer votre présence.');
     await user.goto('/mail');
     await user.getByTestId('email-row').filter({ hasText: 'Notes de réunion' }).click();
     await expect(assistant.getByRole('button', { name: 'Translate to English', exact: true })).toBeVisible();
-    expect(remote.requests).toHaveLength(2); // Language detection is local.
+    expect(remote.requests).toHaveLength(4); // Language detection is local.
     await assistant.getByLabel('Target language').click();
     await user.getByRole('option', { name: 'Français', exact: true }).click();
     await assistant.getByRole('button', { name: 'Translate to Français', exact: true }).click();
     await expect(assistant.getByText('Réunion vendredi à 14 heures.', { exact: true })).toBeVisible();
-    expect(remote.requests[2].body.messages[0].content).toContain('into fr');
+    expect(remote.requests[4].body.messages[0].content).toContain('into fr');
 
     await user.getByRole('button', { name: 'Back to list', exact: true }).click();
     await user.getByTestId('email-row').filter({ hasText: 'AI meeting notes' }).click();
@@ -137,7 +149,7 @@ test('models can be configured and used for summaries and translation of owned m
     const long = await user.request.post('/api/me/ai/assist', { headers: userHeaders, data: { model_id: model.id, email_id: longId, language: 'en', task: 'translate' } });
     expect(long.status()).toBe(400);
     expect(await long.text()).toContain('too long');
-    expect(remote.requests).toHaveLength(3);
+    expect(remote.requests).toHaveLength(5);
 
     // Provider failures are actionable, without forwarding the provider's secret-bearing body.
     remote.fail();
@@ -191,6 +203,13 @@ test('provider adapters use native endpoints and authentication', async ({ page 
       }
       expect(recorded.headers.cookie).toBeUndefined();
       if (provider === 'openai') {
+        // Unsaved settings are tested with the saved key, but never send it to a new address.
+        const draft = await page.request.post('/api/models/test', { headers: auth, data: { ...model, id: model.id } });
+        expect(draft.ok(), await draft.text()).toBe(true);
+        expect(remote.requests.at(-1)!.headers.authorization).toBe('Bearer adapter-key');
+        const moved = await page.request.post('/api/models/test', { headers: auth, data: { ...model, id: model.id, base_url: `${remote.url}/another-provider` } });
+        expect(moved.status()).toBe(400);
+        expect(await moved.text()).toContain('API key is required');
         const changed = await page.request.put(`/api/models/${model.id}`, { headers: auth, data: { ...model, base_url: `${remote.url}/another-provider` } });
         expect(changed.status()).toBe(400);
         expect(await changed.text()).toContain('API key is required');

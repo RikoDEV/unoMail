@@ -2226,5 +2226,7 @@
   "The certificate expires in {{count}} days._few": "Certifikát vyprší za {{count}} dny.",
   "The certificate expires in {{count}} days._many": "Certifikát vyprší za {{count}} dne.",
   "The certificate expires in {{count}} days._other": "Certifikát vyprší za {{count}} dní.",
-  "TLS certificate": "Certifikát TLS"
+  "TLS certificate": "Certifikát TLS",
+  "Save anyway": "Přesto uložit",
+  "Saving tests the connection first.": "Uložení nejprve otestuje připojení."
 }

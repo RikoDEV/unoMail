@@ -2136,5 +2136,7 @@
   "unknown": "unbekannt",
   "The certificate expires in {{count}} days._one": "Das Zertifikat läuft in {{count}} Tag ab.",
   "The certificate expires in {{count}} days._other": "Das Zertifikat läuft in {{count}} Tagen ab.",
-  "TLS certificate": "TLS-Zertifikat"
+  "TLS certificate": "TLS-Zertifikat",
+  "Save anyway": "Trotzdem speichern",
+  "Saving tests the connection first.": "Beim Speichern wird zuerst die Verbindung getestet."
 }

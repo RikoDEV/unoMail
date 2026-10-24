@@ -2226,5 +2226,7 @@
   "The certificate expires in {{count}} days._few": "Certyfikat wygasa za {{count}} dni.",
   "The certificate expires in {{count}} days._many": "Certyfikat wygasa za {{count}} dni.",
   "The certificate expires in {{count}} days._other": "Certyfikat wygasa za {{count}} dnia.",
-  "TLS certificate": "Certyfikat TLS"
+  "TLS certificate": "Certyfikat TLS",
+  "Save anyway": "Zapisz mimo to",
+  "Saving tests the connection first.": "Zapisanie najpierw sprawdzi połączenie."
 }

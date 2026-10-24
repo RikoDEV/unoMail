@@ -2181,5 +2181,7 @@
   "The certificate expires in {{count}} days._one": "Le certificat expire dans {{count}} jour.",
   "The certificate expires in {{count}} days._many": "Le certificat expire dans {{count}} jours.",
   "The certificate expires in {{count}} days._other": "Le certificat expire dans {{count}} jours.",
-  "TLS certificate": "Certificat TLS"
+  "TLS certificate": "Certificat TLS",
+  "Save anyway": "Enregistrer quand même",
+  "Saving tests the connection first.": "L'enregistrement teste d'abord la connexion."
 }
