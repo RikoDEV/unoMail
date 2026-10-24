@@ -42,6 +42,14 @@ test.describe('small screens', () => {
     await row.click();
     await expect(page.getByRole('heading', { name: 'Read me on the bus' })).toBeVisible();
     await expect(row).toBeHidden();
+
+    // Reply, Reply all and Forward stay in one row, which scrolls sideways rather than wrapping.
+    const actions = page.getByTestId('reply-actions');
+    const tops = await actions.locator(':scope > *').evaluateAll((items) => items.filter((item) => item.getBoundingClientRect().width > 0).map((item) => Math.round(item.getBoundingClientRect().top)));
+    expect(tops.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(tops).size).toBe(1);
+    expect(await actions.evaluate((row) => getComputedStyle(row).overflowX)).toBe('auto');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 
   test('the calendar and the administration fold their menus away', async ({ page }) => {

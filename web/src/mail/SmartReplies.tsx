@@ -1,15 +1,16 @@
 import AutoAwesome from '@mui/icons-material/AutoAwesome';
-import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, ListSubheader, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { errorText, post } from '../lib/api';
 import { currentLanguage, LANGUAGES, t } from '../i18n';
 import { usePrefs } from '../lib/prefs';
+import { SplitButton } from '../ui/splitButton';
 import { useAiModel } from './AiAssist';
 
 interface Suggestion { label: string; text: string }
 
-/** The model is shared with the summary/translation tools above this message. */
-export function SmartReplies({ emailId, onChoose }: { emailId: string; onChoose: (text: string, replyAll: boolean) => void }) {
+/** Reply suggestions for one message: state shared by the button beside Reply and the suggestions above it. */
+export function useSmartReplies(emailId: string, allowed: boolean) {
   const { model } = useAiModel();
   const prefs = usePrefs();
   const [language, setLanguage] = useState('auto');
@@ -22,8 +23,6 @@ export function SmartReplies({ emailId, onChoose }: { emailId: string; onChoose:
   latestKey.current = key;
   const generation = useRef(0);
   useEffect(() => () => { generation.current += 1; }, []);
-  const busy = busyKey === key;
-  const result = state?.key === key ? state.replies : null;
 
   async function suggest() {
     if (!model) return;
@@ -40,35 +39,65 @@ export function SmartReplies({ emailId, onChoose }: { emailId: string; onChoose:
       if (generation.current === version) setBusyKey('');
     }
   }
-  if (!model || prefs.smart_reply === false) return null;
+  return {
+    available: allowed && Boolean(model) && prefs.smart_reply !== false,
+    language, replyAll, setReplyAll,
+    busy: busyKey === key,
+    result: state?.key === key ? state.replies : null,
+    error: error?.key === key ? error.text : '',
+    suggest,
+    chooseLanguage: (code: string) => { generation.current += 1; setBusyKey(''); setLanguage(code); },
+    dismissError: () => setError(null),
+    hide: () => setState(null),
+  };
+}
+
+export type SmartRepliesState = ReturnType<typeof useSmartReplies>;
+
+/** "Suggest replies" in the row of Reply / Reply all / Forward, with the reply language in its menu. */
+export function SmartReplyButton({ replies }: { replies: SmartRepliesState }) {
+  if (!replies.available) return null;
   return (
-    <Box component="section" aria-label={t('Smart replies')} sx={{ mt: 2, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Button size="small" startIcon={busy ? <CircularProgress size={16} /> : <AutoAwesome />} disabled={busy} onClick={() => void suggest()}>{result ? t('Suggest again') : t('Suggest replies')}</Button>
-        <TextField select size="small" label={t('Reply language')} value={language} disabled={busy} onChange={(e) => { generation.current += 1; setBusyKey(''); setLanguage(e.target.value); }} sx={{ minWidth: 190 }}>
-          <MenuItem value="auto">{t('Same language as message')}</MenuItem>
-          {LANGUAGES.map((l) => <MenuItem key={l.code} value={l.code}>{l.name}{l.code === currentLanguage() ? ` · ${t('Interface language')}` : ''}</MenuItem>)}
-        </TextField>
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>{model.name}</Typography>
-      </Stack>
-      {error?.key === key && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError(null)}>{error.text}</Alert>}
-      <Box aria-live="polite" aria-busy={busy}>
-        {result && result.length > 0 && <>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 1 }}>
-            {result.map((reply) => <Tooltip key={reply.label} title={reply.text} describeChild>
-              <Button variant="outlined" size="small" onClick={() => onChoose(reply.text, replyAll)} sx={{ textTransform: 'none', borderRadius: 1, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{reply.label}</Button>
-            </Tooltip>)}
-          </Stack>
-          <Stack direction="row" useFlexGap spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-            <FormControlLabel control={<Checkbox size="small" checked={replyAll} onChange={(e) => setReplyAll(e.target.checked)} />} label={t('Reply all')} />
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Choose a suggestion to open an editable reply draft.')}</Typography>
-            <Button size="small" onClick={() => setState(null)}>{t('Hide')}</Button>
-          </Stack>
-        </>}
-        {result && result.length === 0 && <Typography
-          variant="body2"
-          sx={{ color: 'text.secondary', mt: 1 }}>{t('No reply suggestions for this message.')}</Typography>}
-      </Box>
+    <SplitButton
+      startIcon={replies.busy ? <CircularProgress size={16} /> : <AutoAwesome />}
+      disabled={replies.busy}
+      onClick={() => void replies.suggest()}
+      menuLabel={t('Reply language')}
+      menu={(close) => [
+        <ListSubheader key="heading">{t('Reply language')}</ListSubheader>,
+        <MenuItem key="auto" selected={replies.language === 'auto'} onClick={() => { replies.chooseLanguage('auto'); close(); }}>{t('Same language as message')}</MenuItem>,
+        ...LANGUAGES.map((l) => (
+          <MenuItem key={l.code} selected={replies.language === l.code} onClick={() => { replies.chooseLanguage(l.code); close(); }}>
+            {l.name}{l.code === currentLanguage() ? ` · ${t('Interface language')}` : ''}
+          </MenuItem>
+        )),
+      ]}
+    >
+      {replies.result ? t('Suggest again') : t('Suggest replies')}
+    </SplitButton>
+  );
+}
+
+/** The suggestions asked for, as chips above the reply buttons; nothing until requested. */
+export function SmartReplySuggestions({ replies, onChoose }: { replies: SmartRepliesState; onChoose: (text: string, replyAll: boolean) => void }) {
+  if (!replies.available) return null;
+  const { result } = replies;
+  return (
+    <Box component="section" aria-label={t('Smart replies')} aria-live="polite" aria-busy={replies.busy}>
+      {replies.error && <Alert severity="error" sx={{ mt: 2 }} onClose={replies.dismissError}>{replies.error}</Alert>}
+      {result && result.length > 0 && (
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', mt: 2 }}>
+          <AutoAwesome color="primary" sx={{ fontSize: 18 }} aria-hidden />
+          {result.map((reply) => (
+            <Tooltip key={reply.label} title={reply.text} describeChild>
+              <Button variant="outlined" size="small" onClick={() => onChoose(reply.text, replies.replyAll)} sx={{ textTransform: 'none', borderRadius: 4, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{reply.label}</Button>
+            </Tooltip>
+          ))}
+          <FormControlLabel sx={{ ml: 0.5 }} control={<Checkbox size="small" checked={replies.replyAll} onChange={(e) => replies.setReplyAll(e.target.checked)} />} label={t('Reply all')} />
+          <Button size="small" onClick={replies.hide}>{t('Hide')}</Button>
+        </Stack>
+      )}
+      {result && result.length === 0 && <Typography variant="body2" sx={{ color: 'text.secondary', mt: 2 }}>{t('No reply suggestions for this message.')}</Typography>}
     </Box>
   );
 }

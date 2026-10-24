@@ -2228,5 +2228,6 @@
   "The certificate expires in {{count}} days._other": "Certifikát vyprší za {{count}} dní.",
   "TLS certificate": "Certifikát TLS",
   "Save anyway": "Přesto uložit",
+  "AI options": "Možnosti AI",
   "Connection test failed: {{reason}}": "Test připojení selhal: {{reason}}"
 }

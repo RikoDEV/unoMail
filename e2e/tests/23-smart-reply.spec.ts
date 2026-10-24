@@ -69,10 +69,11 @@ test('smart replies use owned context and open editable, safe, auto-saved replie
     await user.getByTestId('email-row').filter({ hasText: 'Smart reply meeting' }).click();
     const message = user.getByTestId('message').filter({ hasText: 'Meeting Organizer' });
     await message.locator('[data-collapsible]').click();
+    // Suggest replies sits beside Reply; the suggestions appear above those buttons once asked for.
     const smart = message.getByRole('region', { name: 'Smart replies', exact: true });
-    await expect(smart.getByRole('button', { name: 'Suggest replies', exact: true })).toBeVisible();
+    await expect(message.getByRole('button', { name: 'Suggest replies', exact: true })).toBeVisible();
     expect(requests).toHaveLength(0); // Reading mail makes no provider request.
-    await smart.getByRole('button', { name: 'Suggest replies', exact: true }).click();
+    await message.getByRole('button', { name: 'Suggest replies', exact: true }).click();
     await expect(smart.getByRole('button', { name: 'Accept the invitation', exact: true })).toBeVisible();
     expect(requests).toHaveLength(1);
     const content = requests[0].messages[1].content as string;
@@ -80,9 +81,9 @@ test('smart replies use owned context and open editable, safe, auto-saved replie
     expect(content).toContain('Can you attend Friday at 14:00?');
     for (const secret of ['PRIVATE-ADMIN-CONTENT', 'UNRELATED-SECRET', 'FUTURE-SECRET']) expect(content).not.toContain(secret);
     expect(requests[0].messages[0].content).toContain('in the language of the latest email');
-    await smart.getByLabel('Reply language', { exact: true }).click();
-    await user.getByRole('option', { name: 'Polski', exact: true }).click();
-    await smart.getByRole('button', { name: 'Suggest replies', exact: true }).click();
+    await message.getByRole('button', { name: 'Reply language', exact: true }).click();
+    await user.getByRole('menuitem', { name: 'Polski', exact: true }).click();
+    await message.getByRole('button', { name: 'Suggest replies', exact: true }).click();
     await expect(smart.getByRole('button', { name: 'Accept the invitation', exact: true })).toBeVisible();
     expect(requests[1].messages[0].content).toContain('in pl');
 
@@ -113,7 +114,7 @@ test('smart replies use owned context and open editable, safe, auto-saved replie
     await composer.getByRole('button', { name: 'Discard draft', exact: true }).click();
     await user.reload();
     await message.locator('[data-collapsible]').click();
-    await smart.getByRole('button', { name: 'Suggest replies', exact: true }).click();
+    await message.getByRole('button', { name: 'Suggest replies', exact: true }).click();
     await expect(smart.getByRole('button', { name: 'Quote safely', exact: true })).toBeVisible();
     await smart.getByLabel('Reply all', { exact: true }).check();
     await smart.getByRole('button', { name: 'Quote safely', exact: true }).click();
@@ -132,13 +133,13 @@ test('smart replies use owned context and open editable, safe, auto-saved replie
     expect(submissions).toHaveLength(0);
 
     mode = 'empty';
-    await smart.getByRole('button', { name: 'Suggest again', exact: true }).click();
+    await message.getByRole('button', { name: 'Suggest again', exact: true }).click();
     await expect(smart.getByText('No reply suggestions for this message.')).toBeVisible();
     mode = 'invalid';
-    await smart.getByRole('button', { name: 'Suggest again', exact: true }).click();
+    await message.getByRole('button', { name: 'Suggest again', exact: true }).click();
     await expect(smart.getByRole('alert')).toContainText('invalid reply suggestions');
     mode = 'error';
-    await smart.getByRole('button', { name: 'Suggest again', exact: true }).click();
+    await message.getByRole('button', { name: 'Suggest again', exact: true }).click();
     await expect(smart.getByRole('alert')).toContainText('HTTP 401');
     await expect(smart).not.toContainText('PRIVATE-PROVIDER-KEY');
     const encrypted = await importMail(user, 'From: encrypted@remote.test\r\nSubject: Encrypted\r\n\r\n-----BEGIN PGP MESSAGE-----\r\nciphertext\r\n-----END PGP MESSAGE-----');

@@ -26,9 +26,9 @@ import { updatePrefs, usePrefs } from '../lib/prefs';
 import { imageProxyUrl } from './extra';
 import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel } from './jmapClient';
 import { SmimeBadges } from './Smime';
-import { AiAssist, AiModelsProvider } from './AiAssist';
+import { AiAssistButtons, AiAssistResults, AiModelsProvider, useAiAssist } from './AiAssist';
 import { SummaryCards } from './SummaryCards';
-import { SmartReplies } from './SmartReplies';
+import { SmartReplyButton, SmartReplySuggestions, useSmartReplies } from './SmartReplies';
 import { snoozePresets } from './timePresets';
 import { adaptForDark, type Rgb } from './darkColors';
 
@@ -378,6 +378,9 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const avatarInfo = useAvatarInfo(accountId, email);
   const phone = useMediaQuery(useTheme().breakpoints.down('sm'));
+  const ai = useAiAssist(email);
+  // Suggestions only for mail someone else sent, and only where the content can be read.
+  const replies = useSmartReplies(email.id, !encrypted && !email.smime?.encrypted && !email.keywords.$draft && Boolean(email.from?.some((sender) => sender.email.toLowerCase() !== ownEmail.toLowerCase())));
   // An open message's sender (picture, name, address) is for reading and hovering, not a switch.
   const keepOpen = (event: { stopPropagation: () => void }) => {
     if (expanded) event.stopPropagation();
@@ -406,7 +409,8 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
         </Box>
         {/* Clicks inside these tools (and their dialogs) must not toggle the message. */}
         {expanded && (
-          <Box onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0 }}>
+          <Box onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            {!encrypted && !email.smime?.encrypted && <AiAssistButtons ai={ai} compact={phone} />}
             <UnsubscribeButton email={email} />
           </Box>
         )}
@@ -435,7 +439,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
             sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>{t('Received via {{address}}', { address })}</Typography>)}
           <SmimeBadges status={email.smime} />
           {!encrypted && !email.smime?.encrypted && <SummaryCards key={`cards-${email.id}`} emailId={email.id} />}
-          {!encrypted && !email.smime?.encrypted && <AiAssist key={email.id} email={email} />}
+          {!encrypted && !email.smime?.encrypted && <AiAssistResults ai={ai} />}
           <MessageBody email={email} accountId={accountId} ownEmail={ownEmail} />
           {invite && <Invitation key={invite.blobId} name={invite.name ?? 'invite.ics'} url={downloadUrl(accountId, invite.blobId, invite.name ?? 'invite.ics')} />}
           {files.length > 0 && (
@@ -450,8 +454,9 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
               ))}
             </Stack>
           )}
-          {!encrypted && !email.smime?.encrypted && !email.keywords.$draft && email.from?.some((sender) => sender.email.toLowerCase() !== ownEmail.toLowerCase()) && <SmartReplies key={`replies-${email.id}`} emailId={email.id} onChoose={(text, replyAll) => onAction(replyAll ? 'replyAll' : 'reply', email, text)} />}
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', mt: 2 }}>
+          <SmartReplySuggestions replies={replies} onChoose={(text, replyAll) => onAction(replyAll ? 'replyAll' : 'reply', email, text)} />
+          {/* On a phone the actions stay in one row that scrolls sideways instead of stacking up. */}
+          <Stack direction="row" spacing={1} useFlexGap data-testid="reply-actions" sx={{ flexWrap: { xs: 'nowrap', sm: 'wrap' }, overflowX: { xs: 'auto', sm: 'visible' }, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' }, mt: 2, pb: { xs: 0.5, sm: 0 }, '& > *': { flexShrink: 0 } }}>
             <Button variant="outlined" startIcon={<Reply />} onClick={() => onAction('reply', email)}>
               {t('Reply')}
             </Button>
@@ -461,6 +466,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
             <Button variant="outlined" startIcon={<Forward />} onClick={() => onAction('forward', email)}>
               {t('Forward')}
             </Button>
+            <SmartReplyButton replies={replies} />
             {preview && <AttachmentPreview file={preview} onClose={() => setPreview(null)} />}
             {plugins.messageActions.map((action) => (
               <Button key={action.id} onClick={() => action.onClick(pluginMessage(email, emailHtml(email, accountId)))}>

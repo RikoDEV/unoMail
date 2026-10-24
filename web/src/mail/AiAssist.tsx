@@ -1,8 +1,9 @@
 import AutoAwesome from '@mui/icons-material/AutoAwesome';
 import Translate from '@mui/icons-material/Translate';
-import { Alert, Box, Button, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, IconButton, ListSubheader, MenuItem, Stack, TextField, Tooltip, Typography } from '@mui/material';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { errorText, get, post } from '../lib/api';
+import { SplitButton } from '../ui/splitButton';
 import { currentLanguage, t } from '../i18n';
 import type { EmailFull } from './jmapClient';
 import { canTranslateLocally, localTranslationSupported, translateLocally } from './localTranslator';
@@ -34,7 +35,8 @@ const LANGUAGES = [
 ];
 type Task = 'summary' | 'translate';
 
-export function AiAssist({ email }: { email: EmailFull }) {
+/** AI summary and translation of one message: state shared by the header buttons and the result shown above the body. */
+export function useAiAssist(email: EmailFull) {
   const { models, model, select } = useAiModel();
   const [foreignLanguage, setForeignLanguage] = useState(false);
   const [source, setSource] = useState<string | null>(null);
@@ -76,36 +78,79 @@ export function AiAssist({ email }: { email: EmailFull }) {
       if (generation.current === version) setBusy(null);
     }
   }
-  if (models.length === 0) return local && foreignLanguage && source ? <LocalTranslation email={email} source={source} /> : null;
+  return {
+    email, models, modelId, foreignLanguage, source, local, language, busy, error, results,
+    chooseModel: (id: string) => { select(id); reset(); },
+    chooseLanguage: (code: string) => { setLanguage(code); reset(); },
+    request,
+    dismissError: () => setError(''),
+    hide: (task: Task) => setResults((old) => ({ ...old, [task]: undefined })),
+  };
+}
+
+export type AiAssistState = ReturnType<typeof useAiAssist>;
+
+const languageName = (code: string) => LANGUAGES.find(([c]) => c === code)?.[1] ?? code;
+
+/** Summarize and Translate, beside Unsubscribe in the message header; icons only on a phone. */
+export function AiAssistButtons({ ai, compact }: { ai: AiAssistState; compact: boolean }) {
+  if (ai.models.length === 0) return null;
+  const busy = Boolean(ai.busy);
+  const translateLabel = t('Translate to {{language}}', { language: languageName(ai.language) });
+  const icon = (task: Task, symbol: ReactNode) => (ai.busy === task ? <CircularProgress size={compact ? 18 : 16} /> : symbol);
+  // The model and target language are the options of the last action, as one split button.
+  const options = (close: () => void) => [
+    ...(ai.models.length > 1 ? [
+      <ListSubheader key="model">{t('AI model')}</ListSubheader>,
+      ...ai.models.map((model) => <MenuItem key={model.id} selected={model.id === ai.modelId} onClick={() => { ai.chooseModel(model.id); close(); }}>{model.name}</MenuItem>),
+    ] : []),
+    ...(ai.foreignLanguage ? [
+      <ListSubheader key="language">{t('Target language')}</ListSubheader>,
+      ...LANGUAGES.map(([code, name]) => <MenuItem key={code} selected={code === ai.language} onClick={() => { ai.chooseLanguage(code); close(); }}>{name}</MenuItem>),
+    ] : []),
+  ];
+  const withOptions = ai.models.length > 1 || ai.foreignLanguage;
+  const action = (task: Task, label: string, symbol: ReactNode, last: boolean) => {
+    if (last && withOptions) {
+      return (
+        <SplitButton variant="text" size="small" disabled={busy} onClick={() => void ai.request(task)} menuLabel={t('AI options')} menu={options}
+          {...(compact ? { 'aria-label': label } : { startIcon: icon(task, symbol) })}>
+          {compact ? icon(task, symbol) : label}
+        </SplitButton>
+      );
+    }
+    return compact ? (
+      <Tooltip title={label}><span><IconButton size="small" aria-label={label} disabled={busy} onClick={() => void ai.request(task)}>{icon(task, symbol)}</IconButton></span></Tooltip>
+    ) : (
+      <Button size="small" startIcon={icon(task, symbol)} disabled={busy} onClick={() => void ai.request(task)} sx={{ flexShrink: 0 }}>{label}</Button>
+    );
+  };
   return (
-    <Box component="section" aria-label={t('AI assistance')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
-        <AutoAwesome color="action" fontSize="small" />
-        <TextField select size="small" label={t('AI model')} value={modelId} disabled={Boolean(busy)} onChange={(e) => { select(e.target.value); reset(); }} sx={{ minWidth: 140 }}>
-          {models.map((model) => <MenuItem key={model.id} value={model.id}>{model.name}</MenuItem>)}
-        </TextField>
-        {foreignLanguage && <TextField select size="small" label={t('Target language')} value={language} disabled={Boolean(busy)} onChange={(e) => { setLanguage(e.target.value); reset(); }} sx={{ minWidth: 140 }}>
-          {LANGUAGES.map(([code, name]) => <MenuItem key={code} value={code}>{name}</MenuItem>)}
-        </TextField>}
-        <Button size="small" startIcon={busy === 'summary' ? <CircularProgress size={16} /> : <AutoAwesome />} disabled={Boolean(busy)} onClick={() => void request('summary')}>{t('Summarize')}</Button>
-        {foreignLanguage && <Button size="small" startIcon={busy === 'translate' ? <CircularProgress size={16} /> : <Translate />} disabled={Boolean(busy)} onClick={() => void request('translate')}>{t('Translate to {{language}}', { language: LANGUAGES.find(([code]) => code === language)?.[1] ?? language })}</Button>}
-      </Stack>
-      <Typography
-        variant="caption"
-        sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>{foreignLanguage ? t('Request a summary or translation using the selected model.') : t('Request a summary using the selected model.')}</Typography>
-      {error && <Alert severity="error" sx={{ mt: 1 }} onClose={() => setError('')}>{error}</Alert>}
-      <Box aria-live="polite" aria-busy={Boolean(busy)}>
-        {(['summary', 'translate'] as const).map((task) => results[task] && (
-          <Box key={task} sx={{ mt: 1.5, borderTop: 1, borderColor: 'divider', pt: 1 }}>
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-              <Typography variant="subtitle2" component="h3" sx={{ flex: 1 }}>{task === 'summary' ? t('Summary') : t('Translation')}</Typography>
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>{results[task]!.model}</Typography>
-              <Button size="small" onClick={() => setResults((old) => ({ ...old, [task]: undefined }))}>{t('Hide')}</Button>
-            </Stack>
-            <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', mt: 0.5 }}>{results[task]!.text}</Typography>
-          </Box>
-        ))}
-      </Box>
+    <Stack direction="row" role="group" aria-label={t('AI assistance')} sx={{ alignItems: 'center', flexShrink: 0, gap: 0.5 }}>
+      {action('summary', t('Summarize'), <AutoAwesome />, !ai.foreignLanguage)}
+      {ai.foreignLanguage && action('translate', translateLabel, <Translate />, true)}
+    </Stack>
+  );
+}
+
+/** The summary or translation asked for, above the message; nothing until one is requested. */
+export function AiAssistResults({ ai }: { ai: AiAssistState }) {
+  if (ai.models.length === 0) return ai.local && ai.foreignLanguage && ai.source ? <LocalTranslation email={ai.email} source={ai.source} /> : null;
+  const shown = (['summary', 'translate'] as const).filter((task) => ai.results[task]);
+  return (
+    <Box aria-live="polite" aria-busy={Boolean(ai.busy)}>
+      {ai.error && <Alert severity="error" sx={{ my: 1 }} onClose={ai.dismissError}>{ai.error}</Alert>}
+      {shown.map((task) => (
+        <Box key={task} component="section" aria-label={task === 'summary' ? t('Summary') : t('Translation')} sx={{ my: 1, pl: 1.5, borderLeft: 3, borderColor: 'primary.main' }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            {task === 'summary' ? <AutoAwesome color="primary" sx={{ fontSize: 16 }} /> : <Translate color="primary" sx={{ fontSize: 16 }} />}
+            <Typography variant="subtitle2" component="h3" sx={{ flex: 1 }}>{task === 'summary' ? t('Summary') : t('Translation')}</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{ai.results[task]!.model}</Typography>
+            <Button size="small" onClick={() => ai.hide(task)}>{t('Hide')}</Button>
+          </Stack>
+          <Typography variant="body2" dir="auto" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{ai.results[task]!.text}</Typography>
+        </Box>
+      ))}
     </Box>
   );
 }

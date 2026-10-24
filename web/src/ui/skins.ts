@@ -377,8 +377,17 @@ function components(theme: Theme, { radius, compact, expressive }: { radius: num
           minHeight: 44,
           marginBlock: 1,
           ...shapeMotion,
-          '&.Mui-selected, &.Mui-selected:hover': { backgroundColor: m3.tertiaryContainer, color: m3.onTertiaryContainer, borderRadius: corner(CORNER.large) },
+          // Concentric with the menu: its large corner less the 4dp list padding.
+          '&.Mui-selected, &.Mui-selected:hover': { backgroundColor: m3.tertiaryContainer, color: m3.onTertiaryContainer, borderRadius: corner(CORNER.medium) },
           '& + .MuiDivider-root': { marginBlock: 4 },
+        },
+      },
+    },
+    // Headings inside menus share the menu's surface (they stay visible while a long list scrolls).
+    MuiListSubheader: {
+      styleOverrides: {
+        root: {
+          '.MuiMenu-list &': { backgroundColor: m3.surfaceContainer, borderRadius: corner(CORNER.medium), lineHeight: '36px', paddingInline: 12 },
         },
       },
     },

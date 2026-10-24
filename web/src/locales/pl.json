@@ -2228,5 +2228,6 @@
   "The certificate expires in {{count}} days._other": "Certyfikat wygasa za {{count}} dnia.",
   "TLS certificate": "Certyfikat TLS",
   "Save anyway": "Zapisz mimo to",
+  "AI options": "Opcje AI",
   "Connection test failed: {{reason}}": "Test połączenia nie powiódł się: {{reason}}"
 }

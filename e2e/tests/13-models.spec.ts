@@ -120,13 +120,14 @@ test('models can be configured and used for summaries and translation of owned m
     const emailId = await importMail(user, 'AI meeting notes', 'Meeting Friday at 14:00. Please bring the report.');
     await user.reload();
     await user.getByTestId('email-row').filter({ hasText: 'AI meeting notes' }).click();
-    const assistant = user.getByRole('region', { name: 'AI assistance', exact: true });
+    // Summarize and Translate sit in the message header; results appear above the message only when asked for.
+    const assistant = user.getByRole('group', { name: 'AI assistance', exact: true });
     await expect(assistant).toBeVisible();
     expect(remote.requests).toHaveLength(3); // Opening mail never sends it to a provider.
     await assistant.getByRole('button', { name: 'Summarize', exact: true }).click();
-    await expect(assistant.getByText('Meeting on Friday at 14:00. Bring the report.', { exact: true })).toBeVisible();
+    await expect(user.getByRole('region', { name: 'Summary', exact: true })).toContainText('Meeting on Friday at 14:00. Bring the report.');
     await expect(assistant.getByRole('button', { name: /^Translate to / })).toHaveCount(0);
-    await expect(assistant.getByLabel('Target language')).toHaveCount(0);
+    await expect(assistant.getByRole('button', { name: 'AI options', exact: true })).toHaveCount(0); // One model and no translation: nothing to choose.
     expect(remote.requests[3].headers.authorization).toBe('Bearer secret-provider-key');
     expect(remote.requests[3].body.messages[1].content).toContain('Meeting Friday at 14:00');
     await importMail(user, 'Notes de réunion', 'Bonjour, notre réunion aura lieu vendredi à quatorze heures. Merci de préparer le rapport et de confirmer votre présence.');
@@ -134,10 +135,10 @@ test('models can be configured and used for summaries and translation of owned m
     await user.getByTestId('email-row').filter({ hasText: 'Notes de réunion' }).click();
     await expect(assistant.getByRole('button', { name: 'Translate to English', exact: true })).toBeVisible();
     expect(remote.requests).toHaveLength(4); // Language detection is local.
-    await assistant.getByLabel('Target language').click();
-    await user.getByRole('option', { name: 'Français', exact: true }).click();
+    await assistant.getByRole('button', { name: 'AI options', exact: true }).click();
+    await user.getByRole('menuitem', { name: 'Français', exact: true }).click();
     await assistant.getByRole('button', { name: 'Translate to Français', exact: true }).click();
-    await expect(assistant.getByText('Réunion vendredi à 14 heures.', { exact: true })).toBeVisible();
+    await expect(user.getByRole('region', { name: 'Translation', exact: true })).toContainText('Réunion vendredi à 14 heures.');
     expect(remote.requests[4].body.messages[0].content).toContain('into fr');
 
     await user.getByRole('button', { name: 'Back to list', exact: true }).click();
@@ -158,15 +159,16 @@ test('models can be configured and used for summaries and translation of owned m
     // Provider failures are actionable, without forwarding the provider's secret-bearing body.
     remote.fail();
     await assistant.getByRole('button', { name: 'Summarize', exact: true }).click();
-    await expect(assistant.getByRole('alert')).toContainText('HTTP 401');
-    await expect(assistant).not.toContainText('DO-NOT-LEAK');
+    const failure = user.getByRole('alert').filter({ hasText: 'HTTP 401' });
+    await expect(failure).toBeVisible();
+    await expect(failure).not.toContainText('DO-NOT-LEAK');
 
     const disabled = await page.request.put(`/api/models/${model.id}`, { headers: adminHeaders, data: { ...model, name: 'Mail helper', enabled: false } });
     expect(disabled.ok()).toBe(true);
     expect((await (await user.request.get('/api/me/ai/models')).json()).some((m: { id: string }) => m.id === model.id)).toBe(false);
     expect((await user.request.post('/api/me/ai/assist', { headers: userHeaders, data: { model_id: model.id, email_id: emailId, language: 'en', task: 'summary' } })).status()).toBe(400);
     await user.reload();
-    await expect(user.getByRole('region', { name: 'AI assistance', exact: true })).toHaveCount(0);
+    await expect(user.getByRole('group', { name: 'AI assistance', exact: true })).toHaveCount(0);
     await page.reload();
     await page.getByRole('button', { name: 'Delete Mail helper', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
