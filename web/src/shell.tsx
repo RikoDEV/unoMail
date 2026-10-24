@@ -18,7 +18,7 @@ import { pendingCount } from './mail/outbox';
 
 import { chosenLanguage, LANGUAGES, setLanguage, t } from './i18n';
 import { updatePrefs } from './prefs';
-import { SWIPE } from './swipe';
+import { ABOVE_SWIPE, SWIPE } from './swipe';
 /** Account menu shown in the top-right corner of every page. */
 /** A round picture for an account: its first letter, in a colour of its own. */
 function AccountAvatar({ email, size }: { email: string; size: number }) {
@@ -303,7 +303,7 @@ export function SideNavPage({ title, navLabel, heading, placement, items, linkCo
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopBar
         title={title}
-        leading={compact && <Tooltip title={t('Menu')}><IconButton aria-label={navLabel} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton></Tooltip>}
+        leading={compact && <Tooltip title={t('Menu')}><IconButton sx={ABOVE_SWIPE} aria-label={navLabel} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton></Tooltip>}
       />
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {compact ? (

@@ -11,7 +11,7 @@ import {
   Box, Button, Checkbox, SwipeableDrawer, Fab, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Select, Snackbar, Stack, ToggleButton, ToggleButtonGroup, Typography,
   useMediaQuery, useTheme,
 } from '@mui/material';
-import { SWIPE } from '../swipe';
+import { ABOVE_SWIPE, SWIPE } from '../swipe';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { del, get, postRaw, errorText } from '../api';
@@ -437,7 +437,7 @@ export default function CalendarPage() {
         title={t('Calendar')}
         leading={
           compact ? (
-            <IconButton aria-label={t('Calendars')} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton>
+            <IconButton sx={ABOVE_SWIPE} aria-label={t('Calendars')} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton>
           ) : (
             <IconButton aria-label={t('Back to mail')} onClick={() => navigate('/mail')}><ArrowBack /></IconButton>
           )

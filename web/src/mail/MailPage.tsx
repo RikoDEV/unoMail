@@ -6,7 +6,7 @@ import {
   Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, LinearProgress, List,
   Menu, MenuItem, Paper, Snackbar, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { SWIPE } from '../swipe';
+import { ABOVE_SWIPE, SWIPE } from '../swipe';
 import { Subscriptions } from './Subscriptions';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -863,7 +863,7 @@ export default function MailPage() {
         onHome={() => setSearch('')}
         leading={
           compact ? (
-            <IconButton aria-label={t('Toggle sidebar')} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton>
+            <IconButton sx={ABOVE_SWIPE} aria-label={t('Toggle sidebar')} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton>
           ) : (
             <IconButton aria-label={t('Toggle sidebar')} aria-expanded={sidebar} onClick={() => setSidebar((s) => !s)}><MenuIcon /></IconButton>
           )
