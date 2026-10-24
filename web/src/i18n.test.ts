@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { t } from './i18n';
 import { SERVER_TEXTS } from './admin/serverTexts';
+import { SERVER_ERRORS } from './lib/serverErrors';
 import en from './locales/en.json';
 import cs from './locales/cs.json';
 import de from './locales/de.json';
@@ -25,7 +26,7 @@ function sources(dir: string): string[] {
 
 /** Every literal key passed to t() in the web client, and the texts the server sends. */
 function usedKeys(): Set<string> {
-  const keys = new Set<string>(SERVER_TEXTS);
+  const keys = new Set<string>([...SERVER_TEXTS, ...SERVER_ERRORS]);
   for (const file of sources(join(__dirname))) {
     const code = readFileSync(file, 'utf8');
     for (const match of code.matchAll(/\bt\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g)) {

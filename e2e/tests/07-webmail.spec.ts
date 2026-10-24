@@ -247,7 +247,7 @@ test.describe('web mail extras', () => {
     const share = page.getByRole('dialog');
     await share.getByLabel('Share with').fill('nobody@elsewhere.test');
     await share.getByRole('button', { name: 'Share', exact: true }).click();
-    await expect(share.getByRole('alert')).toContainText('unknown user');
+    await expect(share.getByRole('alert')).toContainText('Unknown user');
     await share.getByLabel('Share with').fill(ALICE);
     await share.getByRole('button', { name: 'Share', exact: true }).click();
     await expect(share.getByRole('table', { name: 'Shared with' }).getByRole('row', { name: new RegExp(ALICE) })).toBeVisible();

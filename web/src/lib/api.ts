@@ -1,6 +1,8 @@
-
-import { t, uiLocale } from '../i18n';// HTTP client for the management API and JMAP. Authentication is an HttpOnly session cookie;
+// HTTP client for the management API and JMAP. Authentication is an HttpOnly session cookie;
 // every state-changing request additionally carries the per-session CSRF token.
+
+import { t, uiLocale } from '../i18n';
+import { presentServerMessage } from './serverErrors';
 
 export interface Account {
   id: number;
@@ -44,7 +46,8 @@ async function request(method: string, path: string, body?: BodyInit, contentTyp
     try {
       const data = await response.json();
       code = data?.error?.code ?? code;
-      message = data?.error?.message ?? data?.detail ?? message;
+      const sent = data?.error?.message ?? data?.detail;
+      if (typeof sent === 'string' && sent) message = presentServerMessage(sent);
     } catch {
       // Non-JSON error body; keep the generic message.
     }
