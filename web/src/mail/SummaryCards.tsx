@@ -106,10 +106,16 @@ function CardFrame({ card, Icon, label, title, status, subtitle, actions, childr
 }
 
 function PurchaseCard({ card, p, onDismiss }: { card: Card; p: Purchase; onDismiss: (id: number, dismissed: boolean) => void }) {
+  // One parcel: its tracking button sits with the card's other actions. Several: each keeps its own.
+  const single = p.shipments.length === 1 ? p.shipments[0] : null;
+  const track = (url: string) => <Button size="small" {...external} href={url}>{t('Track package')}</Button>;
   return (
     <CardFrame card={card} onDismiss={onDismiss} Icon={Inventory2} label={t('Purchase from {{merchant}}', { merchant: p.merchant })}
       title={p.merchant} status={STATUSES[p.status] ?? p.status} subtitle={`${t('Order {{number}}', { number: p.order_number })}${p.total ? ` · ${moneyLabel(p.total)}` : ''}`}
-      actions={p.order_url && <Button size="small" {...external} href={p.order_url}>{t('View order')}</Button>}>
+      actions={<>
+        {p.order_url && <Button size="small" {...external} href={p.order_url}>{t('View order')}</Button>}
+        {single?.tracking_url && track(single.tracking_url)}
+      </>}>
       {p.items.length > 0 && <Typography variant="body2" sx={{ mt: 1, overflowWrap: 'anywhere' }}>{p.items.join(' · ')}</Typography>}
       {p.shipments.map((shipment, index) => (
         <Box key={shipment.tracking_number ?? shipment.tracking_url ?? index} sx={{ mt: 1, pt: 1, borderTop: 1, borderColor: 'divider' }}>
@@ -118,7 +124,7 @@ function PurchaseCard({ card, p, onDismiss }: { card: Card; p: Purchase; onDismi
             {t('Estimated delivery')}: {shipment.delivery_from ? dateLabel(shipment.delivery_from) : dateLabel(shipment.delivery_until!)}{shipment.delivery_from && shipment.delivery_until && shipment.delivery_from !== shipment.delivery_until ? ` – ${dateLabel(shipment.delivery_until)}` : ''}
           </Typography>}
           {shipment.tracking_number && <Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{t('Tracking number')}: {shipment.tracking_number}</Typography>}
-          {shipment.tracking_url && <Box><Button size="small" {...external} href={shipment.tracking_url}>{t('Track package')}</Button></Box>}
+          {!single && shipment.tracking_url && <Box>{track(shipment.tracking_url)}</Box>}
         </Box>
       ))}
     </CardFrame>
