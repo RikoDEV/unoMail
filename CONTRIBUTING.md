@@ -15,7 +15,7 @@ Thanks for your interest! Bug reports, fixes and improvements are welcome.
 - **Web client** (`web/`): Node 24 and pnpm. `pnpm install`, then `pnpm run typecheck`,
   `pnpm test` and `pnpm run build`.
 - **End-to-end tests** (`e2e/`): Playwright, run with `pnpm test` after building the web client.
-- **Dependency audit:** `./audit.sh`.
+- **Dependency audit:** `./audit.sh`. See [Development](docs/development.md) for CI and dependency updates.
 
 ## Pull requests
 
