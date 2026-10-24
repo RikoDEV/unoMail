@@ -174,7 +174,7 @@ export function MailSidebar({
           </List>
         </>
       )}
-      <Typography variant="overline" sx={{ color: 'text.secondary', px: 2, mt: 1, display: 'block' }}>
+      <Typography variant="overline" sx={{ color: 'text.secondary', px: 2, mt: 1, mb: 0.5, display: 'block' }}>
         {t('Labels')}
       </Typography>
       <List dense disablePadding aria-label={t('Labels')}>
