@@ -420,13 +420,7 @@ function components(theme: Theme, { radius, compact, expressive }: { radius: num
     MuiTableCell: { styleOverrides: { root: { borderColor: m3.outlineVariant }, head: { fontWeight: 600, color: m3.onSurfaceVariant } } },
     MuiDivider: { styleOverrides: { root: { borderColor: m3.outlineVariant } } },
     MuiBadge: { styleOverrides: { badge: { fontWeight: 600 } } },
-    // Expressive progress indicators: a rounded bar on a rounded track, a gap between them.
-    MuiLinearProgress: {
-      styleOverrides: {
-        root: { height: 4, borderRadius: 2, backgroundColor: m3.secondaryContainer },
-        bar: { borderRadius: 2 },
-      },
-    },
+    // Linear progress is drawn by progress.tsx; the circular one gets rounded ends.
     MuiCircularProgress: { styleOverrides: { circle: { strokeLinecap: 'round' } } },
     MuiSlider: expressive
       ? {

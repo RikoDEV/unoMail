@@ -1,11 +1,12 @@
 // DMARC report dashboard, server diagnostics and the interactive API reference.
 
+import { LinearProgress } from '../progress';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import Refresh from '@mui/icons-material/Refresh';
 import UploadFile from '@mui/icons-material/UploadFile';
 import {
   Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogContent, DialogTitle,
-  LinearProgress, MenuItem, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
+  MenuItem, Stack, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
 } from '@mui/material';
 import { useState } from 'react';
 import { formatTime, get, postRaw } from '../api';

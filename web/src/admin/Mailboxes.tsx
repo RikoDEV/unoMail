@@ -1,8 +1,9 @@
+import { LinearProgress } from '../progress';
 import Add from '@mui/icons-material/Add';
 import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import MoveToInbox from '@mui/icons-material/MoveToInbox';
-import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, LinearProgress, MenuItem, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, IconButton, MenuItem, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { del, formatBytes, get, patch, post } from '../api';
 import { useAuth } from '../app';

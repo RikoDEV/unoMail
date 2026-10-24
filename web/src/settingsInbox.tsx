@@ -1,8 +1,9 @@
 // Inbox settings: categories, the personal spam filter and blocked senders.
 
+import { LinearProgress } from './progress';
 import {
   Alert, Box, Button, Card, CardContent, Chip, FormControlLabel, Stack, Switch,
-  LinearProgress, TextField, Typography,
+  TextField, Typography,
 } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 import { blockSender, CATEGORIES, categoryLearning, type CategoryLearning, listBlockedSenders, resetCategoryLearning, resetSpamFilter, spamFilterState, type SpamFilterState, unblockSender } from './mail/extra';

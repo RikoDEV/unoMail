@@ -1,4 +1,5 @@
-import { Alert, Box, Button, Chip, LinearProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, type TableProps, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { LinearProgress } from '../progress';
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Snackbar, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TablePagination, type TableProps, TableRow, TableSortLabel, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Children, cloneElement, Fragment, isValidElement, type ReactElement, type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
 import { t, uiLocale } from '../i18n';

@@ -1,9 +1,10 @@
+import { LinearProgress } from '../progress';
 import Edit from '@mui/icons-material/Edit';
 import MenuIcon from '@mui/icons-material/Menu';
 import Search from '@mui/icons-material/Search';
 import Tune from '@mui/icons-material/Tune';
 import {
-  Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, LinearProgress, List,
+  Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitle, SwipeableDrawer, Fab, IconButton, InputBase, List,
   Menu, MenuItem, Paper, Snackbar, TextField, Tooltip, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { ABOVE_SWIPE, SWIPE } from '../swipe';

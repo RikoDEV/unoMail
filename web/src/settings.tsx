@@ -1,3 +1,4 @@
+import { LinearProgress } from './progress';
 import AlternateEmail from '@mui/icons-material/AlternateEmail';
 import Article from '@mui/icons-material/Article';
 import Badge from '@mui/icons-material/Badge';
@@ -7,7 +8,7 @@ import FilterAlt from '@mui/icons-material/FilterAlt';
 import Inbox from '@mui/icons-material/Inbox';
 import Security from '@mui/icons-material/Security';
 import Tune from '@mui/icons-material/Tune';
-import { Alert, Box, Button, Card, CardContent, FormControlLabel, LinearProgress, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, FormControlLabel, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import { useEffect, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiltersCard } from './settingsFilters';

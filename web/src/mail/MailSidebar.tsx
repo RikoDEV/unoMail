@@ -1,5 +1,6 @@
 // The folder list beside the messages: compose, folders, shared folders, labels and links.
 
+import { LinearProgress } from '../progress';
 import Add from '@mui/icons-material/Add';
 import AllInbox from '@mui/icons-material/AllInbox';
 import Archive from '@mui/icons-material/Archive';
@@ -20,7 +21,7 @@ import ScheduleSend from '@mui/icons-material/ScheduleSend';
 import SendIcon from '@mui/icons-material/Send';
 import Snooze from '@mui/icons-material/Snooze';
 import UnsubscribeIcon from '@mui/icons-material/Unsubscribe';
-import { Badge, Box, Fab, IconButton, LinearProgress, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
+import { Badge, Box, Fab, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
 import type { ReactElement } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { formatBytes } from '../api';
