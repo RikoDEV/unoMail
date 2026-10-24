@@ -117,7 +117,9 @@ function LocalTranslation({ email, source }: { email: EmailFull; source: string 
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
   const generation = useRef(0);
-  useEffect(() => () => { generation.current += 1; }, []);
+  const running = useRef<AbortController | null>(null);
+  const cancel = () => { generation.current += 1; running.current?.abort(); running.current = null; };
+  useEffect(() => cancel, []);
   useEffect(() => {
     let active = true;
     setAvailable(false);
@@ -126,20 +128,23 @@ function LocalTranslation({ email, source }: { email: EmailFull; source: string 
   }, [source, language]);
 
   async function translate() {
-    const version = ++generation.current;
+    cancel();
+    const version = generation.current;
+    const controller = new AbortController();
+    running.current = controller;
     setBusy(true);
     setError('');
     setProgress(null);
     try {
-      const { messageText } = await import('./messageLanguage');
-      const text = await translateLocally(`${email.subject ?? ''}
+      const text = import('./messageLanguage').then(({ messageText }) => `${email.subject ?? ''}
 
-${messageText(email)}`.trim(), source, language, (share) => { if (generation.current === version) setProgress(share); });
-      if (generation.current === version) setResult(text);
+${messageText(email)}`.trim());
+      const translated = await translateLocally(text, source, language, controller.signal, (share) => { if (generation.current === version) setProgress(share); });
+      if (generation.current === version) setResult(translated);
     } catch (err) {
       if (generation.current === version) setError(errorText(err, t('Translation on this device failed')));
     } finally {
-      if (generation.current === version) { setBusy(false); setProgress(null); }
+      if (generation.current === version) { setBusy(false); setProgress(null); running.current = null; }
     }
   }
   const languageName = LANGUAGES.find(([code]) => code === language)?.[1] ?? language;
@@ -147,7 +152,7 @@ ${messageText(email)}`.trim(), source, language, (share) => { if (generation.cur
     <Box component="section" aria-label={t('Translation')} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, my: 1.5 }}>
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap alignItems="center">
         <Translate color="action" fontSize="small" />
-        <TextField select size="small" label={t('Target language')} value={language} disabled={busy} onChange={(e) => { generation.current += 1; setLanguage(e.target.value); setResult(''); setError(''); setBusy(false); }} sx={{ minWidth: 140 }}>
+        <TextField select size="small" label={t('Target language')} value={language} disabled={busy} onChange={(e) => { cancel(); setLanguage(e.target.value); setResult(''); setError(''); setBusy(false); }} sx={{ minWidth: 140 }}>
           {LANGUAGES.map(([code, name]) => <MenuItem key={code} value={code}>{name}</MenuItem>)}
         </TextField>
         <Button size="small" startIcon={busy ? <CircularProgress size={16} /> : <Translate />} disabled={busy || !available} onClick={() => void translate()}>{t('Translate to {{language}}', { language: languageName })}</Button>
