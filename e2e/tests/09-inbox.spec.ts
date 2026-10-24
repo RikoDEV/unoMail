@@ -80,10 +80,15 @@ test.describe('inbox tools', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Save label' }).click();
     await expect(chip.locator('..')).toHaveCSS('background-color', 'rgb(24, 128, 56)');
 
-    // Keyboard: x selects the highlighted conversation.
+    // Keyboard: no row is picked out until the keys are used; x selects the highlighted conversation.
+    await expect(page.locator('[data-testid="email-row"].Mui-selected')).toHaveCount(0);
     await page.keyboard.press('x');
     await expect(page.getByRole('toolbar', { name: 'Actions for the selection' })).toContainText('1 selected');
     await page.keyboard.press('x');
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toContainText('Next conversation');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toHaveCount(0);
 
     // Select everything and archive it.
     await page.getByLabel('Select all conversations').check();

@@ -32,6 +32,7 @@ import { ShareDialog } from './ShareDialog';
 import { AdvancedSearch } from './AdvancedSearch';
 import { type BulkAction, ListToolbar } from './ListToolbar';
 import { LabelDialog } from './LabelDialog';
+import { ShortcutsDialog } from './ShortcutsDialog';
 import { CategoryTabs } from './CategoryTabs';
 import { type LabelDialogState, MailSidebar } from './MailSidebar';
 import { EmailRow, type RowHandlers } from './EmailRow';
@@ -98,6 +99,7 @@ export default function MailPage() {
   const [labels, setLabels] = useState<string[]>([]);
   const [labelDetails, setLabelDetails] = useState<LabelDetail[]>([]);
   const [labelDialog, setLabelDialog] = useState<LabelDialogState | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const prefs = usePrefs();
   // Inbox categories (General, Offers, ...) and their unread counts.
   const [category, setCategoryTab] = useState<CategoryName>('general');
@@ -682,6 +684,9 @@ export default function MailPage() {
         case '/':
           searchInput.current?.focus();
           break;
+        case '?':
+          setShortcutsOpen(true);
+          break;
         default:
           return;
       }
@@ -1107,6 +1112,7 @@ export default function MailPage() {
         onPick={(pick, target) => void rowMenuPick(pick, target)}
         onClose={() => setRowMenu(null)}
       />
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       {labelDialog && (
         <LabelDialog
           value={labelDialog}

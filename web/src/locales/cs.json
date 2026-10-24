@@ -2108,5 +2108,12 @@
   "Secret key": "Tajný klíč",
   "Enter the site key and the secret key. Until then no captcha is asked for.": "Zadejte klíč webu a tajný klíč. Do té doby se captcha nevyžaduje.",
   "Allow forwarding by mail filters": "Povolit přeposílání filtry pošty",
-  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filtry mohou přesměrovat poštu na adresy mimo tento server. Uživatel dostane upozornění, kdykoli filtr začne přeposílat poštu na nové místo"
+  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filtry mohou přesměrovat poštu na adresy mimo tento server. Uživatel dostane upozornění, kdykoli filtr začne přeposílat poštu na nové místo",
+  "Keyboard shortcuts": "Klávesové zkratky",
+  "Next conversation": "Další konverzace",
+  "Previous conversation": "Předchozí konverzace",
+  "Open conversation": "Otevřít konverzaci",
+  "Back to the list": "Zpět na seznam",
+  "Select or deselect conversation": "Vybrat nebo zrušit výběr konverzace",
+  "Show keyboard shortcuts": "Zobrazit klávesové zkratky"
 }

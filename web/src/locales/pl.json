@@ -2108,5 +2108,12 @@
   "Secret key": "Klucz tajny",
   "Enter the site key and the secret key. Until then no captcha is asked for.": "Wpisz klucz witryny i klucz tajny. Do tego czasu captcha nie jest wymagana.",
   "Allow forwarding by mail filters": "Zezwalaj na przekazywanie przez filtry poczty",
-  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filtry mogą przekierowywać pocztę na adresy spoza tego serwera. Użytkownik dostaje powiadomienie, gdy filtr zacznie przekazywać pocztę w nowe miejsce"
+  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filtry mogą przekierowywać pocztę na adresy spoza tego serwera. Użytkownik dostaje powiadomienie, gdy filtr zacznie przekazywać pocztę w nowe miejsce",
+  "Keyboard shortcuts": "Skróty klawiszowe",
+  "Next conversation": "Następna rozmowa",
+  "Previous conversation": "Poprzednia rozmowa",
+  "Open conversation": "Otwórz rozmowę",
+  "Back to the list": "Powrót do listy",
+  "Select or deselect conversation": "Zaznacz lub odznacz rozmowę",
+  "Show keyboard shortcuts": "Pokaż skróty klawiszowe"
 }

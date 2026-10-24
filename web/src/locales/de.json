@@ -2022,5 +2022,12 @@
   "Secret key": "Geheimer Schlüssel",
   "Enter the site key and the secret key. Until then no captcha is asked for.": "Geben Sie den Websiteschlüssel und den geheimen Schlüssel ein. Bis dahin wird kein Captcha verlangt.",
   "Allow forwarding by mail filters": "Weiterleitung durch Mailfilter erlauben",
-  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filter dürfen E-Mails an Adressen außerhalb dieses Servers umleiten. Benutzer werden benachrichtigt, sobald ein Filter an ein neues Ziel weiterleitet"
+  "Filters may redirect mail to addresses outside this server. Users are told whenever a filter starts forwarding somewhere new": "Filter dürfen E-Mails an Adressen außerhalb dieses Servers umleiten. Benutzer werden benachrichtigt, sobald ein Filter an ein neues Ziel weiterleitet",
+  "Keyboard shortcuts": "Tastenkürzel",
+  "Next conversation": "Nächste Unterhaltung",
+  "Previous conversation": "Vorherige Unterhaltung",
+  "Open conversation": "Unterhaltung öffnen",
+  "Back to the list": "Zurück zur Liste",
+  "Select or deselect conversation": "Unterhaltung auswählen oder abwählen",
+  "Show keyboard shortcuts": "Tastenkürzel anzeigen"
 }
