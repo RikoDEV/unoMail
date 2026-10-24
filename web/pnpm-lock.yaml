@@ -46,7 +46,7 @@ importers:
         version: 6.4.299
       postal-mime:
         specifier: ^4.0.7
-        version: 4.0.7
+        version: 4.0.8
       qrcode:
         specifier: 1.5.4
         version: 1.5.4
@@ -1120,8 +1120,8 @@ packages:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
 
-  postal-mime@4.0.7:
-    resolution: {integrity: sha512-6iBsSWv8bd9ss+lp9hzKITHj+h7HyDSum7MC8P6XH5/HEuEzZxk8+6u/MpfX7mLstMw6dQ9MvPEMP/SOcGQnFg==}
+  postal-mime@4.0.8:
+    resolution: {integrity: sha512-nnAgc4a9hn7zYuQmX4C7LU+fN47kR5S8cE8zvB/vZ2NimNDbaj+ISZJ9qe3CKIfn2uOTwwz4nQeIyljvdFNgOA==}
     engines: {node: '>=20'}
 
   postcss@8.5.29:
@@ -2237,7 +2237,7 @@ snapshots:
 
   pngjs@5.0.0: {}
 
-  postal-mime@4.0.7: {}
+  postal-mime@4.0.8: {}
 
   postcss@8.5.29:
     dependencies:
