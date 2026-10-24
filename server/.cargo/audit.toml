@@ -20,4 +20,12 @@ ignore = [
     "RUSTSEC-2026-0367",
     "RUSTSEC-2026-0368",
     "RUSTSEC-2026-0369",
+    # RUSTSEC-2026-0387 (crypto-bigint < 0.7.6: operations meant to be constant-time are not).
+    # crypto-bigint 0.5 comes in only through pgp 0.21 (elliptic-curve 0.13, cx448); no pgp release
+    # on the fixed version exists yet. The server holds no OpenPGP private keys: openpgp.rs parses
+    # public keys and encrypts incoming mail to them. The only secret in that path is the one-time
+    # ECDH key of each encryption, and leaking it would reveal only that one message, to a sender
+    # who wrote it. Decryption and signing happen in the browser (openpgp.js). Remove once pgp
+    # moves to crypto-bigint 0.7.
+    "RUSTSEC-2026-0387",
 ]
