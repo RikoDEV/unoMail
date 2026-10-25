@@ -162,17 +162,14 @@ pub async fn karma_list(State(state): State<AppState>, session: Session) -> Json
     session.require_super()?;
     let rows: Vec<(String, i64, i64, i64, i64, i64, String)> =
         sqlx::query_as("SELECT ip, score, good, bad, hits, last_seen, last_event FROM ip_karma ORDER BY last_seen DESC LIMIT 1000").fetch_all(&state.db).await?;
-    let out = join_all(rows.into_iter().map(|(ip, score, good, bad, hits, last_seen, last_event)| {
-        let state = state.clone();
-        async move {
-            let described = match ip.parse::<IpAddr>() {
-                Ok(address) => activity::describe(&state, address).await,
-                Err(_) => Described::default(),
-            };
+    // Up to a thousand addresses: answer from the lookup cache rather than wait on DNS for each.
+    let out = rows
+        .into_iter()
+        .map(|(ip, score, good, bad, hits, last_seen, last_event)| {
+            let described = ip.parse::<IpAddr>().map(|address| activity::describe_cached(&state, address)).unwrap_or_default();
             json!({ "ip": ip, "score": score, "good": good, "bad": bad, "hits": hits, "last_seen": last_seen, "last_event": last_event, "rdns": described.rdns, "country": described.country })
-        }
-    }))
-    .await;
+        })
+        .collect();
     Ok(Json(out))
 }
 

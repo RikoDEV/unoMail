@@ -8,7 +8,7 @@ import Edit from '@mui/icons-material/Edit';
 import LockOpen from '@mui/icons-material/LockOpen';
 import VerifiedUser from '@mui/icons-material/VerifiedUser';
 import {
-  Alert, Button, Chip, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
+  Alert, Box, Button, Chip, CircularProgress, Dialog, DialogContent, DialogTitle, IconButton, MenuItem, Stack, Tab, TableBody, TableCell, TableHead, TableRow, Tabs, TextField,
   Tooltip, Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -63,6 +63,15 @@ interface RuleForm {
 }
 
 const lastSeen = (seconds: number | null) => (seconds ? formatTime(seconds) : t('Never'));
+
+/** Shown in place of a table until its rows have arrived. */
+function Loading() {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+      <CircularProgress size={28} aria-label={t('Loading')} />
+    </Box>
+  );
+}
 
 function ListChip({ list }: { list: Rule['list'] }) {
   return list === 'blacklist' ? <Chip size="small" color="error" icon={<Block />} label={t('Blacklist')} /> : <Chip size="small" color="success" icon={<VerifiedUser />} label={t('Whitelist')} />;
@@ -146,7 +155,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
           </Button>
         )}
       </Stack>
-      {rules.length === 0 ? (
+      {!data ? (!error && <Loading />) : rules.length === 0 ? (
         <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
           {source === 'user' ? t('No rules yet.') : t('Nothing has been blocked automatically.')}
         </Typography>
@@ -231,7 +240,7 @@ function KarmaTable() {
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('How remote servers have behaved. Accepted mail raises the score; rejected mail, failed logins, unknown recipients and protocol errors lower it. At a score of -20 an address is blacklisted for a day. Records idle for a month are forgotten.')}
       </Typography>
-      {records.length === 0 ? (
+      {!data ? (!error && <Loading />) : records.length === 0 ? (
         <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
           {t('No remote server has been scored yet.')}
         </Typography>
@@ -301,7 +310,7 @@ function LoginBlocksTable() {
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1 }}>
         {t('Networks and accounts refused for too many failed logins, on every protocol. The limits are set in the server settings. Unblocking also forgets the failures and earlier lockouts.')}
       </Typography>
-      {blocks.length === 0 ? (
+      {!data ? (!error && <Loading />) : blocks.length === 0 ? (
         <Typography sx={{ color: 'text.secondary', py: 4, textAlign: 'center' }}>
           {t('Nothing is rate limited.')}
         </Typography>

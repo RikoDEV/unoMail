@@ -3,7 +3,7 @@
 //! is kept in memory and saved as a snapshot so that it survives a restart.
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     net::IpAddr,
     time::Duration,
 };
@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    app::App,
+    app::{App, AppState},
     security::reputation::{dnsbl_query, is_private},
     util::{now, sanitize_line},
 };
@@ -20,7 +20,7 @@ use crate::{
 const MAX_IPS: usize = 5000;
 const MAX_REPLIES: usize = 500;
 const LOOKUP_TTL_SECS: i64 = 6 * 3600;
-const FAILED_LOOKUP_TTL_SECS: i64 = 300;
+const FAILED_LOOKUP_TTL_SECS: i64 = 1800;
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
@@ -51,6 +51,8 @@ struct Inner {
     ips: HashMap<IpAddr, Seen>,
     replies: VecDeque<Reply>,
     lookups: HashMap<IpAddr, (Described, i64)>,
+    /// Addresses being looked up in the background, so that each is looked up once.
+    pending: HashSet<IpAddr>,
 }
 
 #[derive(Default)]
@@ -126,11 +128,8 @@ pub async fn describe(app: &App, ip: IpAddr) -> Described {
     if is_private(ip) {
         return Described::default();
     }
-    if let Some((known, at)) = app.activity.0.lock().lookups.get(&ip)
-        // An answer is kept for hours; a failed lookup is retried after a few minutes.
-        && now() - at < if known.rdns.is_some() || known.country.is_some() { LOOKUP_TTL_SECS } else { FAILED_LOOKUP_TTL_SECS }
-    {
-        return known.clone();
+    if let Some(known) = cached(app, ip) {
+        return known;
     }
     let Some(resolver) = &app.authenticator else { return Described::default() };
     let zone = if ip.is_ipv4() { "origin.asn.cymru.com" } else { "origin6.asn.cymru.com" };
@@ -149,6 +148,33 @@ pub async fn describe(app: &App, ip: IpAddr) -> Described {
     }
     inner.lookups.insert(ip, (described.clone(), now()));
     described
+}
+
+/// A fresh cached answer for `ip`, if there is one.
+fn cached(app: &App, ip: IpAddr) -> Option<Described> {
+    let inner = app.activity.0.lock();
+    let (known, at) = inner.lookups.get(&ip)?;
+    // An answer is kept for hours; a failed lookup is retried after half an hour.
+    (now() - at < if known.rdns.is_some() || known.country.is_some() { LOOKUP_TTL_SECS } else { FAILED_LOOKUP_TTL_SECS }).then(|| known.clone())
+}
+
+/// Like [`describe`], but never waits on DNS: answers from the cache and looks up the rest in
+/// the background, for lists of many addresses that would otherwise wait on the slowest one.
+pub fn describe_cached(app: &AppState, ip: IpAddr) -> Described {
+    if is_private(ip) {
+        return Described::default();
+    }
+    if let Some(known) = cached(app, ip) {
+        return known;
+    }
+    if app.activity.0.lock().pending.insert(ip) {
+        let app = app.clone();
+        tokio::spawn(async move {
+            describe(&app, ip).await;
+            app.activity.0.lock().pending.remove(&ip);
+        });
+    }
+    Described::default()
 }
 
 #[cfg(test)]
