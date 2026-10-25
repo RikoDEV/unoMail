@@ -204,3 +204,76 @@ async fn calendars_and_events_round_trip() {
     assert_eq!(destroyed[0][1]["destroyed"], json!([id]));
     assert_eq!(destroyed[1][1]["destroyed"], json!([work]));
 }
+
+#[tokio::test]
+async fn blobs_are_built_read_and_looked_up() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+    let api = Api::logged_in(&env, "bob@example.org").await;
+    let account = api.jmap_account().await;
+    let session = api.get("/jmap/session").await.body;
+    assert_eq!(session["accounts"][&account]["accountCapabilities"]["urn:ietf:params:jmap:blob"]["supportedTypeNames"], json!(["Email", "Mailbox", "Thread"]));
+
+    let message = "From: ann@example.org\r\nTo: bob@example.org\r\nSubject: Built\r\n\r\nHello there\r\n";
+    let (head, body) = message.split_at(20);
+    let got = api
+        .jmap(json!([
+            ["Blob/upload", { "accountId": account, "create": {
+                "a": { "data": [{ "data:asText": head }, { "data:asBase64": base64_encode(body) }], "type": "message/rfc822" },
+                "b": { "data": [{ "blobId": "#a", "offset": 6, "length": 15 }] },
+                "bad": { "data": [{ "blobId": "#a", "offset": 1000, "length": 1 }] },
+            } }, "0"],
+            ["Blob/get", { "accountId": account, "ids": ["#b", "nope"], "properties": ["data:asText", "digest:sha-256", "size"] }, "1"],
+            ["Mailbox/get", { "accountId": account, "ids": null }, "2"],
+        ]))
+        .await;
+    assert_eq!(got[0][1]["created"]["a"]["size"], message.len());
+    assert_eq!(got[0][1]["notCreated"]["bad"]["type"], "invalidProperties");
+    let piece = &got[1][1]["list"][0];
+    assert_eq!((piece["data:asText"].as_str(), piece["size"].as_u64()), (Some("ann@example.org"), Some(15)));
+    assert!(piece["digest:sha-256"].as_str().is_some_and(|d| d.len() == 44));
+    assert_eq!(got[1][1]["notFound"], json!(["nope"]));
+
+    let inbox = got[2][1]["list"].as_array().unwrap().iter().find(|m| m["role"] == "inbox").unwrap()["id"].as_str().unwrap().to_owned();
+    let blob = got[0][1]["created"]["a"]["id"].as_str().unwrap().to_owned();
+    let imported = api.jmap(json!([["Email/import", { "accountId": account, "emails": { "e": { "blobId": blob, "mailboxIds": { &inbox: true } } } }, "0"]])).await;
+    let email = &imported[0][1]["created"]["e"];
+    let found = api.jmap(json!([["Blob/lookup", { "accountId": account, "typeNames": ["Email", "Mailbox"], "ids": [email["blobId"]] }, "0"]])).await;
+    assert_eq!(found[0][1]["list"][0]["matchedIds"]["Email"], json!([email["id"]]), "{found} {imported}");
+    assert_eq!(found[0][1]["list"][0]["matchedIds"]["Mailbox"], json!([inbox]));
+    let wrong = api.jmap(json!([["Blob/lookup", { "accountId": account, "typeNames": ["Calendar"], "ids": [] }, "0"]])).await;
+    assert_eq!(wrong[0][1]["type"], "unknownDataType");
+}
+
+fn base64_encode(data: &str) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(data)
+}
+
+#[tokio::test]
+async fn principals_list_the_domain() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.domain("other.example").await;
+    env.account("bob@example.org").await;
+    env.account("carol@example.org").await;
+    env.account("eve@other.example").await;
+    let api = Api::logged_in(&env, "bob@example.org").await;
+    let account = api.jmap_account().await;
+    let session = api.get("/jmap/session").await.body;
+    let me = session["accounts"][&account]["accountCapabilities"]["urn:ietf:params:jmap:principals"]["currentUserPrincipalId"].as_str().unwrap().to_owned();
+    let got = api
+        .jmap(json!([
+            ["Principal/query", { "accountId": account, "filter": { "text": "carol" } }, "0"],
+            ["Principal/get", { "accountId": account, "ids": null }, "1"],
+            ["ShareNotification/query", { "accountId": account }, "2"],
+        ]))
+        .await;
+    assert_eq!(got[0][1]["total"], 1);
+    let emails: Vec<&str> = got[1][1]["list"].as_array().unwrap().iter().map(|p| p["email"].as_str().unwrap()).collect();
+    assert_eq!(emails, ["bob@example.org", "carol@example.org"], "other domains stay hidden");
+    let mine = got[1][1]["list"].as_array().unwrap().iter().find(|p| p["id"] == me.as_str()).unwrap();
+    assert!(mine["accounts"][&account].get("urn:ietf:params:jmap:principals:owner").is_some());
+    assert_eq!(got[2][1]["ids"], json!([]));
+}

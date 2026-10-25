@@ -966,7 +966,8 @@ pub async fn set(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodResu
                 Ok((appended, size)) => {
                     let id = format!("m{}", appended.id);
                     ctx.created.insert(creation_id.clone(), id.clone());
-                    created.insert(creation_id.clone(), json!({ "id": id, "threadId": format!("t{}", appended.thread_id), "size": size }));
+                    let blob_id: Option<String> = sqlx::query_scalar("SELECT blob_hash FROM messages WHERE id = ?").bind(appended.id).fetch_optional(&ctx.app.db).await.ok().flatten();
+                created.insert(creation_id.clone(), json!({ "id": id, "blobId": blob_id, "threadId": format!("t{}", appended.thread_id), "size": size }));
                 }
                 Err(err) => {
                     not_created.insert(creation_id.clone(), err);
@@ -1073,7 +1074,8 @@ pub async fn import(ctx: &mut Context<'_>, args: &Map<String, Value>) -> MethodR
             Ok((appended, size)) => {
                 let id = format!("m{}", appended.id);
                 ctx.created.insert(creation_id.clone(), id.clone());
-                created.insert(creation_id.clone(), json!({ "id": id, "threadId": format!("t{}", appended.thread_id), "size": size }));
+                let blob_id: Option<String> = sqlx::query_scalar("SELECT blob_hash FROM messages WHERE id = ?").bind(appended.id).fetch_optional(&ctx.app.db).await.ok().flatten();
+                created.insert(creation_id.clone(), json!({ "id": id, "blobId": blob_id, "threadId": format!("t{}", appended.thread_id), "size": size }));
             }
             Err(err) => {
                 not_created.insert(creation_id.clone(), err);

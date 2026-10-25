@@ -105,6 +105,19 @@ async fn a_calendar_program_discovers_and_synchronises_a_calendar() {
     assert_eq!(got.text, event("one@test", "First", "20261013T100000Z", ""), "objects are kept byte for byte");
     assert_eq!(got.headers[header::ETAG].to_str().unwrap(), etag);
     assert_eq!(got.headers[header::CACHE_CONTROL], "no-store");
+    // Byte ranges (RFC 7233).
+    let part = dav.send("GET", &format!("{work}one.ics"), &[("range", "bytes=0-14")], "").await;
+    assert_eq!((part.status, part.text.as_str()), (StatusCode::PARTIAL_CONTENT, "BEGIN:VCALENDAR"));
+    assert_eq!(dav.send("GET", &format!("{work}one.ics"), &[("range", "bytes=99999-")], "").await.status, StatusCode::RANGE_NOT_SATISFIABLE);
+    // Prefer: return=minimal (RFC 8144) leaves out the missing properties; quotas (RFC 4331).
+    let minimal = dav.send("PROPFIND", &work, &[("depth", "0"), ("prefer", "return=minimal")], r#"<d:propfind xmlns:d="DAV:"><d:prop><d:displayname/><d:nonsense/><d:quota-used-bytes/></d:prop></d:propfind>"#).await;
+    assert!(minimal.text.contains("<D:quota-used-bytes>") && !minimal.text.contains("nonsense"), "{}", minimal.text);
+    assert_eq!(minimal.headers["preference-applied"], "return=minimal");
+    // Extended MKCOL (RFC 5689) makes calendars too, and nothing else.
+    let mkcol = r#"<d:mkcol xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:set><d:prop><d:resourcetype><d:collection/><c:calendar/></d:resourcetype><d:displayname>Made by MKCOL</d:displayname></d:prop></d:set></d:mkcol>"#;
+    assert_eq!(dav.send("MKCOL", &format!("{HOME}mkcol/"), &[], mkcol).await.status, StatusCode::CREATED);
+    assert_eq!(dav.send("MKCOL", &format!("{HOME}plain/"), &[], "").await.status, StatusCode::FORBIDDEN);
+    assert!(dav.send("PROPFIND", &format!("{HOME}mkcol/"), &[("depth", "0")], "").await.text.contains("Made by MKCOL"));
 
     // Updating needs the current version.
     let stale = dav.send("PUT", &format!("{work}one.ics"), &[("if-match", "\"stale\"")], &event("one@test", "Renamed", "20261013T100000Z", "")).await;

@@ -30,6 +30,7 @@ use crate::{
     error::ApiError,
 };
 
+mod blob;
 mod calendar;
 mod contacts;
 mod email;
@@ -37,6 +38,7 @@ mod mailbox;
 mod masked_email;
 mod mdn;
 pub mod objects;
+mod principals;
 mod quota;
 mod sieve;
 pub mod push;
@@ -220,6 +222,8 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
             "urn:ietf:params:jmap:websocket": { "url": ws::url(&state), "supportsPush": true },
             "urn:ietf:params:jmap:mdn": {},
             "urn:ietf:params:jmap:quota": {},
+            blob::CAPABILITY: {},
+            principals::CAPABILITY: {},
             "urn:ietf:params:jmap:sieve": {},
             "urn:ietf:params:jmap:contacts": {},
             "urn:ietf:params:jmap:calendars": {},
@@ -235,6 +239,9 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
                     crate::masked_email::CAPABILITY: {},
                     "urn:ietf:params:jmap:submission": submission_caps,
                     "urn:ietf:params:jmap:quota": {},
+                    blob::CAPABILITY: blob::capability(state.rt().max_message_size),
+                    principals::CAPABILITY: principals::capability(&user.account),
+                    principals::OWNER_CAPABILITY: principals::owner_capability(&user.account),
                     "urn:ietf:params:jmap:sieve": sieve::capability(),
                     "urn:ietf:params:jmap:contacts": { "maxAddressBooksPerCard": 1, "mayCreateAddressBook": false },
                     "urn:ietf:params:jmap:calendars": calendar_caps,
@@ -243,7 +250,7 @@ async fn session_object(State(state): State<AppState>, user: JmapUser) -> Result
         },
         "primaryAccounts": {
             crate::masked_email::CAPABILITY: id,
-            "urn:ietf:params:jmap:mail": id, "urn:ietf:params:jmap:submission": id, "urn:ietf:params:jmap:quota": id,
+            "urn:ietf:params:jmap:mail": id, "urn:ietf:params:jmap:submission": id, "urn:ietf:params:jmap:quota": id, blob::CAPABILITY: id, principals::CAPABILITY: id,
             "urn:ietf:params:jmap:sieve": id, "urn:ietf:params:jmap:contacts": id, "urn:ietf:params:jmap:calendars": id,
         },
         "username": user.account.email,
@@ -386,6 +393,13 @@ async fn dispatch(ctx: &mut Context<'_>, name: &str, args: &Map<String, Value>) 
         "Mailbox/changes" => email::changes(ctx, args, "mailbox").await,
         "Thread/changes" => email::changes(ctx, args, "thread").await,
         "Email/queryChanges" => email::query_changes(ctx, args).await,
+        "Principal/get" => principals::get(ctx, args).await,
+        "Principal/query" => principals::query(ctx, args).await,
+        "Principal/changes" => principals::changes(ctx, args).await,
+        "ShareNotification/get" | "ShareNotification/query" | "ShareNotification/changes" | "ShareNotification/set" => principals::notifications(ctx, name, args).await,
+        "Blob/upload" => blob::upload(ctx, args).await,
+        "Blob/get" => blob::get(ctx, args).await,
+        "Blob/lookup" => blob::lookup(ctx, args).await,
         "Quota/get" => quota::get(ctx, args).await,
         "Quota/changes" => quota::changes(ctx, args).await,
         "Quota/query" => quota::query(ctx, args).await,

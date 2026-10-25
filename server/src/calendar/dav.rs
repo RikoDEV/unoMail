@@ -288,6 +288,8 @@ pub(super) struct Query {
     time_range: Option<(Option<String>, Option<String>)>,
     /// Component named by the innermost `comp-filter`.
     component: Option<String>,
+    /// Children of a `resourcetype` (extended MKCOL, RFC 5689).
+    pub(super) resource_types: Vec<String>,
 }
 
 pub(super) fn parse_query(body: &str) -> Option<Query> {
@@ -303,6 +305,9 @@ pub(super) fn parse_query(body: &str) -> Option<Query> {
                 // sub-elements (<comp>, <expand>) that are not.
                 if stack.last().is_some_and(|parent| parent == "prop") && !query.props.contains(&name) {
                     query.props.push(name.clone());
+                }
+                if stack.last().is_some_and(|parent| parent == "resourcetype") {
+                    query.resource_types.push(name.clone());
                 }
                 let attribute = |key: &str| attributes.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
                 match name.as_str() {
@@ -382,6 +387,9 @@ fn property(name: &str, target: &Target<'_>, account: &Account, hrefs: &Hrefs) -
         ("calendar-color", Target::Calendar(access)) if !access.calendar.color.is_empty() => format!("<A:calendar-color>{}</A:calendar-color>", xml_escape(&access.calendar.color)),
         ("getctag", Target::Calendar(access)) => format!("<CS:getctag>{}</CS:getctag>", access.calendar.sync_token),
         ("sync-token", Target::Calendar(access)) => format!("<D:sync-token>{SYNC_PREFIX}{}</D:sync-token>", access.calendar.sync_token),
+        // RFC 4331: the account's storage, which calendars share with mail.
+        ("quota-used-bytes", Target::Home | Target::Calendar(_)) => format!("<D:quota-used-bytes>{}</D:quota-used-bytes>", account.used_bytes.max(0)),
+        ("quota-available-bytes", Target::Home | Target::Calendar(_)) if account.quota_bytes > 0 => format!("<D:quota-available-bytes>{}</D:quota-available-bytes>", (account.quota_bytes - account.used_bytes).max(0)),
         ("max-resource-size", Target::Calendar(_)) => format!("<C:max-resource-size>{}</C:max-resource-size>", ical::MAX_OBJECT_BYTES),
         ("getetag", Target::Item(_, object)) => format!("<D:getetag>{}</D:getetag>", xml_escape(&object.etag)),
         ("getcontenttype", Target::Item(_, object)) => format!("<D:getcontenttype>text/calendar; charset=utf-8; component={}</D:getcontenttype>", object.component.to_ascii_lowercase()),
@@ -625,7 +633,7 @@ async fn handle(state: &AppState, request: Request, ip: std::net::IpAddr) -> Res
     if method == Method::OPTIONS {
         return Ok((
             StatusCode::OK,
-            [("dav", "1, 3, calendar-access, addressbook"), ("allow", "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR"), ("ms-author-via", "DAV")],
+            [("dav", "1, 3, calendar-access, addressbook, extended-mkcol"), ("allow", "OPTIONS, GET, HEAD, PUT, DELETE, PROPFIND, PROPPATCH, REPORT, MKCALENDAR, MKCOL"), ("accept-ranges", "bytes"), ("ms-author-via", "DAV")],
         )
             .into_response());
     }
@@ -652,8 +660,12 @@ async fn handle(state: &AppState, request: Request, ip: std::net::IpAddr) -> Res
         ("REPORT", Resource::Calendar(slug)) => report(state, account, &hrefs, &find_calendar(slug).await?, &query()?).await,
         ("REPORT", _) => Err(precondition(StatusCode::FORBIDDEN, "D:supported-report")),
 
-        ("MKCALENDAR", Resource::Calendar(slug)) => {
+        ("MKCALENDAR" | "MKCOL", Resource::Calendar(slug)) => {
             let query = query()?;
+            // Extended MKCOL (RFC 5689) makes a calendar when the resource type says so.
+            if method.as_str() == "MKCOL" && !query.resource_types.iter().any(|t| t == "calendar") {
+                return Err(precondition(StatusCode::FORBIDDEN, "D:valid-resourcetype"));
+            }
             let name = query.texts.get("displayname").filter(|n| !n.is_empty()).cloned().unwrap_or_else(|| slug.clone());
             let color = query.texts.get("calendar-color").cloned().unwrap_or_default();
             let description = query.texts.get("calendar-description").cloned().unwrap_or_default();
@@ -716,12 +728,85 @@ async fn handle(state: &AppState, request: Request, ip: std::net::IpAddr) -> Res
 /// Entry point for everything below `/dav`.
 pub async fn serve(State(state): State<AppState>, request: Request) -> Response {
     let ip = request.extensions().get::<PeerAddr>().map_or(std::net::IpAddr::from([0, 0, 0, 0]), |peer| peer.0.ip());
+    let method = request.method().clone();
+    let (minimal, range) = preferences(request.headers());
     let mut response = match handle(&state, request, ip).await {
         Ok(response) | Err(response) => response,
     };
+    if minimal && response.status() == StatusCode::MULTI_STATUS {
+        response = without_missing(response).await;
+    }
+    if method == Method::GET && response.status() == StatusCode::OK {
+        response.headers_mut().insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+        if let Some(range) = range {
+            response = ranged(response, &range).await;
+        }
+    }
     // Calendar data is personal: never cache it in shared caches.
     response.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     response
+}
+
+/// Whether the client prefers minimal multistatus answers (RFC 8144), and the byte range it asks for.
+fn preferences(headers: &HeaderMap) -> (bool, Option<String>) {
+    let text = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let minimal = text("prefer").is_some_and(|p| p.split(',').any(|p| p.trim().eq_ignore_ascii_case("return=minimal")));
+    (minimal, text("range"))
+}
+
+/// Drops the `404 Not Found` propstats from a multistatus body.
+async fn without_missing(response: Response) -> Response {
+    let (mut parts, body) = response.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, usize::MAX).await else { return status(StatusCode::INTERNAL_SERVER_ERROR) };
+    let text = String::from_utf8_lossy(&bytes);
+    let mut out = String::with_capacity(text.len());
+    let mut rest: &str = &text;
+    while let Some(start) = rest.find("<D:propstat>") {
+        let Some(len) = rest[start..].find("</D:propstat>") else { break };
+        let end = start + len + "</D:propstat>".len();
+        out.push_str(&rest[..start]);
+        if !rest[start..end].contains("404 Not Found") {
+            out.push_str(&rest[start..end]);
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    parts.headers.remove(header::CONTENT_LENGTH);
+    parts.headers.insert(header::HeaderName::from_static("preference-applied"), HeaderValue::from_static("return=minimal"));
+    Response::from_parts(parts, Body::from(out))
+}
+
+/// Parses a single `bytes=a-b`, `bytes=a-` or `bytes=-n` range against a length.
+fn byte_range(value: &str, len: usize) -> Option<(usize, usize)> {
+    let spec = value.trim().strip_prefix("bytes=")?;
+    if spec.contains(',') || len == 0 {
+        return None;
+    }
+    let (from, to) = spec.split_once('-')?;
+    let (start, end) = match (from.trim(), to.trim()) {
+        ("", n) => (len.saturating_sub(n.parse().ok()?), len - 1),
+        (a, "") => (a.parse().ok()?, len - 1),
+        (a, b) => (a.parse().ok()?, b.parse::<usize>().ok()?.min(len - 1)),
+    };
+    (start <= end && start < len).then_some((start, end))
+}
+
+/// Serves a byte range of a successful GET (RFC 7233); several ranges get the whole body.
+async fn ranged(response: Response, range: &str) -> Response {
+    let (mut parts, body) = response.into_parts();
+    let Ok(bytes) = axum::body::to_bytes(body, usize::MAX).await else { return status(StatusCode::INTERNAL_SERVER_ERROR) };
+    parts.headers.remove(header::CONTENT_LENGTH);
+    if !range.trim().starts_with("bytes=") || range.contains(',') {
+        return Response::from_parts(parts, Body::from(bytes));
+    }
+    let Some((start, end)) = byte_range(range, bytes.len()) else {
+        return (StatusCode::RANGE_NOT_SATISFIABLE, [(header::CONTENT_RANGE, format!("bytes */{}", bytes.len()))]).into_response();
+    };
+    parts.status = StatusCode::PARTIAL_CONTENT;
+    if let Ok(value) = HeaderValue::from_str(&format!("bytes {start}-{end}/{}", bytes.len())) {
+        parts.headers.insert(header::CONTENT_RANGE, value);
+    }
+    Response::from_parts(parts, Body::from(bytes.slice(start..=end)))
 }
 
 /// `/.well-known/caldav` and `/.well-known/carddav`: tell clients where the service lives (RFC 6764).
@@ -732,6 +817,16 @@ pub async fn well_known() -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn byte_ranges_are_parsed() {
+        assert_eq!(byte_range("bytes=0-4", 10), Some((0, 4)));
+        assert_eq!(byte_range("bytes=5-", 10), Some((5, 9)));
+        assert_eq!(byte_range("bytes=-3", 10), Some((7, 9)));
+        assert_eq!(byte_range("bytes=8-99", 10), Some((8, 9)));
+        assert_eq!(byte_range("bytes=10-12", 10), None);
+        assert_eq!(byte_range("items=0-1", 10), None);
+    }
 
     #[test]
     fn xml_requests_are_read_without_trusting_them() {
