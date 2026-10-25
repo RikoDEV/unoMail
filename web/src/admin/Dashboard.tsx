@@ -94,7 +94,7 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
             <ScrollTable size="small" aria-label={t('Remote IPs')}>
               <TableHead>
                 <TableRow>
-                  <TableCell>{t('Address')}</TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>{t('Address')}</TableCell>
                   <TableCell align="right">{t('Connections')}</TableCell>
                   <TableCell>{t('Last seen')}</TableCell>
                 </TableRow>
