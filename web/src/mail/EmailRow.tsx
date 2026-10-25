@@ -156,7 +156,8 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
       {expanded ? (
         // Expanded: picture, then sender and date, subject and text, and the files.
         <>
-          <Stack direction="row" sx={{ alignItems: 'center', mt: -0.25 }}>{controls}</Stack>
+          {/* Where the list is narrow the star goes under the checkbox, leaving more room for the text. */}
+          <Stack direction={narrow ? 'column' : 'row'} sx={{ alignItems: 'center', mt: -0.25 }}>{controls}</Stack>
           <Box sx={{ pt: 0.25 }}><ListAvatar accountId={accountId} email={email} people={people} size={36} /></Box>
           <Box sx={{ flex: 1, minWidth: 0, ml: 1 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
