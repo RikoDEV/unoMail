@@ -14,7 +14,7 @@ import {
 import { ABOVE_SWIPE, SWIPE } from '../lib/swipe';
 import { Subscriptions } from './Subscriptions';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { del, get, post, errorText } from '../lib/api';
 import { useAuth } from '../app';
@@ -716,6 +716,8 @@ export default function MailPage() {
 
   function onScroll(event: React.UIEvent<HTMLDivElement>) {
     const el = event.currentTarget;
+    // Hidden behind an open message on a phone, the list can be scrolled by the browser; keep only the reader's own position.
+    if (!threadId) listOffset.current = el.scrollTop;
     if (!loading && emails.length < total && el.scrollTop + el.clientHeight > el.scrollHeight - 300) void load(emails.length);
   }
 
@@ -780,6 +782,12 @@ export default function MailPage() {
     overscan: 10,
     getItemKey: (index) => visible[index]?.id ?? index,
   });
+  // On a phone the list is hidden while a message is open, which loses its scroll position: put it back.
+  const listOffset = useRef(0);
+  useLayoutEffect(() => {
+    if (!threadId && listScroll.current && listScroll.current.scrollTop !== listOffset.current) virtualizer.scrollToOffset(listOffset.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadId]);
   // Keyboard navigation (j/k) keeps the highlighted row in view.
   useEffect(() => {
     if (!threadId && cursor < visible.length) virtualizer.scrollToIndex(cursor, { align: 'auto' });
