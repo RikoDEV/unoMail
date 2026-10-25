@@ -2321,5 +2321,13 @@
   "Send failure reports": "Enviar relatórios de falha",
   "Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.": "Relatórios sobre mensagens individuais que falharam em DMARC, DKIM ou SPF, para os domínios que os pedem (ruf, ra=). Incluem os cabeçalhos da mensagem, sem os endereços dos destinatários.",
   "Received": "Recebido",
-  "Type": "Tipo"
+  "Type": "Tipo",
+  "Ask an AI model about suspicious mail": "Consultar um modelo de IA sobre correio suspeito",
+  "Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.": "Envia o remetente, o assunto, o texto e as ligações do correio recebido duvidoso ao fornecedor do modelo escolhido. O modelo só pode somar pontos, nunca absolver uma mensagem.",
+  "Model": "Modelo",
+  "One of the models set up under Models": "Um dos modelos configurados em Modelos",
+  "Ask from score": "Consultar a partir da pontuação",
+  "Only mail the other tests already score at least this much is shown to the model": "Só o correio que os outros testes pontuam pelo menos isto é mostrado ao modelo",
+  "Points for a phishing verdict": "Pontos por um veredicto de phishing",
+  "Added when the model judges a message phishing": "Somados quando o modelo considera uma mensagem phishing"
 }

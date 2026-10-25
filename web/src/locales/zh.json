@@ -2231,5 +2231,13 @@
   "Send failure reports": "发送失败报告",
   "Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.": "向提出请求的域名发送未通过 DMARC、DKIM 或 SPF 的单封邮件报告（ruf、ra=）。报告包含去除了收件人地址的邮件头。",
   "Received": "接收时间",
-  "Type": "类型"
+  "Type": "类型",
+  "Ask an AI model about suspicious mail": "就可疑邮件询问 AI 模型",
+  "Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.": "将可疑来信的发件人、主题、正文和链接发送给所选模型的提供商。模型只能加分，绝不能为邮件开脱。",
+  "Model": "模型",
+  "One of the models set up under Models": "在“模型”中设置的模型之一",
+  "Ask from score": "询问起始分数",
+  "Only mail the other tests already score at least this much is shown to the model": "只有其他测试评分至少达到此值的邮件才会交给模型",
+  "Points for a phishing verdict": "钓鱼判定的分数",
+  "Added when the model judges a message phishing": "模型判定邮件为钓鱼时加上"
 }

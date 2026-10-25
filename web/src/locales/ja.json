@@ -2231,5 +2231,13 @@
   "Send failure reports": "失敗レポートを送信",
   "Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.": "DMARC、DKIM、SPF に失敗した個々のメッセージについてのレポートを、要求しているドメインに送信します（ruf、ra=）。受信者アドレスを除いたメッセージヘッダーが含まれます。",
   "Received": "受信日時",
-  "Type": "種類"
+  "Type": "種類",
+  "Ask an AI model about suspicious mail": "疑わしいメールを AI モデルに確認する",
+  "Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.": "疑わしい受信メールの差出人、件名、本文、リンクを選択したモデルのプロバイダーに送信します。モデルは点数を加えるだけで、メッセージを潔白とすることはありません。",
+  "Model": "モデル",
+  "One of the models set up under Models": "「モデル」で設定したモデルのいずれか",
+  "Ask from score": "確認を始めるスコア",
+  "Only mail the other tests already score at least this much is shown to the model": "他のテストのスコアがこの値以上のメールだけをモデルに見せます",
+  "Points for a phishing verdict": "フィッシング判定の点数",
+  "Added when the model judges a message phishing": "モデルがフィッシングと判定したときに加算"
 }

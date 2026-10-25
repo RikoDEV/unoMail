@@ -109,6 +109,19 @@ pub struct Runtime {
     pub penalized_countries: Vec<String>,
     #[serde(default = "origin_score")]
     pub origin_score: f64,
+    /// Ask an AI model whether suspicious incoming mail is phishing. Off by default: the
+    /// sender, subject, text and links of such mail go to the model's provider.
+    #[serde(default)]
+    pub ai_phishing_check: bool,
+    /// Id of the AI model asked.
+    #[serde(default)]
+    pub ai_phishing_model: String,
+    /// Built-in filter score from which the model is asked.
+    #[serde(default = "ai_phishing_min_score")]
+    pub ai_phishing_min_score: f64,
+    /// Points added when the model judges a message phishing.
+    #[serde(default = "ai_phishing_score")]
+    pub ai_phishing_score: f64,
 
     // Antivirus.
     #[serde(default = "yes")]
@@ -239,6 +252,14 @@ fn origin_score() -> f64 {
     2.0
 }
 
+fn ai_phishing_min_score() -> f64 {
+    1.5
+}
+
+fn ai_phishing_score() -> f64 {
+    4.0
+}
+
 fn spam_subject_prefix() -> String {
     "[SPAM]".into()
 }
@@ -342,6 +363,15 @@ impl Runtime {
         }
         if !self.origin_score.is_finite() || !(0.0..=100.0).contains(&self.origin_score) {
             return Err("the score for penalised origins must be between 0 and 100".into());
+        }
+        if !self.ai_phishing_min_score.is_finite() || !(0.0..=100.0).contains(&self.ai_phishing_min_score) {
+            return Err("the score from which the AI model is asked must be between 0 and 100".into());
+        }
+        if !self.ai_phishing_score.is_finite() || !(0.0..=20.0).contains(&self.ai_phishing_score) {
+            return Err("the points for an AI phishing verdict must be between 0 and 20".into());
+        }
+        if self.ai_phishing_model.len() > 64 || self.ai_phishing_model.chars().any(|c| !(c.is_ascii_alphanumeric() || c == '-')) {
+            return Err("choose an AI model from the list".into());
         }
         if self.spam_traps.len() > 100 || self.penalized_asns.len() > 1000 || self.penalized_countries.len() > 250 {
             return Err("too many spam traps, autonomous systems or countries".into());

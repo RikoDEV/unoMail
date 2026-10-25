@@ -38,7 +38,7 @@ impl Model {
     }
 }
 
-async fn load(state: &AppState, id: &str) -> Result<Model, ApiError> {
+async fn load(state: &crate::app::App, id: &str) -> Result<Model, ApiError> {
     if uuid::Uuid::parse_str(id).is_err() { return Err(ApiError::NotFound); }
     let value = crate::db::get_setting(&state.db, &format!("{PREFIX}{id}")).await?.ok_or(ApiError::NotFound)?;
     serde_json::from_str(&value).map_err(|e| ApiError::Internal(e.into()))
@@ -63,6 +63,16 @@ pub(crate) async fn generate(state: &AppState, account: i64, model_id: &str, ins
     admit(account)?;
     let _slot = SLOTS.try_acquire().map_err(|_| ApiError::RateLimited)?;
     let key = state.secrets.open(&model.api_key).ok_or_else(|| ApiError::bad("could not decrypt the model API key"))?;
+    complete(&model, &key, instruction, text).await
+}
+
+/// For the server's own checks on incoming mail: no user to rate-limit, and a busy model is
+/// skipped rather than waited for.
+pub(crate) async fn generate_for_server(app: &crate::app::App, model_id: &str, instruction: &str, text: &str) -> Result<String, ApiError> {
+    let model = load(app, model_id).await?;
+    if !model.enabled { return Err(ApiError::bad("this AI model is disabled")); }
+    let _slot = SLOTS.try_acquire().map_err(|_| ApiError::RateLimited)?;
+    let key = if model.api_key.is_empty() { String::new() } else { app.secrets.open(&model.api_key).ok_or_else(|| ApiError::bad("could not decrypt the model API key"))? };
     complete(&model, &key, instruction, text).await
 }
 

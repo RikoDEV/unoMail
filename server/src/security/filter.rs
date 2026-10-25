@@ -8,6 +8,9 @@
 //!   and users' "spam" / "not spam" decisions.
 //! - **Origin**: autonomous systems and countries the administrator penalises, looked up in
 //!   the DNS service of Team Cymru (`origin.asn.cymru.com`), so no database is shipped.
+//! - **Forgery**: traces that only a sender faking its message leaves: a spam verdict written
+//!   before any server could have scanned the message, a mail program whose name does not
+//!   match the message it made, and Google's notification redirect in mail not from Google.
 //! - **Spam traps**: addresses that no person uses. Whatever is sent to them teaches the
 //!   reputation that its source sends spam, and is never delivered.
 //!
@@ -33,6 +36,11 @@ const MAX_TEXT_BYTES: usize = 512 * 1024;
 const MAX_URLS: usize = 500;
 /// Verdicts needed on a key before its reputation counts.
 const MIN_SAMPLES: i64 = 5;
+/// Google's redirect for links in its own notification mail; nobody else's mail has a reason
+/// to send readers through it, so it hides where a phishing link leads.
+const GOOGLE_NOTIFICATION_REDIRECT: &str = "://notifications.googleapis.com/email/redirect";
+/// Senders whose mail may carry that redirect: Google itself, and its users forwarding its mail.
+const GOOGLE_DOMAINS: [&str; 4] = ["google.com", "googlemail.com", "gmail.com", "youtube.com"];
 const SHORTENERS: [&str; 16] = [
     "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "buff.ly", "cutt.ly", "rebrand.ly", "shorturl.at", "tiny.cc", "rb.gy", "t.ly", "v.gd", "s.id", "shorte.st",
 ];
@@ -54,7 +62,7 @@ pub struct Assessment {
 }
 
 impl Assessment {
-    fn add(&mut self, name: &'static str, score: f64) {
+    pub fn add(&mut self, name: &'static str, score: f64) {
         self.score += score;
         self.hits.push(Hit { name, score });
     }
@@ -115,8 +123,8 @@ fn text_domain(text: &str) -> Option<String> {
     (tld.len() >= 2 && tld.chars().all(|c| c.is_alphabetic())).then_some(host)
 }
 
-/// Link tests on the text of a message.
-pub fn link_tests(raw: &[u8], assessment: &mut Assessment) {
+/// Link tests on the text of a message; `sender_domain` is its verified sender domain.
+pub fn link_tests(raw: &[u8], sender_domain: Option<&str>, assessment: &mut Assessment) {
     let Some(message) = MessageParser::default().parse(raw) else { return };
     let mut text = String::new();
     for index in 0..message.text_body.len().min(10) {
@@ -136,8 +144,9 @@ pub fn link_tests(raw: &[u8], assessment: &mut Assessment) {
     html.truncate(html.char_indices().nth(MAX_TEXT_BYTES).map_or(html.len(), |(i, _)| i));
 
     let mut hosts: HashSet<String> = HashSet::new();
-    let (mut ip, mut homograph, mut userinfo, mut shortener) = (false, false, false, false);
+    let (mut ip, mut homograph, mut userinfo, mut shortener, mut google_redirect) = (false, false, false, false, false);
     let mut note = |url: &str| {
+        google_redirect |= url.to_ascii_lowercase().contains(GOOGLE_NOTIFICATION_REDIRECT);
         let Some((host, has_user)) = host_of(url) else { return };
         ip |= host.parse::<IpAddr>().is_ok();
         homograph |= (host.split('.').any(|l| l.starts_with("xn--")) || !host.is_ascii()) && mixed_script(&host);
@@ -149,8 +158,15 @@ pub fn link_tests(raw: &[u8], assessment: &mut Assessment) {
         note(found.as_str());
     }
     let mut mismatch = false;
+    let (mut dead, mut live_hosts) = (0, HashSet::new());
     for anchor in ANCHOR.captures_iter(&html).take(MAX_URLS) {
         let href = anchor[1].replace("&amp;", "&");
+        let target = href.trim();
+        if target.is_empty() || target == "#" || target.to_ascii_lowercase().starts_with("javascript:") {
+            dead += 1;
+        } else if let Some((host, _)) = host_of(target) {
+            live_hosts.insert(host);
+        }
         note(&href);
         let shown = TAG.replace_all(&anchor[2], "").replace("&nbsp;", " ");
         if let (Some((target, _)), Some(claimed)) = (host_of(&href), text_domain(&shown)) {
@@ -175,6 +191,54 @@ pub fn link_tests(raw: &[u8], assessment: &mut Assessment) {
     }
     if hosts.len() > 15 {
         assessment.add("URL_MANY_DOMAINS", 1.0);
+    }
+    // Footer links (privacy, contact, unsubscribe) that lead nowhere beside a single real
+    // destination: a page made to look like a company's mail around one link.
+    if dead >= 2 && live_hosts.len() == 1 {
+        assessment.add("URL_DEAD_LINKS", 1.5);
+    }
+    if google_redirect && !sender_domain.is_some_and(|domain| GOOGLE_DOMAINS.contains(&base_domain(&domain.to_ascii_lowercase()).as_str())) {
+        assessment.add("URL_GOOGLE_REDIRECT", 2.5);
+    }
+}
+
+// --- Forgery ---------------------------------------------------------------------------------
+
+/// Message-IDs made by Python's `email.utils.make_msgid`: `<time.pid.random@host>`.
+static PYTHON_MESSAGE_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*<?\d{10,}\.\d{1,7}\.\d{10,}@").expect("valid regex"));
+
+/// The header fields of a message as (lower-case name, unfolded value).
+fn header_fields(raw: &[u8]) -> Vec<(String, String)> {
+    let end = crate::security::authn::find_header_end(raw).min(raw.len());
+    let mut fields: Vec<(String, String)> = Vec::new();
+    for line in String::from_utf8_lossy(&raw[..end]).lines() {
+        if line.starts_with([' ', '\t']) {
+            if let Some((_, value)) = fields.last_mut() {
+                value.push(' ');
+                value.push_str(line.trim());
+            }
+        } else if let Some((name, value)) = line.split_once(':') {
+            fields.push((name.trim().to_ascii_lowercase(), value.trim().to_owned()));
+        }
+    }
+    fields
+}
+
+/// Tests for traces of a forged message, on its headers as they arrived.
+pub fn forgery_tests(raw: &[u8], assessment: &mut Assessment) {
+    let fields = header_fields(raw);
+    let has = |name: &str| fields.iter().any(|(n, _)| n == name);
+    let value = |name: &str| fields.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str());
+    // A spam verdict needs a server that scanned the message, and every server on the way adds
+    // a Received line. With none, the sender wrote the verdict itself.
+    if !has("received") && fields.iter().any(|(n, _)| n.starts_with("x-spam-")) {
+        assessment.add("FORGED_SPAM_HEADER", 2.0);
+    }
+    // Thunderbird writes UUID Message-IDs and no Outlook headers: a message that names it but
+    // has neither came from a script dressed up as a mail program.
+    let claims_thunderbird = [value("x-mailer"), value("user-agent")].into_iter().flatten().any(|v| v.to_ascii_lowercase().contains("thunderbird"));
+    if claims_thunderbird && (value("message-id").is_some_and(|id| PYTHON_MESSAGE_ID.is_match(id)) || has("x-msmail-priority") || has("x-mimeole")) {
+        assessment.add("FORGED_MAILER", 2.0);
     }
 }
 
@@ -389,7 +453,8 @@ pub async fn assess(app: &App, sender: &Sender<'_>, raw: &[u8]) -> Assessment {
     if rt.sender_reputation {
         reputation_tests(app, &mut assessment).await;
     }
-    link_tests(raw, &mut assessment);
+    link_tests(raw, sender.verified_domain, &mut assessment);
+    forgery_tests(raw, &mut assessment);
     assessment
 }
 
@@ -406,7 +471,7 @@ mod tests {
         let kind = if html { "text/html" } else { "text/plain" };
         let raw = format!("From: a@b.example\r\nTo: c@d.example\r\nSubject: x\r\nContent-Type: {kind}; charset=utf-8\r\n\r\n{body}\r\n");
         let mut assessment = Assessment::default();
-        link_tests(raw.as_bytes(), &mut assessment);
+        link_tests(raw.as_bytes(), None, &mut assessment);
         assessment.hits.iter().map(|h| h.name).collect()
     }
 
@@ -426,6 +491,53 @@ mod tests {
         assert!(assess_links(r#"<a href="https://news.mybank.example/x">www.mybank.example</a> <a href="https://x.example">Click here</a>"#, true).is_empty());
         let many: String = (0..20).map(|i| format!("https://site{i}.example/ ")).collect();
         assert_eq!(assess_links(&many, false), ["URL_MANY_DOMAINS"]);
+    }
+
+    #[test]
+    fn google_notification_redirects_count_only_outside_google() {
+        let raw = "From: a@b.example\r\nContent-Type: text/html\r\n\r\n<a href=\"https://notifications.googleapis.com/email/redirect?t=AFG8&amp;r=x\">Pay now</a>\r\n";
+        let hits = |sender: Option<&str>| {
+            let mut assessment = Assessment::default();
+            link_tests(raw.as_bytes(), sender, &mut assessment);
+            assessment.hits.iter().map(|h| h.name).collect::<Vec<_>>()
+        };
+        assert_eq!(hits(Some("drclancycavnar.com")), ["URL_GOOGLE_REDIRECT"]);
+        assert_eq!(hits(None), ["URL_GOOGLE_REDIRECT"]);
+        assert!(hits(Some("accounts.google.com")).is_empty());
+        assert!(hits(Some("gmail.com")).is_empty(), "a Gmail user forwarding a Google notification");
+        assert!(assess_links("Search: https://www.google.com/url?q=https://example.org", false).is_empty());
+    }
+
+    #[test]
+    fn dead_links_count_only_around_a_single_destination() {
+        let footer = r##"<a href="#">Privacy</a> <a href="#">Contact</a>"##;
+        assert_eq!(assess_links(&format!(r#"<a href="https://pay.evil.example/x">Pay</a> {footer}"#), true), ["URL_DEAD_LINKS"]);
+        assert_eq!(assess_links(&format!(r#"<a href="https://pay.evil.example/x">Pay</a> <a href="javascript:void(0)">Help</a> {footer}"#), true), ["URL_DEAD_LINKS"]);
+        // A real company links its footer to its own pages, and one placeholder is a slip.
+        assert!(assess_links(&format!(r#"<a href="https://shop.example/a">Buy</a> <a href="https://help.shop.example/">Help</a> {footer}"#), true).is_empty());
+        assert!(assess_links(r##"<a href="https://shop.example/a">Buy</a> <a href="#">Back to top</a>"##, true).is_empty());
+        assert!(assess_links(footer, true).is_empty(), "nothing to lure to");
+    }
+
+    fn forgeries(headers: &str) -> Vec<&'static str> {
+        let raw = format!("{headers}From: a@b.example\r\nSubject: x\r\n\r\nbody\r\n");
+        let mut assessment = Assessment::default();
+        forgery_tests(raw.as_bytes(), &mut assessment);
+        assessment.hits.iter().map(|h| h.name).collect()
+    }
+
+    #[test]
+    fn forged_verdicts_and_mail_programs_are_found() {
+        // The two phishing messages this was written for, cut down to the telling headers.
+        let phish = "Message-ID: <179266232943.13324.18280280735127330802@WIN-6U7R9EBBET1>\r\nX-MSMail-Priority: Normal\r\nX-Mailer: Mozilla Thunderbird\r\nX-Spam-Status: No, score=0.0 required=5.0\r\nX-Spam-Report: This message is not spam.\r\n";
+        assert_eq!(forgeries(phish), ["FORGED_SPAM_HEADER", "FORGED_MAILER"]);
+        // A verdict of a server on the way, and Thunderbird's own Message-IDs.
+        assert!(forgeries("Received: from relay.example by mx.example\r\nX-Spam-Status: No, score=1.0\r\n").is_empty());
+        assert!(forgeries("User-Agent: Mozilla Thunderbird\r\nMessage-ID: <6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b@example.org>\r\n").is_empty());
+        assert!(forgeries("User-Agent: Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Thunderbird/128.3.0\r\nMessage-ID: <4F2A1B3C.5060708@example.org>\r\n").is_empty());
+        // Python's Message-ID without a false claim is just a script, and fine.
+        assert!(forgeries("Message-ID: <179266232943.13324.18280280735127330802@host.example>\r\n").is_empty());
+        assert_eq!(forgeries("User-Agent: Thunderbird\r\nMessage-ID:\r\n <179266232943.13324.18280280735127330802@WIN-X>\r\n"), ["FORGED_MAILER"], "folded header");
     }
 
     #[test]

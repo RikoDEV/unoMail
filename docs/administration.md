@@ -37,8 +37,21 @@ Allowed addresses skip DNS blocklists, reputation checks and greylisting.
 
 - **Spam filter** sets Rspamd's action thresholds and rule scores. Changes apply immediately.
 - **Built-in filter** (Server settings) runs after Rspamd and records its results in
-  `X-Unomail-Filter`. It checks deceptive links, sender network and domain reputation, and
-  countries or networks you penalise.
+  `X-Unomail-Filter`. It checks deceptive links, sender network and domain reputation,
+  countries or networks you penalise, and traces of forged messages: a spam verdict written
+  before any server scanned the message, a mail program name that does not fit the message,
+  and Google's notification redirect in mail not from Google. `X-Spam-*` headers arriving
+  from outside (other than through a trusted relay) are removed. Footer links that lead
+  nowhere around a single real destination also count.
+- **AI phishing check** (Server settings, off by default) asks one of your AI models whether
+  mail the built-in filter already finds doubtful (from *Ask from score*) is phishing. The
+  model gets a digest the server makes (sender, subject, text, and the hosts links
+  really lead to), fenced with a random marker and labelled as untrusted data. Only the exact
+  answer `PHISHING` adds points (`AI_PHISHING`); any other answer, an error, a busy model or a
+  20-second timeout changes nothing, so a message that tries to talk the model round can at
+  most go unflagged, never get cleared. Calls are capped at 30 a minute. Turning it on sends
+  that digest to the model's provider: prefer a self-hosted model for private mail. Its
+  verdicts never teach sender reputation.
 - **Spam traps** are unused addresses. Mail to them is dropped and its source is penalised.
 
 ## Reports

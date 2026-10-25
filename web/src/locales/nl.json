@@ -2276,5 +2276,13 @@
   "Send failure reports": "Foutrapporten versturen",
   "Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.": "Rapporten over afzonderlijke berichten die niet door DMARC, DKIM of SPF kwamen, naar de domeinen die erom vragen (ruf, ra=). Ze bevatten de berichtkoppen zonder de adressen van ontvangers.",
   "Received": "Ontvangen",
-  "Type": "Type"
+  "Type": "Type",
+  "Ask an AI model about suspicious mail": "Een AI-model raadplegen over verdachte mail",
+  "Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.": "Stuurt afzender, onderwerp, tekst en links van twijfelachtige inkomende mail naar de aanbieder van het gekozen model. Het model kan alleen punten toevoegen, nooit een bericht vrijpleiten.",
+  "Model": "Model",
+  "One of the models set up under Models": "Een van de modellen ingesteld onder Modellen",
+  "Ask from score": "Raadplegen vanaf score",
+  "Only mail the other tests already score at least this much is shown to the model": "Alleen mail die de andere tests minstens zo hoog scoren, wordt aan het model getoond",
+  "Points for a phishing verdict": "Punten voor een phishingoordeel",
+  "Added when the model judges a message phishing": "Toegevoegd wanneer het model een bericht als phishing beoordeelt"
 }

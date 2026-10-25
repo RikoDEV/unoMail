@@ -23,6 +23,8 @@ interface Field {
   /** `decimal` allows a fraction; `text` is one line; `secret` is write-only; `select` is one of `options`. */
   kind: 'bool' | 'number' | 'decimal' | 'megabytes' | 'list' | 'text' | 'secret' | 'select';
   options?: { value: string; label: string }[];
+  /** For select: take the options from the configured AI models instead. */
+  optionsFrom?: 'models';
   min?: number;
   max?: number;
   /** For text: whether it may be left empty, and what it must look like. */
@@ -88,6 +90,16 @@ const GROUPS: Group[] = [
       { key: 'penalized_countries', label: t('Penalised countries'), help: t('Comma separated two-letter codes, e.g. KP,RU; mail sent from there scores the points below'), kind: 'list', items: 'country', dependsOn: ['native_filter'] },
       { key: 'penalized_asns', label: t('Penalised autonomous systems'), help: t('Comma separated network numbers (ASN), e.g. 64500'), kind: 'list', items: 'asn', dependsOn: ['native_filter'] },
       { key: 'origin_score', label: t('Points for a penalised origin'), help: t('Added once for the country and once for the network'), kind: 'decimal', min: 0, max: 100, dependsOn: ['native_filter'] },
+      {
+        key: 'ai_phishing_check',
+        label: t('Ask an AI model about suspicious mail'),
+        help: t('Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.'),
+        kind: 'bool',
+        dependsOn: ['native_filter'],
+      },
+      { key: 'ai_phishing_model', label: t('Model'), help: t('One of the models set up under Models'), kind: 'select', optionsFrom: 'models', dependsOn: ['native_filter', 'ai_phishing_check'] },
+      { key: 'ai_phishing_min_score', label: t('Ask from score'), help: t('Only mail the other tests already score at least this much is shown to the model'), kind: 'decimal', min: 0, max: 100, dependsOn: ['native_filter', 'ai_phishing_check'] },
+      { key: 'ai_phishing_score', label: t('Points for a phishing verdict'), help: t('Added when the model judges a message phishing'), kind: 'decimal', min: 0, max: 20, dependsOn: ['native_filter', 'ai_phishing_check'] },
     ],
   },
   {
@@ -310,6 +322,8 @@ function GlobalScripts() {
 
 export function ServerSettings() {
   const { data, error, reload } = useLoad(() => get<SettingsResponse>('/api/settings'), []);
+  const models = useLoad(() => get<{ id: string; name: string; enabled: boolean }[]>('/api/models'), []);
+  const modelOptions = [{ value: '', label: t('None') }, ...(models.data ?? []).filter((m) => m.enabled).map((m) => ({ value: m.id, label: m.name }))];
   const { run, feedback } = useAction();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
@@ -371,7 +385,7 @@ export function ServerSettings() {
                             sx={{ width: 340 }}
                             slotProps={{ select: { inputProps: { 'aria-label': field.label } } }}
                           >
-                            {field.options!.map((option) => (
+                            {(field.optionsFrom === 'models' ? modelOptions : field.options!).map((option) => (
                               <MenuItem key={option.value} value={option.value}>
                                 {option.label}
                               </MenuItem>

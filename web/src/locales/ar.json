@@ -2456,5 +2456,13 @@
   "Send failure reports": "إرسال تقارير الفشل",
   "Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.": "تقارير عن الرسائل المفردة التي فشلت في DMARC أو DKIM أو SPF، تُرسل إلى النطاقات التي تطلبها (ruf، ra=). تتضمن ترويسات الرسالة بعد حذف عناوين المستلمين.",
   "Received": "تاريخ الاستلام",
-  "Type": "النوع"
+  "Type": "النوع",
+  "Ask an AI model about suspicious mail": "استشارة نموذج ذكاء اصطناعي بشأن البريد المريب",
+  "Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.": "يرسل المرسِل والموضوع والنص والروابط للبريد الوارد المشكوك فيه إلى مزوّد النموذج المختار. يمكن للنموذج إضافة نقاط فقط، ولا يبرّئ رسالة أبدًا.",
+  "Model": "النموذج",
+  "One of the models set up under Models": "أحد النماذج المعدّة ضمن النماذج",
+  "Ask from score": "الاستشارة ابتداءً من درجة",
+  "Only mail the other tests already score at least this much is shown to the model": "لا يُعرض على النموذج إلا البريد الذي تمنحه الاختبارات الأخرى هذه الدرجة على الأقل",
+  "Points for a phishing verdict": "نقاط حكم التصيّد",
+  "Added when the model judges a message phishing": "تُضاف عندما يحكم النموذج بأن الرسالة تصيّد"
 }

@@ -358,9 +358,15 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
         let author = if author_verified { MessageParser::default().parse_headers(&stripped).and_then(|m| m.from()?.first()?.address.as_deref().and_then(Address::parse)).map(|a| a.domain) } else { None };
         let envelope = if sender_verified { Address::parse(msg.sender).map(|a| a.domain) } else { None };
         let verified_domain = author.or(envelope);
-        let assessment = filter::assess(app, &filter::Sender { ip: msg.ip, verified_domain: verified_domain.as_deref() }, &stripped).await;
-        // What the message itself shows, without what is already known about its source.
+        let mut assessment = filter::assess(app, &filter::Sender { ip: msg.ip, verified_domain: verified_domain.as_deref() }, &stripped).await;
+        // What the message itself shows, without what is already known about its source. The AI
+        // opinion is left out too: reputation is learnt only from the server's own tests.
         let own_score: f64 = assessment.hits.iter().filter(|hit| !hit.name.starts_with("REP_")).map(|hit| hit.score).sum();
+        if rt.native_filter && !junk && assessment.score < rt.native_filter_score
+            && let Some(points) = crate::security::ai_check::points(app, &stripped, verified_domain.as_deref(), assessment.score).await
+        {
+            assessment.add(crate::security::ai_check::TEST, points);
+        }
         if rt.native_filter {
             extra_headers.push_str(&assessment.header());
             if assessment.score >= rt.native_filter_score && !junk {
@@ -383,6 +389,11 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
         }
     }
 
+    // Spam verdicts from outside are the sender's word: only a trusted relay's are kept, so
+    // that Sieve rules and mail programs see this server's own verdict alone.
+    if !msg.trusted_relay {
+        stripped = remove_headers(&stripped, |name| name.len() > 7 && name[..7].eq_ignore_ascii_case("x-spam-"));
+    }
     let id = random_token()[..12].to_owned();
     let received = format!(
         "Received: from {} ([{}])\r\n\tby {} with {} id {};\r\n\t{}\r\n",

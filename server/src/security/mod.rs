@@ -1,6 +1,7 @@
 //! Sender authentication, signing and reputation checks.
 
 pub mod access;
+pub mod ai_check;
 pub mod attachments;
 pub mod authn;
 pub mod bimi;

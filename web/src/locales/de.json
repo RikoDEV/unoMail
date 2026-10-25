@@ -2276,5 +2276,13 @@
   "Send failure reports": "Fehlerberichte senden",
   "Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.": "Berichte über einzelne Nachrichten, bei denen DMARC, DKIM oder SPF fehlgeschlagen ist, an die Domains, die sie anfordern (ruf, ra=). Sie enthalten die Kopfzeilen ohne Empfängeradressen.",
   "Received": "Empfangen",
-  "Type": "Typ"
+  "Type": "Typ",
+  "Ask an AI model about suspicious mail": "Ein KI-Modell zu verdächtiger Post befragen",
+  "Sends the sender, subject, text and links of doubtful incoming mail to the chosen model’s provider. The model can only add points, never clear a message.": "Sendet Absender, Betreff, Text und Links zweifelhafter eingehender Post an den Anbieter des gewählten Modells. Das Modell kann nur Punkte hinzufügen, nie eine Nachricht freisprechen.",
+  "Model": "Modell",
+  "One of the models set up under Models": "Eines der unter Modelle eingerichteten Modelle",
+  "Ask from score": "Fragen ab Punktzahl",
+  "Only mail the other tests already score at least this much is shown to the model": "Nur Post, die die anderen Tests mindestens so hoch bewerten, wird dem Modell gezeigt",
+  "Points for a phishing verdict": "Punkte für ein Phishing-Urteil",
+  "Added when the model judges a message phishing": "Hinzugefügt, wenn das Modell eine Nachricht als Phishing einstuft"
 }
