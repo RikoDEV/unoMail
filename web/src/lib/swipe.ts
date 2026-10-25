@@ -27,3 +27,6 @@ export const SWIPE = {
   swipeAreaWidth: 48,
   SwipeAreaProps: { onClick: (event: React.MouseEvent<HTMLElement>) => passTapThrough(event.currentTarget, event.clientX, event.clientY) },
 } as const;
+
+/** The menu buttons at the left edge are lifted above the swipe area, so that they are hit directly and not through it. */
+export const ABOVE_SWIPE = { position: 'relative', zIndex: (theme: { zIndex: { drawer: number } }) => theme.zIndex.drawer } as const;
