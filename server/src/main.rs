@@ -227,6 +227,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(unomail::jmap::push::run(app.clone()));
     tokio::spawn(unomail::jmap::submission::run(app.clone()));
     tokio::spawn(unomail::snooze::run(app.clone()));
+    tokio::spawn(unomail::packages::hooks::run_schedules(app.clone()));
     tokio::spawn(unomail::masked_email::run(app.clone()));
     tokio::spawn(reports(app.clone()));
     tokio::spawn(unomail::backup::schedule(app.clone()));

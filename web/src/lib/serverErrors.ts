@@ -30,6 +30,11 @@ export const SERVER_ERRORS = [
   "the address of your primary identity is your account's own address",
   'your own address is always sent by this server',
   'your primary identity cannot be deleted',
+  // Plug-in and theme packages (server/src/packages).
+  'repositories must be fetched over https',
+  'the address must not contain credentials',
+  'enter a tag, branch or commit',
+  'the preview has expired; fetch the package again',
 ];
 
 /** A server message as the interface shows it: translated when known, always capitalised. */

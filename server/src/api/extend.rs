@@ -1,11 +1,9 @@
-//! Administration of the integrations around the web client: the LDAP directory, skins,
-//! plug-ins and webhooks.
+//! Administration of the integrations around the web client: the LDAP directory, skins and
+//! webhooks. Plug-in and theme packages are in `super::packages`.
 
 use axum::{
     Json,
     extract::{Path, State},
-    http::{HeaderValue, header},
-    response::{IntoResponse, Response},
 };
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
@@ -107,14 +105,74 @@ pub fn validate_skin(skin: &Value) -> Result<(), String> {
         let ok = match key.as_str() {
             "id" | "name" => true,
             "mode" => matches!(value.as_str(), Some("light" | "dark" | "auto")),
-            "primary" | "secondary" | "background" | "paper" | "text" => is_color(value),
+            "primary" | "secondary" | "tertiary" | "error" | "background" | "paper" | "text" => is_color(value),
             "radius" => value.as_u64().is_some_and(|r| r <= 32),
+            "spacing" => value.as_u64().is_some_and(|s| (4..=12).contains(&s)),
+            "fontScale" => value.as_f64().is_some_and(|s| (0.85..=1.25).contains(&s)),
             "density" => matches!(value.as_str(), Some("comfortable" | "compact")),
             "font" => matches!(value.as_str(), Some("roboto" | "system" | "serif" | "mono")),
+            "imageFit" => matches!(value.as_str(), Some("cover" | "contain" | "tile")),
+            "parts" => {
+                validate_parts(value)?;
+                true
+            }
             _ => return Err(format!("unknown skin property: {}", sanitize_line(key))),
         };
         if !ok {
             return Err(format!("invalid value for {}", sanitize_line(key)));
+        }
+    }
+    Ok(())
+}
+
+/// Parts of the interface a skin may style one by one.
+pub const PARTS: &[&str] = &["appBar", "sidebar", "messageList", "messageRow", "reader", "composer", "card", "dialog", "button", "input", "chip"];
+
+/// `linear-gradient(<angle>deg, #rrggbb [<0-100>%], ...)` with two to four stops, and nothing else.
+pub fn is_gradient(value: &str) -> bool {
+    let Some(inner) = value.strip_prefix("linear-gradient(").and_then(|v| v.strip_suffix(')')) else { return false };
+    let mut parts = inner.split(',').map(str::trim);
+    let angle_ok = parts.next().and_then(|a| a.strip_suffix("deg")).and_then(|a| a.parse::<u16>().ok()).is_some_and(|a| a <= 360);
+    let stops: Vec<&str> = parts.collect();
+    angle_ok
+        && (2..=4).contains(&stops.len())
+        && stops.iter().all(|stop| {
+            let mut words = stop.split_whitespace();
+            let color = words.next().is_some_and(|c| is_color(&Value::String(c.to_owned())));
+            let position = match words.next() {
+                None => true,
+                Some(p) => p.strip_suffix('%').and_then(|p| p.parse::<u8>().ok()).is_some_and(|p| p <= 100),
+            };
+            color && position && words.next().is_none()
+        })
+}
+
+/// Styles for named parts: a fixed set of properties with bounded values, never CSS.
+fn validate_parts(value: &Value) -> Result<(), String> {
+    let parts = value.as_object().ok_or("parts must be an object")?;
+    for (part, style) in parts {
+        if !PARTS.contains(&part.as_str()) {
+            return Err(format!("unknown part: {}", sanitize_line(part)));
+        }
+        let style = style.as_object().ok_or("each part must be an object")?;
+        for (key, value) in style {
+            let number = |min: f64, max: f64| value.as_f64().is_some_and(|n| (min..=max).contains(&n));
+            let ok = match key.as_str() {
+                "background" => is_color(value) || value.as_str().is_some_and(is_gradient),
+                "color" | "borderColor" => is_color(value),
+                "borderWidth" => number(0.0, 4.0),
+                "radius" => number(0.0, 32.0),
+                "shadow" => matches!(value.as_str(), Some("none" | "low" | "medium" | "high")),
+                "opacity" => number(0.6, 1.0),
+                "blur" => number(0.0, 24.0),
+                "fontWeight" => value.as_u64().is_some_and(|w| (400..=800).contains(&w) && w % 100 == 0),
+                "fontSize" => number(0.8, 1.3),
+                "textTransform" => matches!(value.as_str(), Some("none" | "uppercase")),
+                _ => return Err(format!("unknown style property: {}.{}", sanitize_line(part), sanitize_line(key))),
+            };
+            if !ok {
+                return Err(format!("invalid value for {}.{}", sanitize_line(part), sanitize_line(key)));
+            }
         }
     }
     Ok(())
@@ -144,86 +202,6 @@ pub async fn skins_put(State(state): State<AppState>, session: Session, Json(ski
     crate::db::set_setting(&state.db, SKINS_KEY, &Value::Array(skins.clone()).to_string()).await?;
     session.audit(&state, "skins.updated", "server", &skins.len().to_string()).await;
     Ok(Json(skins))
-}
-
-// --- Plug-ins ------------------------------------------------------------------------------
-
-const MAX_PLUGIN_BYTES: u64 = 2 * 1024 * 1024;
-
-fn valid_plugin_name(name: &str) -> bool {
-    !name.is_empty() && name.len() <= 50 && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_'))
-}
-
-/// Plug-ins are directories under `<data>/plugins`, each with a `plugin.json` manifest and a
-/// `plugin.js` module. Only someone with access to the server's disk can install one.
-async fn installed_plugins(state: &AppState) -> Vec<Value> {
-    let dir = state.cfg.data_dir.join("plugins");
-    let mut out = Vec::new();
-    let Ok(mut entries) = tokio::fs::read_dir(&dir).await else { return out };
-    while let Ok(Some(entry)) = entries.next_entry().await {
-        let Some(id) = entry.file_name().to_str().filter(|n| valid_plugin_name(n)).map(str::to_owned) else { continue };
-        let Ok(manifest) = tokio::fs::read(entry.path().join("plugin.json")).await else { continue };
-        let Ok(Value::Object(manifest)) = serde_json::from_slice::<Value>(&manifest) else { continue };
-        if tokio::fs::metadata(entry.path().join("plugin.js")).await.is_ok_and(|m| m.is_file() && m.len() <= MAX_PLUGIN_BYTES) {
-            let field = |key: &str| manifest.get(key).and_then(Value::as_str).map(sanitize_line).unwrap_or_default();
-            out.push(json!({ "id": id, "name": field("name"), "version": field("version"), "description": field("description") }));
-        }
-    }
-    out.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
-    out
-}
-
-async fn disabled_plugins(state: &AppState) -> Result<Vec<String>, ApiError> {
-    Ok(crate::db::get_setting(&state.db, "plugins.disabled").await?.and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default())
-}
-
-/// The plug-ins the web client should load.
-pub async fn plugins_get(State(state): State<AppState>, session: Session) -> JsonResult<Vec<Value>> {
-    let disabled = disabled_plugins(&state).await?;
-    let mut plugins = installed_plugins(&state).await;
-    for plugin in &mut plugins {
-        plugin["enabled"] = json!(!disabled.iter().any(|d| Some(d.as_str()) == plugin["id"].as_str()));
-    }
-    // Ordinary users only learn about what actually runs in their browser.
-    if !session.is_super() {
-        plugins.retain(|p| p["enabled"] == true);
-    }
-    Ok(Json(plugins))
-}
-
-#[derive(Deserialize)]
-pub struct PluginToggle {
-    enabled: bool,
-}
-
-pub async fn plugin_toggle(State(state): State<AppState>, session: Session, Path(id): Path<String>, Json(toggle): Json<PluginToggle>) -> JsonResult<Value> {
-    session.require_super()?;
-    if !installed_plugins(&state).await.iter().any(|p| p["id"].as_str() == Some(id.as_str())) {
-        return Err(ApiError::NotFound);
-    }
-    let mut disabled = disabled_plugins(&state).await?;
-    disabled.retain(|d| d != &id);
-    if !toggle.enabled {
-        disabled.push(id.clone());
-    }
-    crate::db::set_setting(&state.db, "plugins.disabled", &json!(disabled).to_string()).await?;
-    session.audit(&state, "plugin.toggled", &id, if toggle.enabled { "enabled" } else { "disabled" }).await;
-    Ok(Json(json!({ "id": id, "enabled": toggle.enabled })))
-}
-
-/// Serves the script of an enabled plug-in to signed-in users.
-pub async fn plugin_script(State(state): State<AppState>, _session: Session, Path(id): Path<String>) -> Result<Response, ApiError> {
-    if !valid_plugin_name(&id) || disabled_plugins(&state).await?.contains(&id) {
-        return Err(ApiError::NotFound);
-    }
-    let path = state.cfg.data_dir.join("plugins").join(&id).join("plugin.js");
-    let script = match tokio::fs::metadata(&path).await {
-        Ok(meta) if meta.is_file() && meta.len() <= MAX_PLUGIN_BYTES => tokio::fs::read(&path).await?,
-        _ => return Err(ApiError::NotFound),
-    };
-    let mut response = script.into_response();
-    response.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static("text/javascript; charset=utf-8"));
-    Ok(response)
 }
 
 // --- Webhooks ------------------------------------------------------------------------------
@@ -336,10 +314,21 @@ mod tests {
     }
 
     #[test]
-    fn plugin_names_cannot_escape_the_plugin_directory() {
-        assert!(valid_plugin_name("hello-world_2"));
-        for bad in ["", "..", "../x", "a/b", "A", "a.b", "a b"] {
-            assert!(!valid_plugin_name(bad), "{bad:?}");
+    fn parts_take_bounded_styles_and_plain_gradients_only() {
+        let skin = |parts: Value| json!({ "id": "x", "name": "X", "parts": parts });
+        assert!(validate_skin(&skin(json!({ "sidebar": { "background": "linear-gradient(135deg, #102030, #405060 80%)", "blur": 12, "fontWeight": 600 } }))).is_ok());
+        for bad in [
+            json!({ "warning": { "color": "#000000" } }),
+            json!({ "sidebar": { "display": "none" } }),
+            json!({ "sidebar": { "background": "url(https://evil.example/x.png)" } }),
+            json!({ "sidebar": { "background": "linear-gradient(90deg, #000000, url(x))" } }),
+            json!({ "sidebar": { "background": "linear-gradient(90deg, #000000)" } }),
+            json!({ "sidebar": { "opacity": 0.1 } }),
+            json!({ "sidebar": { "fontWeight": 450 } }),
+        ] {
+            assert!(validate_skin(&skin(bad.clone())).is_err(), "{bad}");
         }
+        // Images come only from packages, never from pasted skins.
+        assert!(validate_skin(&json!({ "id": "x", "name": "X", "images": { "page": "https://evil.example/x.png" } })).is_err());
     }
 }

@@ -113,6 +113,8 @@ pub struct Config {
     /// use unencrypted SMTP. For tests and closed networks only.
     pub allow_private_destinations: bool,
     pub identity_relay_allow_private: bool,
+    /// Lets packages be installed from local (`file://`) repositories. For tests only.
+    pub packages_allow_local: bool,
     /// Refuse to deliver outbound mail over connections that are not TLS protected.
     pub outbound_require_tls: bool,
     pub queue_max_age_secs: i64,
@@ -259,6 +261,7 @@ impl Config {
             outbound_relay: var("UNOMAIL_OUTBOUND_RELAY"),
             allow_private_destinations: parse("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
             identity_relay_allow_private: parse("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
+            packages_allow_local: parse("UNOMAIL_PACKAGES_ALLOW_LOCAL", false)?,
             outbound_require_tls: parse_bool("UNOMAIL_OUTBOUND_REQUIRE_TLS", false)?,
             queue_max_age_secs: parse("UNOMAIL_QUEUE_MAX_AGE", 5 * 24 * 3600)?,
             outbound_max_messages_per_hour: parse("UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR", 300)?,
@@ -343,6 +346,7 @@ impl Config {
             outbound_relay: None,
             allow_private_destinations: true,
             identity_relay_allow_private: true,
+            packages_allow_local: true,
             outbound_require_tls: false,
             queue_max_age_secs: 3600,
             outbound_max_messages_per_hour: 300,

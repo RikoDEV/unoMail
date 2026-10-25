@@ -26,7 +26,7 @@ RUN touch src/main.rs src/lib.rs && UNOMAIL_VERSION="${UNOMAIL_VERSION#v}" cargo
 
 # --- Runtime ------------------------------------------------------------------------------
 FROM alpine:3.24
-RUN apk add --no-cache ca-certificates clamav clamav-daemon clamav-libunrar curl libcap redis rspamd s6-overlay tzdata \
+RUN apk add --no-cache ca-certificates clamav clamav-daemon clamav-libunrar curl git libcap redis rspamd s6-overlay tzdata \
     && addgroup -S unomail && adduser -S -H -G unomail -h /data/unomail -s /sbin/nologin unomail \
     # Rspamd talks to ClamAV over its Unix socket.
     && addgroup -S mailfilter && addgroup unomail rspamd \

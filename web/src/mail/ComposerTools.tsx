@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { type ReactNode, useState } from 'react';
 import { DialogButtons } from '../admin/common';
+import { useFeature } from '../lib/plugins';
 import { t, uiLocale } from '../i18n';
 import { schedulePresets } from './timePresets';
 
@@ -78,6 +79,7 @@ export function SendButton({ busy, onSend, receipt, onToggleReceipt, smime, onTo
 }) {
   const [sendMenu, setSendMenu] = useState<HTMLElement | null>(null);
   const [scheduling, setScheduling] = useState<string | null>(null);
+  const showSchedule = useFeature('composer.schedule');
   return (
     <>
       <ButtonGroup variant="contained" disabled={busy} disableElevation sx={{ mr: 1, '& .MuiButtonGroup-firstButton': { px: 2.5 }, '& .MuiButtonGroup-lastButton': { px: 1 } }}>
@@ -89,15 +91,17 @@ export function SendButton({ busy, onSend, receipt, onToggleReceipt, smime, onTo
         </Button>
       </ButtonGroup>
       <Menu anchorEl={sendMenu} open={Boolean(sendMenu)} onClose={() => setSendMenu(null)}>
-        <MenuItem disabled sx={{ opacity: '1 !important' }}>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Schedule send')}</Typography>
-        </MenuItem>
-        {schedulePresets(new Date()).map((preset) => (
+        {showSchedule && (
+          <MenuItem disabled sx={{ opacity: '1 !important' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Schedule send')}</Typography>
+          </MenuItem>
+        )}
+        {showSchedule && schedulePresets(new Date()).map((preset) => (
           <MenuItem key={preset.label} onClick={() => { setSendMenu(null); onSend(preset.at); }}>
             <ListItemText primary={preset.label} secondary={preset.at.toLocaleString(uiLocale(), { weekday: 'short', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })} />
           </MenuItem>
         ))}
-        <MenuItem onClick={() => { setSendMenu(null); setScheduling(''); }}>{t('Pick a date and time…')}</MenuItem>
+        {showSchedule && <MenuItem onClick={() => { setSendMenu(null); setScheduling(''); }}>{t('Pick a date and time…')}</MenuItem>}
         <Divider />
         <MenuItem onClick={onToggleReceipt}>
           <ListItemIcon><Checkbox edge="start" size="small" checked={receipt} tabIndex={-1} disableRipple /></ListItemIcon>

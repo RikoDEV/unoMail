@@ -67,5 +67,15 @@ test.describe('small screens', () => {
     await nav.getByText('Domains').click();
     await expect(page).toHaveURL(/\/admin\/domains/);
     await expect(nav.getByText('Domains')).not.toBeInViewport();
+
+    // The API reference: long paths wrap and nothing scrolls sideways, open or closed.
+    await page.goto('/admin/api');
+    const endpoint = page.getByRole('button', { name: /\/api\/me\/packages\/\{id\}\/admin-settings/ });
+    await expect(endpoint).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await endpoint.click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    const box = await page.getByLabel('Filter').boundingBox();
+    expect(box!.width).toBeGreaterThan(300);
   });
 });

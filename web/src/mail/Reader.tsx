@@ -28,6 +28,7 @@ import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel 
 import { SmimeBadges } from './Smime';
 import { AiAssistButtons, AiAssistResults, AiModelsProvider, useAiAssist } from './AiAssist';
 import { SummaryCards } from './SummaryCards';
+import { FeatureGate, PluginSlot } from '../plugins/Slot';
 import { SmartReplyButton, SmartReplySuggestions, useSmartReplies } from './SmartReplies';
 import { snoozePresets } from './timePresets';
 import { adaptForDark, type Rgb } from './darkColors';
@@ -294,7 +295,7 @@ function MessageBody({ email, accountId, ownEmail }: { email: EmailFull; account
   // Let plug-ins know which message is being read.
   useEffect(() => {
     if (source && !decrypted) return;
-    emit('message:open', pluginMessage(email, rendered.html));
+    emit('message:open', pluginMessage(email, rendered.html, accountId));
     // Only when the message (or its decrypted content) changes, not on every re-render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email.id, decrypted]);
@@ -363,8 +364,11 @@ function MessageBody({ email, accountId, ownEmail }: { email: EmailFull; account
   );
 }
 
-function pluginMessage(email: EmailFull, html: string): PluginMessage {
-  return { id: email.id, subject: email.subject, from: email.from ?? [], to: email.to ?? [], receivedAt: email.receivedAt, html };
+function pluginMessage(email: EmailFull, html: string, accountId: string): PluginMessage {
+  const attachments = email.attachments
+    .filter((a) => !a.cid)
+    .map((a) => ({ id: a.blobId, name: a.name ?? 'attachment', type: a.type, size: a.size, url: downloadUrl(accountId, a.blobId, a.name ?? 'attachment') }));
+  return { id: email.id, subject: email.subject, from: email.from ?? [], to: email.to ?? [], receivedAt: email.receivedAt, html, attachments };
 }
 
 function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, onToggle, onAction }: { email: EmailFull; accountId: string; ownEmail: string; inboxId: string; expanded: boolean; collapsible: boolean; onToggle: () => void; onAction: (action: ReaderAction, email: EmailFull, suggestedText?: string) => void }) {
@@ -438,7 +442,8 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
             variant="caption"
             sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>{t('Received via {{address}}', { address })}</Typography>)}
           <SmimeBadges status={email.smime} />
-          {!encrypted && !email.smime?.encrypted && <SummaryCards key={`cards-${email.id}`} emailId={email.id} />}
+          <PluginSlot slot="reader.header" />
+          {!encrypted && !email.smime?.encrypted && <FeatureGate id="summary-cards"><SummaryCards key={`cards-${email.id}`} emailId={email.id} /></FeatureGate>}
           {!encrypted && !email.smime?.encrypted && <AiAssistResults ai={ai} />}
           <MessageBody email={email} accountId={accountId} ownEmail={ownEmail} />
           {invite && <Invitation key={invite.blobId} name={invite.name ?? 'invite.ics'} url={downloadUrl(accountId, invite.blobId, invite.name ?? 'invite.ics')} />}
@@ -454,7 +459,8 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
               ))}
             </Stack>
           )}
-          <SmartReplySuggestions replies={replies} onChoose={(text, replyAll) => onAction(replyAll ? 'replyAll' : 'reply', email, text)} />
+          <PluginSlot slot="reader.footer" />
+          <FeatureGate id="smart-reply"><SmartReplySuggestions replies={replies} onChoose={(text, replyAll) => onAction(replyAll ? 'replyAll' : 'reply', email, text)} /></FeatureGate>
           {/* On a phone the actions stay in one row that scrolls sideways instead of stacking up. */}
           <Stack direction="row" spacing={1} useFlexGap data-testid="reply-actions" sx={{ flexWrap: { xs: 'nowrap', sm: 'wrap' }, overflowX: { xs: 'auto', sm: 'visible' }, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' }, mt: 2, pb: { xs: 0.5, sm: 0 }, '& > *': { flexShrink: 0 } }}>
             <Button variant="outlined" startIcon={<Reply />} onClick={() => onAction('reply', email)}>
@@ -466,10 +472,10 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
             <Button variant="outlined" startIcon={<Forward />} onClick={() => onAction('forward', email)}>
               {t('Forward')}
             </Button>
-            <SmartReplyButton replies={replies} />
+            <FeatureGate id="smart-reply"><SmartReplyButton replies={replies} /></FeatureGate>
             {preview && <AttachmentPreview file={preview} onClose={() => setPreview(null)} />}
             {plugins.messageActions.map((action) => (
-              <Button key={action.id} onClick={() => action.onClick(pluginMessage(email, emailHtml(email, accountId)))}>
+              <Button key={action.id} onClick={() => action.onClick(pluginMessage(email, emailHtml(email, accountId), accountId))}>
                 {action.label}
               </Button>
             ))}
@@ -563,7 +569,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
     );
   }
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label={t('Conversation')}>
+    <Box className="um-part-reader" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label={t('Conversation')}>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', p: 1 }}>
         <Tooltip title={t('Back to list (u)')}><IconButton aria-label={t('Back to list')} onClick={onBack}><ArrowBack /></IconButton></Tooltip>
         <Tooltip title={t('Archive (e)')}><IconButton aria-label={t('Archive')} onClick={onArchive}><Archive /></IconButton></Tooltip>

@@ -35,7 +35,7 @@ fn notification(event: &str, data: &Value) -> String {
 /// Receivers named as localhost were chosen deliberately and are reached as they are. Any
 /// other host must resolve to public addresses only, checked at every send rather than when
 /// the webhook was saved, so that DNS cannot later point it at an internal service.
-async fn destination(url: &str, allow_private: bool) -> Result<Option<(String, SocketAddr)>, &'static str> {
+pub(crate) async fn destination(url: &str, allow_private: bool) -> Result<Option<(String, SocketAddr)>, &'static str> {
     let url = reqwest::Url::parse(url).map_err(|_| "invalid URL")?;
     let host = url.host_str().ok_or("invalid URL")?.trim_matches(['[', ']']).to_owned();
     if allow_private || matches!(host.as_str(), "localhost" | "127.0.0.1" | "::1") {

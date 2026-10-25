@@ -37,6 +37,7 @@ pub mod net;
 pub mod oauth;
 pub mod openpgp;
 pub mod outbound;
+pub mod packages;
 pub mod pop3;
 pub mod retention;
 pub mod s3;

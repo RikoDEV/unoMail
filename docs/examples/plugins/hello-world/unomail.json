@@ -1,0 +1,12 @@
+{
+  "schema": 2,
+  "id": "hello-world",
+  "type": "plugin",
+  "name": "Hello world",
+  "version": "1.0.0",
+  "description": "Adds a button to the reader that greets you with the message's subject.",
+  "license": "MIT",
+  "api": "^2",
+  "entry": "index.js",
+  "permissions": ["message:read", "notify"]
+}

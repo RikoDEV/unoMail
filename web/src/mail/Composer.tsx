@@ -22,6 +22,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, uploadBlob, errorText } from '../lib/api';
 import { useAuth } from '../app';
 import { type ComposerHandle, emit, usePlugins } from '../lib/plugins';
+import { composerClosed, composerOpened } from '../plugins/host';
+import { FeatureGate, PluginSlot } from '../plugins/Slot';
 import { updatePrefs, usePrefs } from '../lib/prefs';
 import { type Identity, listIdentities, listSignatures, listTemplates, type Signatures, saveTemplate, type Template } from './extra';
 import { type Draft, type DraftAttachment, destroyEmails, draftRecipients, saveDraft, type Sent, type SendOptions, sendEmail, sendEncrypted } from './jmapClient';
@@ -264,7 +266,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     return () => clearTimeout(timer);
   });
 
-  async function addFiles(files: FileList | null, inline: boolean) {
+  async function addFiles(files: FileList | File[] | null, inline: boolean) {
     if (!files) return;
     setError('');
     for (const file of Array.from(files)) {
@@ -464,15 +466,24 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     onClose(false);
   }
 
-  const handle: ComposerHandle = {
-    getSubject: () => subject,
+  // Sandboxed plug-ins keep the handle across calls, so it reads the composer as it is now.
+  const latest = useRef({ subject, to, cc, insertHtml, markDirty, addFiles });
+  latest.current = { subject, to, cc, insertHtml, markDirty, addFiles };
+  const [handle] = useState<ComposerHandle>(() => ({
+    getSubject: () => latest.current.subject,
     setSubject: (value) => {
       setSubject(String(value));
-      markDirty();
+      latest.current.markDirty();
     },
-    getRecipients: () => [to, cc].filter(Boolean).join(', '),
-    insertHtml: (html) => insertHtml(String(html)),
-  };
+    getRecipients: () => [latest.current.to, latest.current.cc].filter(Boolean).join(', '),
+    insertHtml: (html) => latest.current.insertHtml(String(html)),
+    addFiles: (files) => latest.current.addFiles(files, false),
+  }));
+  // The composer plug-ins act on: the one opened or used last.
+  useEffect(() => {
+    composerOpened(handle);
+    return () => composerClosed(handle);
+  }, [handle]);
 
   const tint = alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.08);
   const dark = theme.palette.mode === 'dark';
@@ -487,8 +498,10 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
     <Paper
       elevation={8}
       role="dialog"
+      className="um-part-composer"
       aria-label={t('New message')}
       data-fullscreen={fullScreen}
+      onFocus={() => composerOpened(handle)}
       onKeyDown={(e) => {
         // Escape leaves full screen instead of doing anything else on the page.
         if (e.key === 'Escape' && fullScreen && !e.defaultPrevented) {
@@ -600,7 +613,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
           </Tooltip>
           <Tooltip title={t('Attach files')}><IconButton aria-label={t('Attach files')} onClick={() => fileInput.current?.click()}><AttachFile /></IconButton></Tooltip>
           <Tooltip title={t('Insert link')}><IconButton aria-label={t('Insert link')} onClick={insertLink}><InsertLink /></IconButton></Tooltip>
-          <Tooltip title={t('Insert emoji')}><IconButton aria-label={t('Insert emoji')} onClick={(e) => openEmoji(e.currentTarget)}><EmojiEmotionsOutlined /></IconButton></Tooltip>
+          <FeatureGate id="composer.emoji"><Tooltip title={t('Insert emoji')}><IconButton aria-label={t('Insert emoji')} onClick={(e) => openEmoji(e.currentTarget)}><EmojiEmotionsOutlined /></IconButton></Tooltip></FeatureGate>
           <EmojiPicker anchor={emojiAnchor} onClose={() => setEmojiAnchor(null)} onPick={insertEmoji} />
           <Tooltip title={t('Insert image')}><IconButton aria-label={t('Insert image')} onClick={() => imageInput.current?.click()}><Image /></IconButton></Tooltip>
           <Tooltip title={encrypt ? t('Encryption is on') : t('Encrypt this message (OpenPGP)')}>
@@ -609,7 +622,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
             </IconButton>
           </Tooltip>
           <Tooltip title={t('Signature')}><IconButton aria-label={t('Signature')} onClick={(e) => setSignatureAnchor(e.currentTarget)}><Draw /></IconButton></Tooltip>
-          <Tooltip title={t('Templates')}><IconButton aria-label={t('Templates')} onClick={(e) => void openTemplates(e.currentTarget)}><TextSnippet /></IconButton></Tooltip>
+          <FeatureGate id="templates"><Tooltip title={t('Templates')}><IconButton aria-label={t('Templates')} onClick={(e) => void openTemplates(e.currentTarget)}><TextSnippet /></IconButton></Tooltip></FeatureGate>
           <Tooltip title={t('More actions')}><IconButton aria-label={t('More actions')} onClick={(e) => setMoreMenu(e.currentTarget)}><MoreVert /></IconButton></Tooltip>
           <Menu anchorEl={moreMenu} open={Boolean(moreMenu)} onClose={() => setMoreMenu(null)}>
             <MenuItem onClick={() => void updatePrefs({ spellcheck: !spellcheck }).catch(() => {})}>
@@ -638,6 +651,7 @@ export function Composer({ initial, accountId, draftsId, sentId, draftEmailId, o
               </MenuItem>
             )}
           </Menu>
+          <PluginSlot slot="composer.toolbar" />
           {plugins.composerActions.map((action) => (
             <Button key={action.id} size="small" onClick={() => action.onClick(handle)}>
               {action.label}

@@ -245,7 +245,7 @@ export function Login({ adding = false }: { adding?: boolean }) {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+    <Box className="um-part-login" sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 2 }}>
       <Card sx={{ width: '100%', maxWidth: 420, p: 2 }}>
         <CardContent>
           {challenge ? (

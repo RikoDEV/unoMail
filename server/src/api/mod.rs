@@ -45,6 +45,7 @@ pub mod smart_reply;
 pub mod me;
 pub mod oauth;
 pub mod openapi;
+pub mod packages;
 pub mod personal;
 pub mod spamfilter;
 pub mod system;
@@ -302,6 +303,7 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
     .iter()
     .any(|prefix| path.starts_with(prefix));
     let asset = path.starts_with("/assets/");
+    let plugin_frame = path.starts_with("/plugin-frame/");
     // Traced by route, not by path: ids in paths would make every request its own kind.
     let route = request.extensions().get::<axum::extract::MatchedPath>().map_or("other", |p| p.as_str()).to_owned();
     let span = tracing::info_span!("http.request", http.request.method = %request.method(), http.route = %route, http.response.status_code = tracing::field::Empty);
@@ -315,7 +317,8 @@ async fn security_headers(State(state): State<AppState>, request: Request, next:
         headers.insert(HeaderName::from_static(name), HeaderValue::from_static(value));
     };
     set("x-content-type-options", "nosniff");
-    set("x-frame-options", "DENY");
+    // The web client embeds plug-in frames; nothing else may be framed.
+    set("x-frame-options", if plugin_frame { "SAMEORIGIN" } else { "DENY" });
     set("referrer-policy", "no-referrer");
     set("cross-origin-opener-policy", "same-origin");
     set("cross-origin-resource-policy", "same-origin");
@@ -562,9 +565,16 @@ pub fn router(state: AppState) -> Router {
         .route("/ldap", get(extend::ldap_get).put(extend::ldap_put))
         .route("/ldap/test", post(extend::ldap_test))
         .route("/skins", get(extend::skins_get).put(extend::skins_put))
-        .route("/plugins", get(extend::plugins_get))
-        .route("/plugins/{id}", put(extend::plugin_toggle))
-        .route("/plugins/{id}/plugin.js", get(extend::plugin_script))
+        .route("/packages", get(packages::list).post(packages::install))
+        .route("/packages/preview", post(packages::preview))
+        .route("/packages/{id}", put(packages::set_enabled).delete(packages::uninstall))
+        .route("/packages/{id}/update", post(packages::update_preview))
+        .route("/packages/{id}/settings", get(packages::admin_settings_get).put(packages::admin_settings_put))
+        .route("/me/packages/{id}", put(packages::user_put))
+        .route("/me/packages/{id}/settings", get(packages::user_settings))
+        .route("/me/packages/{id}/admin-settings", get(packages::user_admin_settings))
+        .route("/me/packages/{id}/storage", get(packages::storage_get).put(packages::storage_put))
+        .route("/x/{id}/{*path}", any(packages::server_route))
         .route("/webhooks", get(extend::webhooks_list).post(extend::webhook_create))
         .route("/webhooks/{id}", put(extend::webhook_update).delete(extend::webhook_delete))
         .route("/webhooks/{id}/test", post(extend::webhook_test))
@@ -577,6 +587,10 @@ pub fn router(state: AppState) -> Router {
         .merge(crate::jmap::routes(&state))
         .route("/health", get(system::health))
         .route("/metrics", get(system::metrics))
+        // Plug-ins run in this sandboxed document; it is outside /api because it needs no session.
+        .route("/plugin-frame/{id}/{commit}", get(packages::frame))
+        .route("/package-asset/{id}/{commit}/{*path}", get(packages::asset))
+        .route("/plugin-auth/callback", get(packages::auth_callback))
         .route("/.well-known/acme-challenge/{token}", get(acme_challenge))
         // Mail client auto-configuration (Thunderbird, Outlook, Apple Mail).
         .route("/mail/config-v1.1.xml", get(me::thunderbird))

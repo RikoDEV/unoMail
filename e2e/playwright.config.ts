@@ -65,6 +65,8 @@ export default defineConfig({
       UNOMAIL_GREYLIST: 'false',
       // The suite runs its own stand-ins for remote services on the loopback interface.
       UNOMAIL_ALLOW_PRIVATE_DESTINATIONS: 'true',
+      // Packages are installed from repositories the suite creates on disk.
+      UNOMAIL_PACKAGES_ALLOW_LOCAL: 'true',
       UNOMAIL_PUBLIC_URL: `http://localhost:${PORTS.http}`,
       // No requests to third parties from the tests.
       UNOMAIL_GRAVATAR: 'off',

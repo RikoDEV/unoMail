@@ -149,6 +149,7 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
       onDragEnd={handlers.dragEnd}
       sx={[unread ? (expanded ? ROW_UNREAD_EXPANDED_SX : ROW_UNREAD_CONDENSED_SX) : expanded ? ROW_EXPANDED_SX : ROW_CONDENSED_SX, first && FIRST_SX, last && LAST_SX]}
       data-testid="email-row"
+      className="um-part-messageRow"
       data-unread={unread}
       data-density={density}
     >

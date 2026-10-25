@@ -17,6 +17,7 @@ import { ApiError, del, formatBytes, formatTime, get, post, put, errorText } fro
 import { UsageBar, useLoad } from '../admin/common';
 import { useAuth } from '../app';
 import { AppearanceCard, MessageListCard, NotificationsCard, SendingCard } from './Webmail';
+import { AddonsCard } from './Addons';
 import { InboxCard } from './Inbox';
 import { EncryptionCard, SmimeCard } from './Encryption';
 import { IdentitiesCard, TemplatesCard } from './Identities';
@@ -24,6 +25,9 @@ import { SideNavPage, useTitle } from '../ui/shell';
 import { AppPasswordsCard, TwoStepCard } from './Security';
 import { SmartReplySettings, SummaryCardsSettings } from './SummaryCards';
 import { MaskedAddresses } from './MaskedEmail';
+import { useFeature } from '../lib/plugins';
+import { PluginView, usePluginPages } from '../plugins/Slot';
+import Extension from '@mui/icons-material/Extension';
 
 import { t } from '../i18n';
 interface SessionRow {
@@ -112,6 +116,9 @@ interface Sending {
 export default function SettingsPage() {
   useTitle(t('Settings'));
   const [params, setParams] = useSearchParams();
+  const showMasked = useFeature('masked-email');
+  const showTemplates = useFeature('templates');
+  const pluginSections = usePluginPages('settings.section');
   const { account } = useAuth();
   const sessions = useLoad(() => get<SessionRow[]>('/api/auth/sessions'), []);
   const sending = useLoad(() => get<Sending>('/api/me/sending'), []);
@@ -233,7 +240,7 @@ export default function SettingsPage() {
 
   // The settings, grouped. Each group has its own address (?tab=...), so it can be linked to.
   const sections: { id: string; label: string; icon: ReactElement; content: ReactNode }[] = [
-    { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><AppearanceCard /></> },
+    { id: 'general', label: t('General'), icon: <Tune />, content: <>{accountCard}<MessageListCard /><SendingCard /><NotificationsCard /><AppearanceCard /><AddonsCard /></> },
     { id: 'inbox', label: t('Inbox'), icon: <Inbox />, content: <><InboxCard /><SummaryCardsSettings /><SmartReplySettings /></> },
     { id: 'identities', label: t('Identities'), icon: <Badge />, content: <IdentitiesCard /> },
     { id: 'masked-addresses', label: t('Masked addresses'), icon: <AlternateEmail />, content: <MaskedAddresses /> },
@@ -243,6 +250,12 @@ export default function SettingsPage() {
     { id: 'vacation', label: t('Out of office'), icon: <BeachAccess />, content: <VacationCard /> },
     { id: 'security', label: t('Security'), icon: <Security />, content: <>{passwordCard}<TwoStepCard /><AppPasswordsCard /><EncryptionCard /><SmimeCard />{sessionsCard}</> },
   ];
+  // Plug-ins may hide some of them and add their own.
+  const hidden = new Set([...(showMasked ? [] : ['masked-addresses']), ...(showTemplates ? [] : ['templates'])]);
+  sections.splice(0, sections.length, ...sections.filter((section) => !hidden.has(section.id)));
+  for (const page of pluginSections) {
+    sections.push({ id: `x-${page.plugin}-${page.id}`, label: page.title, icon: <Extension />, content: <PluginView mount={page} fill /> });
+  }
   const active = sections.find((section) => section.id === params.get('tab')) ?? sections[0];
   return (
     <SideNavPage

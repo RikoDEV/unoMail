@@ -1,0 +1,16 @@
+{
+  "schema": 2,
+  "id": "subject-tagger",
+  "type": "plugin",
+  "name": "Subject tagger",
+  "version": "1.0.0",
+  "description": "Marks mail from outside the server: a header, and a prefix in front of the subject.",
+  "license": "MIT",
+  "api": "^2",
+  "entry": "index.js",
+  "permissions": ["server:mail-incoming", "server:routes", "ui:admin"],
+  "settings": [
+    { "key": "prefix", "type": "string", "label": "Subject prefix", "default": "[EXTERNAL]", "scope": "admin" }
+  ],
+  "server": { "module": "server.wat", "hooks": ["mail:incoming"], "routes": true }
+}

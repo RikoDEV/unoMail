@@ -1,0 +1,15 @@
+{
+  "schema": 2,
+  "id": "word-count",
+  "type": "plugin",
+  "name": "Word count",
+  "version": "1.0.0",
+  "description": "Counts the words in the subject and adds a sign-off to the message being written.",
+  "license": "MIT",
+  "api": "^2",
+  "entry": "index.js",
+  "permissions": ["composer:read", "composer:write", "notify"],
+  "settings": [
+    { "key": "signoff", "type": "string", "label": "Sign-off", "default": "Best regards," }
+  ]
+}

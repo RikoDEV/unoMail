@@ -37,7 +37,24 @@ import { Backups } from './Backups';
 import { Lists } from './Lists';
 import { Mailboxes } from './Mailboxes';
 
+import Extension from '@mui/icons-material/Extension';
+import { useParams } from 'react-router-dom';
+import { PluginView, usePluginPages } from '../plugins/Slot';
+import { PageHeader } from './common';
 import { t } from '../i18n';
+
+/** An administration page a plug-in added (`admin.section`). */
+function AdminPluginPage() {
+  const { plugin, view } = useParams();
+  const page = usePluginPages('admin.section').find((p) => p.plugin === plugin && p.id === view);
+  if (!page) return null;
+  return (
+    <>
+      <PageHeader title={page.title} />
+      <PluginView mount={page} fill />
+    </>
+  );
+}
 interface NavItem {
   path: string;
   label: string;
@@ -70,7 +87,11 @@ const NAV: NavItem[] = [
 export default function AdminApp() {
   const { account } = useAuth();
   const isSuper = account?.role === 'super_admin';
-  const items = NAV.filter((item) => isSuper || !item.superOnly);
+  const pages = usePluginPages('admin.section');
+  const items = [
+    ...NAV.filter((item) => isSuper || !item.superOnly),
+    ...(isSuper ? pages.map((page) => ({ path: `x/${encodeURIComponent(page.plugin)}/${encodeURIComponent(page.id)}`, label: page.title, icon: <Extension />, superOnly: true })) : []),
+  ];
   return (
     <SideNavPage
       title={t('unoMail Admin')}
@@ -101,6 +122,7 @@ export default function AdminApp() {
             {isSuper && <Route path="spam-filter" element={<SpamFilter />} />}
             {isSuper && <Route path="integrations" element={<Integrations />} />}
             {isSuper && <Route path="models" element={<Models />} />}
+            {isSuper && <Route path="x/:plugin/:view" element={<AdminPluginPage />} />}
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Routes>
     </SideNavPage>

@@ -1,0 +1,29 @@
+{
+  "schema": 2,
+  "id": "notes-panel",
+  "type": "plugin",
+  "name": "Notes",
+  "version": "2.0.0",
+  "description": "Private notes on a page of their own, kept with your account.",
+  "license": "MIT",
+  "api": "^2",
+  "entry": "index.js",
+  "permissions": [
+    "ui:page",
+    "ui:widget",
+    "storage"
+  ],
+  "settings": [
+    {
+      "key": "size",
+      "type": "select",
+      "label": "Text size",
+      "options": [
+        "small",
+        "medium",
+        "large"
+      ],
+      "default": "medium"
+    }
+  ]
+}

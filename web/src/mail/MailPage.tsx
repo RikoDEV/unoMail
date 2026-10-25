@@ -18,7 +18,9 @@ import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } 
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { del, get, post, errorText } from '../lib/api';
 import { useAuth } from '../app';
-import { setPluginNotifier, usePlugins } from '../lib/plugins';
+import { usePlugins } from '../lib/plugins';
+import { setHostNotifier } from '../plugins/host';
+import { PluginSlot } from '../plugins/Slot';
 import { usePrefs } from '../lib/prefs';
 import { TopBar, useTitle } from '../ui/shell';
 import { cachedList, cachedMailboxes, cachedThread, cacheList, cacheMailboxes, cacheThread, openCache } from './cache';
@@ -459,8 +461,8 @@ export default function MailPage() {
 
   // Plug-ins report to the user through the page's own notice bar.
   useEffect(() => {
-    setPluginNotifier(setNotice);
-    return () => setPluginNotifier(() => {});
+    setHostNotifier(setNotice);
+    return () => setHostNotifier(() => {});
   }, []);
 
   // "/mail/inbox?compose=address" opens a new message, e.g. from the address book, and
@@ -892,7 +894,7 @@ export default function MailPage() {
     );
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box className="um-page" sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopBar
         title={t('unoMail')}
         onHome={() => setSearch('')}
@@ -923,6 +925,7 @@ export default function MailPage() {
             </IconButton>
           </Tooltip>
         </Paper>
+        <PluginSlot slot="mail.toolbar" />
         <AdvancedSearch
           anchor={searchPanel}
           query={search}
@@ -1005,7 +1008,7 @@ export default function MailPage() {
           )}
           <Box ref={listScroll} sx={{ flex: 1, overflow: 'auto', pb: 1, borderRadius: '16px 16px 0 0' }} onScroll={onScroll}>
             {/* Only the rows in view (and a few around them) exist; the list keeps its full height. */}
-            <List disablePadding aria-label={t('Messages')} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
+            <List disablePadding className="um-part-messageList" aria-label={t('Messages')} style={{ position: 'relative', height: virtualizer.getTotalSize() }}>
               {virtualizer.getVirtualItems().map((item) => {
                 const email = visible[item.index];
                 return (

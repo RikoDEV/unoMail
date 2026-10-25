@@ -516,7 +516,7 @@ async fn the_web_client_starts_with_one_request() {
     let start = bob.get("/api/me/startup").await;
     assert!(start.status.is_success(), "{}", start.text);
     assert_eq!(start.body["preferences"]["skin"], "paper");
-    assert!(start.body["skins"].is_array() && start.body["plugins"].is_array());
+    assert!(start.body["skins"].is_array() && start.body["packages"].is_array());
     assert_eq!(Api::new(&env).get("/api/me/startup").await.status.as_u16(), 401);
 }
 

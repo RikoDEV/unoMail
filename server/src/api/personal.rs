@@ -1019,8 +1019,8 @@ pub async fn preferences_get(State(state): State<AppState>, session: Session) ->
 pub async fn startup(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
     let Json(preferences) = preferences_get(State(state.clone()), session.clone()).await?;
     let Json(skins) = crate::api::extend::skins_get(State(state.clone()), session.clone()).await?;
-    let Json(plugins) = crate::api::extend::plugins_get(State(state), session).await?;
-    Ok(Json(json!({ "preferences": preferences, "skins": skins, "plugins": plugins })))
+    let (packages, themes) = crate::api::packages::startup(&state, &session).await?;
+    Ok(Json(json!({ "preferences": preferences, "skins": skins, "themes": themes, "packages": packages })))
 }
 
 /// Stores the client's preferences. The server treats them as an opaque (but bounded) object.

@@ -1,0 +1,12 @@
+{
+  "schema": 2,
+  "id": "no-calendar",
+  "type": "plugin",
+  "name": "Mail only",
+  "version": "1.0.0",
+  "description": "Hides the calendar and puts a short agenda note in its place in the navigation.",
+  "license": "MIT",
+  "api": "^2",
+  "entry": "index.js",
+  "permissions": ["ui:replace", "ui:page"]
+}

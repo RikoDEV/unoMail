@@ -2,7 +2,8 @@ import { setCsrfToken } from '../lib/api';
 import { clearMailCache, closeCache } from '../mail/cache';
 import { clearPendingFiles } from '../mail/pendingFiles';
 import { lock } from '../mail/pgp';
-import { unloadPlugins } from '../lib/plugins';
+import { resetPlugins } from '../lib/plugins';
+import { stopPackages } from '../plugins/host';
 import { resetPrefs } from '../lib/prefs';
 
 /** Clear secrets synchronously, then remove asynchronous file storage. */
@@ -12,6 +13,7 @@ export function clearSensitiveSessionState(): Promise<void> {
   setCsrfToken('');
   clearMailCache();
   resetPrefs();
-  unloadPlugins();
+  resetPlugins();
+  stopPackages();
   return clearPendingFiles();
 }

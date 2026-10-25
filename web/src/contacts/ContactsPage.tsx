@@ -196,7 +196,7 @@ export default function ContactsPage() {
     </Dialog>
   );
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box className="um-page" sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopBar title={t('Contacts')} leading={<IconButton aria-label={t('Back to mail')} onClick={() => navigate('/mail')}><ArrowBack /></IconButton>} />
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Box component="nav" aria-label={t('Contact groups')} sx={{ width: 240, flexShrink: 0, px: 1, overflow: 'auto', display: { xs: 'none', md: 'block' } }}>

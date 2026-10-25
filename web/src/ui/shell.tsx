@@ -16,6 +16,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useAppearance, useAuth } from '../app';
 import { pendingCount } from '../mail/outbox';
 
+import { useFeature } from '../lib/plugins';
 import { chosenLanguage, LANGUAGES, setLanguage, t } from '../i18n';
 import { updatePrefs } from '../lib/prefs';
 import { ABOVE_SWIPE, SWIPE } from '../lib/swipe';
@@ -34,6 +35,7 @@ function AccountMenu() {
   if (!account) return null;
   // The pages are links, so a middle click or Ctrl+click opens them in a new tab.
   const close = () => setAnchor(null);
+  const showCalendar = useFeature('calendar');
   const others = accounts.filter((entry) => !entry.active);
   const otherUnread = others.reduce((sum, entry) => sum + entry.unread, 0);
   // Leaving an account loses its unsent offline changes; say so first.
@@ -97,10 +99,12 @@ function AccountMenu() {
           <ListItemIcon><Mail fontSize="small" /></ListItemIcon>
           {t('Mail')}
         </MenuItem>
-        <MenuItem component={RouterLink} to="/calendar" onClick={close}>
-          <ListItemIcon><CalendarMonth fontSize="small" /></ListItemIcon>
-          {t('Calendar')}
-        </MenuItem>
+        {showCalendar && (
+          <MenuItem component={RouterLink} to="/calendar" onClick={close}>
+            <ListItemIcon><CalendarMonth fontSize="small" /></ListItemIcon>
+            {t('Calendar')}
+          </MenuItem>
+        )}
         {account.role !== 'user' && (
           <MenuItem component={RouterLink} to="/admin" onClick={close}>
             <ListItemIcon><AdminPanelSettings fontSize="small" /></ListItemIcon>
@@ -232,6 +236,7 @@ export function TopBar({ title, children, leading, onHome }: { title: string; ch
   return (
     <Stack
       component="header"
+      className="um-part-appBar"
       direction="row"
       spacing={{ xs: 1, sm: 2 }}
       sx={{
@@ -298,7 +303,7 @@ export function SideNavPage({ title, navLabel, heading, placement, items, linkCo
   const compact = useMediaQuery((theme: Theme) => theme.breakpoints.down('md'));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const nav = (
-    <Box component="nav" aria-label={navLabel} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined }}>
+    <Box component="nav" className="um-part-sidebar" aria-label={navLabel} sx={{ width: compact ? 260 : 220, flexShrink: 0, px: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', height: compact ? '100%' : undefined }}>
       {heading && (
         <Typography variant="h6" component="h1" sx={{ px: 2, pt: compact ? 1 : 0, pb: 1 }}>
           {heading}
@@ -323,7 +328,7 @@ export function SideNavPage({ title, navLabel, heading, placement, items, linkCo
     </Box>
   );
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box className="um-page" sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       <TopBar
         title={title}
         leading={compact && <Tooltip title={t('Menu')}><IconButton sx={ABOVE_SWIPE} aria-label={navLabel} aria-expanded={drawerOpen} onClick={() => setDrawerOpen((open) => !open)}><MenuIcon /></IconButton></Tooltip>}

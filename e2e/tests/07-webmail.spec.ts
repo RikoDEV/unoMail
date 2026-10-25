@@ -365,18 +365,7 @@ test.describe('web mail extras', () => {
     expect(fs.readFileSync(await (await file).path(), 'utf8')).toBe('attached secret');
   });
 
-  test('integrations: skins, plug-ins, webhooks, single sign-on and international addresses', async ({ page }) => {
-    // A plug-in installed on the server's disk by its operator.
-    const plugin = path.join(dataDir, 'plugins', 'hello');
-    fs.mkdirSync(plugin, { recursive: true });
-    fs.writeFileSync(path.join(plugin, 'plugin.json'), JSON.stringify({ name: 'Hello plug-in', version: '1.0', description: 'Adds a button to every message' }));
-    fs.writeFileSync(
-      path.join(plugin, 'plugin.js'),
-      `export default function (api) {
-         api.addMessageAction({ id: 'shout', label: 'Shout subject', onClick: (message) => api.notify(message.subject.toUpperCase()) });
-         api.addSidebarLink({ id: 'wiki', label: 'Team wiki', href: 'https://wiki.example.test/' });
-       }`,
-    );
+  test('integrations: skins, webhooks, single sign-on and international addresses', async ({ page }) => {
     const hooks = await standIn((_request, response) => {
       response.writeHead(200);
       response.end('ok');
@@ -410,8 +399,6 @@ test.describe('web mail extras', () => {
     await page.getByLabel('Skins (JSON)').fill('[{ "id": "evil", "name": "Evil", "css": "body { display: none }" }]');
     await page.getByRole('button', { name: 'Save skins' }).click();
     await expect(page.getByRole('alert').filter({ hasText: 'unknown skin property' })).toBeVisible();
-
-    await expect(page.getByRole('table', { name: 'Plug-ins' }).getByRole('row', { name: /Hello plug-in/ })).toContainText('Adds a button to every message');
 
     await page.getByLabel('Webhook URL').fill(`http://127.0.0.1:${hooks.port}/hook`);
     await page.getByRole('button', { name: 'Add webhook' }).click();
@@ -451,12 +438,6 @@ test.describe('web mail extras', () => {
     expect(tokenRequest.body).toContain('client_secret=provider-secret');
     expect(tokenRequest.body).toContain('code_verifier=');
 
-    // The plug-in is active for Bob: its action and its sidebar link.
-    await expect(folders(page).getByRole('link', { name: 'Team wiki' })).toHaveAttribute('href', 'https://wiki.example.test/');
-    await page.getByTestId('email-row').filter({ hasText: 'Newsletter one' }).click();
-    await conversation(page).getByRole('button', { name: 'Shout subject' }).click();
-    await expect(page.getByText('NEWSLETTER ONE', { exact: true })).toBeVisible();
-
     // Skins: the administrator's custom skin can be chosen and follows the account.
     await openSettings(page, 'General');
     await page.getByRole('radio', { name: /Ocean/ }).click();
@@ -478,10 +459,6 @@ test.describe('web mail extras', () => {
     await page.getByLabel('Enable single sign-on').uncheck();
     await page.getByRole('button', { name: 'Save single sign-on' }).click();
     await expect(page.getByText('Single sign-on settings saved')).toBeVisible();
-    // The switch reflects the server's state, so it flips once the change has been saved.
-    await page.getByLabel('Enable hello').click();
-    await expect(page.getByText('Plug-in disabled')).toBeVisible();
-    await expect(page.getByLabel('Enable hello')).not.toBeChecked();
     hooks.close();
     provider.close();
   });

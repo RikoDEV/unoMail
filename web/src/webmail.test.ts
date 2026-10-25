@@ -1,10 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('./lib/api', () => ({ get: vi.fn(async () => []), put: vi.fn(async () => ({})), post: vi.fn(), del: vi.fn(), postRaw: vi.fn() }));
 
 import { applySuggestion, imageProxyUrl, shareLevel, splitRecipients, suggestionText } from './mail/extra';
 import { buildFrameDocument, sanitizeEmail } from './mail/sanitize';
-import { createPluginApi, emit, registrySnapshot, resetPlugins, setPluginNotifier } from './lib/plugins';
 import { BUILT_IN_SKINS, buildTheme, colorScheme, sanitizeSkin, skinIsDark, spring } from './ui/skins';
 
 describe('remote images', () => {
@@ -99,41 +98,6 @@ describe('skins', () => {
     expect(bouncy.duration).toBeGreaterThan(200);
     expect(bouncy.duration).toBeLessThan(600);
     expect(Math.max(...spring(1, 3800).easing.slice(7, -1).split(', ').map(Number))).toBeLessThanOrEqual(1);
-  });
-});
-
-describe('plug-in API', () => {
-  beforeEach(() => resetPlugins());
-
-  it('registers scoped actions, validates links and isolates failing handlers', () => {
-    const api = createPluginApi('demo', 'bob@example.org');
-    expect(api.account).toBe('bob@example.org');
-    api.addMessageAction({ id: 'translate', label: 'Translate', onClick: () => {} });
-    api.addMessageAction({ id: 'translate', label: 'Translate again', onClick: () => {} });
-    api.addComposerAction({ id: 'greet', label: 'Greeting', onClick: (composer) => composer.insertHtml('<p>Hello</p>') });
-    api.addSidebarLink({ id: 'wiki', label: 'Wiki', href: 'https://wiki.example.org' });
-    expect(() => api.addSidebarLink({ id: 'bad', label: 'Bad', href: 'javascript:alert(1)' })).toThrow();
-
-    const registry = registrySnapshot();
-    expect(registry.messageActions.map((a) => `${a.id}=${a.label}`)).toEqual(['demo:translate=Translate again']);
-    expect(registry.composerActions[0].id).toBe('demo:greet');
-    expect(registry.sidebarLinks).toEqual([{ id: 'demo:wiki', label: 'Wiki', href: 'https://wiki.example.org' }]);
-
-    const seen: string[] = [];
-    api.on('message:sent', () => {
-      throw new Error('broken plug-in');
-    });
-    api.on('message:sent', (payload) => seen.push(payload.subject));
-    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
-    emit('message:sent', { subject: 'Hello', recipients: 'ann@example.org' });
-    expect(seen).toEqual(['Hello']);
-    expect(errors).toHaveBeenCalledOnce();
-    errors.mockRestore();
-
-    const notices: string[] = [];
-    setPluginNotifier((text) => notices.push(text));
-    api.notify('x'.repeat(1000));
-    expect(notices[0]).toHaveLength(300);
   });
 });
 

@@ -11,7 +11,9 @@ import { Login } from './auth/login';
 import { clearAccountCache, closeCache } from './mail/cache';
 import { clearSensitiveSessionState } from './auth/sessionCleanup';
 import { lock as lockPgp } from './mail/pgp';
-import { loadPlugins } from './lib/plugins';
+import { type PackageInfo, startPackages } from './plugins/host';
+import { PluginFrames } from './plugins/PluginFrames';
+import { FeatureGate, PluginPage } from './plugins/Slot';
 import { loadPrefs, type Prefs, primePrefs, updatePrefs, usePrefs } from './lib/prefs';
 import { BUILT_IN_SKINS, buildTheme, sanitizeSkin, type Skin } from './ui/skins';
 
@@ -129,7 +131,9 @@ export function App() {
   const applySkins = useCallback((installed: unknown[]) => setCustomSkins(installed.map(sanitizeSkin).filter((skin): skin is Skin => skin !== null)), []);
   const reloadSkins = useCallback(async () => {
     try {
-      applySkins(await get<unknown[]>('/api/skins'));
+      // Skins pasted by the administrator, and the themes installed as packages.
+      const [skins, packages] = await Promise.all([get<unknown[]>('/api/skins'), get<{ type: string; enabled: boolean; manifest: { theme?: unknown } }[]>('/api/packages').catch(() => [])]);
+      applySkins([...skins, ...packages.filter((p) => p.type === 'theme' && p.enabled).map((p) => p.manifest.theme)]);
     } catch {
       setCustomSkins([]);
     }
@@ -205,18 +209,18 @@ export function App() {
     let cancelled = false;
     void refreshAccounts();
     // One request for what every page needs; the separate ones if it fails.
-    get<{ preferences: Prefs; skins: unknown[]; plugins: { id: string; enabled: boolean }[] }>('/api/me/startup')
+    get<{ preferences: Prefs; skins: unknown[]; themes?: unknown[]; packages?: PackageInfo[]; }>('/api/me/startup')
       .then((data) => {
         if (cancelled) return;
         primePrefs(data.preferences);
-        applySkins(data.skins);
-        void loadPlugins(account.email, data.plugins);
+        applySkins([...data.skins, ...(data.themes ?? [])]);
+        void startPackages(account.email, data.packages ?? []);
       })
       .catch(() => {
         if (cancelled) return;
         void loadPrefs();
         void reloadSkins();
-        void loadPlugins(account.email);
+        void startPackages(account.email);
       });
     return () => { cancelled = true; };
   }, [account, reloadSkins, applySkins, refreshAccounts]);
@@ -338,13 +342,15 @@ export function App() {
             <BrowserRouter>
               {/* A boundary of its own: loading the reminders must not suspend (and remount) the pages. */}
               <Suspense fallback={null}>{account && <Reminders />}</Suspense>
+              {account && <PluginFrames />}
               <PageBoundary>
               <Suspense fallback={null}>
                 <Routes>
                   <Route path="/login" element={<LoginRoute />} />
                   <Route path="/mail/*" element={<RequireAuth><MailPage /></RequireAuth>} />
-                  <Route path="/contacts" element={<RequireAuth><ContactsPage /></RequireAuth>} />
-                  <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
+                  <Route path="/contacts" element={<RequireAuth><FeatureGate id="contacts" fallback={<Navigate to="/mail" replace />}><ContactsPage /></FeatureGate></RequireAuth>} />
+                  <Route path="/calendar" element={<RequireAuth><FeatureGate id="calendar" fallback={<Navigate to="/mail" replace />}><CalendarPage /></FeatureGate></RequireAuth>} />
+                  <Route path="/x/:plugin/:view" element={<RequireAuth><PluginPage /></RequireAuth>} />
                   <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
                   <Route path="/admin/*" element={<RequireAuth admin><AdminApp /></RequireAuth>} />
                   <Route path="*" element={<Navigate to="/mail" replace />} />

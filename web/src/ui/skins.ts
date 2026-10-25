@@ -11,6 +11,7 @@ import { alpha, createTheme, type Theme, type ThemeOptions } from '@mui/material
 import '@fontsource-variable/roboto-flex';
 
 import { t } from '../i18n';
+import { type Images, type Part, type PartStyle, partStyles, sanitizeImages, sanitizeParts } from './skinParts';
 export interface Skin {
   id: string;
   name: string;
@@ -18,13 +19,24 @@ export interface Skin {
   mode?: 'light' | 'dark' | 'auto';
   primary?: string;
   secondary?: string;
+  tertiary?: string;
+  error?: string;
   background?: string;
   paper?: string;
   text?: string;
   /** Corner radius in pixels (0 to 32). */
   radius?: number;
   density?: 'comfortable' | 'compact';
+  /** Base spacing unit in pixels (4 to 12); overrides the density's default. */
+  spacing?: number;
+  /** Scale of the base font size (0.85 to 1.25). */
+  fontScale?: number;
   font?: 'roboto' | 'system' | 'serif' | 'mono';
+  /** Styles of named parts of the interface. */
+  parts?: Partial<Record<Part, PartStyle>>;
+  /** Background images (theme packages only). */
+  images?: Images;
+  imageFit?: 'cover' | 'contain' | 'tile';
 }
 
 /** The Material 3 colour roles that Material UI's palette has no place for. */
@@ -88,13 +100,20 @@ export function sanitizeSkin(input: unknown): Skin | null {
   if (typeof raw.id !== 'string' || typeof raw.name !== 'string' || !/^[a-z0-9-]{1,40}$/.test(raw.id)) return null;
   const skin: Skin = { id: raw.id, name: raw.name.slice(0, 60) };
   if (raw.mode === 'light' || raw.mode === 'dark' || raw.mode === 'auto') skin.mode = raw.mode;
-  for (const key of ['primary', 'secondary', 'background', 'paper', 'text'] as const) {
+  for (const key of ['primary', 'secondary', 'tertiary', 'error', 'background', 'paper', 'text'] as const) {
     const value = raw[key];
     if (typeof value === 'string' && COLOR.test(value)) skin[key] = value;
   }
   if (typeof raw.radius === 'number' && raw.radius >= 0 && raw.radius <= 32) skin.radius = raw.radius;
+  if (typeof raw.spacing === 'number' && Number.isInteger(raw.spacing) && raw.spacing >= 4 && raw.spacing <= 12) skin.spacing = raw.spacing;
+  if (typeof raw.fontScale === 'number' && raw.fontScale >= 0.85 && raw.fontScale <= 1.25) skin.fontScale = raw.fontScale;
   if (raw.density === 'comfortable' || raw.density === 'compact') skin.density = raw.density;
   if (raw.font === 'roboto' || raw.font === 'system' || raw.font === 'serif' || raw.font === 'mono') skin.font = raw.font;
+  const parts = sanitizeParts(raw.parts);
+  if (parts) skin.parts = parts;
+  const images = sanitizeImages(raw.images);
+  if (images) skin.images = images;
+  if (raw.imageFit === 'cover' || raw.imageFit === 'contain' || raw.imageFit === 'tile') skin.imageFit = raw.imageFit;
   return skin;
 }
 
@@ -189,13 +208,14 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
     ...(skin.background ? { surfaceContainer: skin.background, surfaceContainerLow: skin.background, surfaceDim: skin.background } : {}),
     ...(skin.paper ? { surface: skin.paper, surfaceContainerLowest: skin.paper, surfaceContainerHigh: skin.paper, surfaceContainerHighest: skin.paper } : {}),
     ...(skin.text ? { onSurface: skin.text, onSurfaceVariant: skin.text } : {}),
+    ...(skin.tertiary ? { tertiary: skin.tertiary } : {}),
   };
   const options: ThemeOptions = {
     palette: {
       mode: dark ? 'dark' : 'light',
       primary: { main: skin.primary ?? c.primary, contrastText: skin.primary ? undefined : c.onPrimary },
       secondary: skin.secondary ? { main: skin.secondary } : { main: c.secondary, contrastText: c.onSecondary },
-      error: { main: c.error },
+      error: { main: skin.error ?? c.error },
       // Pages sit on the surface container; the panes and cards on them are the surface.
       background: { default: skin.background ?? c.surfaceContainer, paper: skin.paper ?? c.surface },
       text: { primary: m3.onSurface, secondary: m3.onSurfaceVariant },
@@ -203,7 +223,7 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
       m3,
     },
     shape: { borderRadius: radius },
-    spacing: compact ? 6 : 8,
+    spacing: skin.spacing ?? (compact ? 6 : 8),
     transitions: expressive
       ? {
           // Spatial movement (drawers, collapses) uses the non-bouncing effects springs; the
@@ -214,7 +234,7 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
       : {},
     typography: {
       fontFamily: FONTS[skin.font ?? 'roboto'],
-      fontSize: compact ? 13 : 14,
+      fontSize: Math.round((compact ? 13 : 14) * (skin.fontScale ?? 1) * 10) / 10,
       // Material 3 type scale, with the "emphasized" weights for headlines and titles.
       h1: { fontSize: '3.5625rem', lineHeight: 64 / 57, fontWeight: 400, letterSpacing: '-0.016em' },
       h2: { fontSize: '2.8125rem', lineHeight: 52 / 45, fontWeight: 400, letterSpacing: 0 },
@@ -230,7 +250,15 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
     },
   };
   // The component styles need the finished palette, so the theme is built twice.
-  return createTheme({ ...options, components: components(createTheme(options), { radius, compact, expressive }) });
+  const base = createTheme(options);
+  const styled = components(base, { radius, compact, expressive });
+  // The skin's parts and images come last, over the component styles.
+  const baseline = (styled?.MuiCssBaseline?.styleOverrides ?? {}) as Record<string, object>;
+  const extra = partStyles(base, skin.parts, skin.images, skin.imageFit);
+  return createTheme({
+    ...options,
+    components: { ...styled, MuiCssBaseline: { styleOverrides: { ...baseline, ...extra, body: { ...(baseline.body ?? {}), ...(extra.body ?? {}) } } } },
+  });
 }
 
 /** Material 3 (Expressive) component styles. */

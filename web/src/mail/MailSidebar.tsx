@@ -28,6 +28,7 @@ import { formatBytes } from '../lib/api';
 import type { Account } from '../lib/api';
 import { t } from '../i18n';
 import type { SidebarLink } from '../lib/plugins';
+import { FeatureGate, itemIcon, PluginSlot, usePluginPages } from '../plugins/Slot';
 import { Copyright } from '../ui/shell';
 import { folderName, type Mailbox } from './jmapClient';
 
@@ -68,10 +69,12 @@ export function MailSidebar({
 }) {
   /** In the icon strip an entry has no visible text: name it for screen readers and show it in a tooltip. */
   const named = (name: string) => (mini ? { 'aria-label': name } : {});
+  const pages = usePluginPages('app.navigation');
   const tip = (name: string, item: ReactElement) => (mini ? <Tooltip key={item.key} title={name} placement="right">{item}</Tooltip> : item);
   return (
     <Box
       component="nav"
+      className="um-part-sidebar"
       aria-label={t('Folders')}
       data-mini={mini}
       sx={{
@@ -208,14 +211,24 @@ export function MailSidebar({
         </ListItemButton>
       </List>
       <List dense disablePadding sx={{ mt: 1 }} aria-label={t('More')}>
-        {tip(t('Calendar'), <ListItemButton component={RouterLink} to="/calendar" {...named(t('Calendar'))}>
-          <ListItemIcon sx={{ minWidth: 40 }}><CalendarMonth /></ListItemIcon>
-          <ListItemText primary={t('Calendar')} />
-        </ListItemButton>)}
-        {tip(t('Contacts'), <ListItemButton component={RouterLink} to="/contacts" {...named(t('Contacts'))}>
-          <ListItemIcon sx={{ minWidth: 40 }}><Contacts /></ListItemIcon>
-          <ListItemText primary={t('Contacts')} />
-        </ListItemButton>)}
+        <FeatureGate id="calendar">
+          {tip(t('Calendar'), <ListItemButton component={RouterLink} to="/calendar" {...named(t('Calendar'))}>
+            <ListItemIcon sx={{ minWidth: 40 }}><CalendarMonth /></ListItemIcon>
+            <ListItemText primary={t('Calendar')} />
+          </ListItemButton>)}
+        </FeatureGate>
+        <FeatureGate id="contacts">
+          {tip(t('Contacts'), <ListItemButton component={RouterLink} to="/contacts" {...named(t('Contacts'))}>
+            <ListItemIcon sx={{ minWidth: 40 }}><Contacts /></ListItemIcon>
+            <ListItemText primary={t('Contacts')} />
+          </ListItemButton>)}
+        </FeatureGate>
+        {pages.map((page) => tip(page.title,
+          <ListItemButton key={`${page.plugin}:${page.id}`} component={RouterLink} to={`/x/${encodeURIComponent(page.plugin)}/${encodeURIComponent(page.id)}`} {...named(page.title)}>
+            <ListItemIcon sx={{ minWidth: 40 }}>{itemIcon('extension')}</ListItemIcon>
+            <ListItemText primary={page.title} />
+          </ListItemButton>,
+        ))}
         {sidebarLinks.map((link) => tip(link.label,
           <ListItemButton key={link.id} component="a" href={link.href} target="_blank" rel="noopener noreferrer" {...named(link.label)}>
             <ListItemIcon sx={{ minWidth: 40 }}><Extension /></ListItemIcon>
@@ -223,6 +236,7 @@ export function MailSidebar({
           </ListItemButton>,
         ))}
       </List>
+      {!mini && <Box sx={{ px: 1, mt: 1 }}><PluginSlot slot="mail.sidebar" direction="column" /></Box>}
       {account && (
         <Box className="mini-hide" sx={{ mt: 'auto', px: 2, pt: 3, flexShrink: 0 }}>
           <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>

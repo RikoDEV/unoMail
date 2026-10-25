@@ -1,0 +1,19 @@
+{
+  "schema": 2,
+  "id": "cloud-files",
+  "type": "plugin",
+  "name": "Cloud files",
+  "version": "1.0.0",
+  "description": "Saves attachments to a WebDAV cloud (Nextcloud, ownCloud, …) and attaches cloud files to new messages.",
+  "license": "MIT",
+  "api": "^2",
+  "entry": "index.js",
+  "permissions": ["attachments:read", "composer:write", "panel", "notify"],
+  "settings": [
+    { "key": "server", "type": "host", "label": "Cloud server", "scope": "admin" },
+    { "key": "davPath", "type": "string", "label": "WebDAV path ({user} is the user name)", "default": "/remote.php/dav/files/{user}", "scope": "admin" },
+    { "key": "username", "type": "string", "label": "Cloud user name" },
+    { "key": "password", "type": "string", "label": "App password", "secret": true },
+    { "key": "folder", "type": "string", "label": "Folder for saved attachments", "default": "Mail attachments" }
+  ]
+}

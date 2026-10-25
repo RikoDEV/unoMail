@@ -1,15 +1,8 @@
-// Plug-in API of the web client.
-//
-// A plug-in is a JavaScript module installed by the server's operator under
-// `<data>/plugins/<id>/plugin.js`. Its default export receives the API below and uses it to
-// add actions to the reader and the composer, links to the sidebar, and to react to events.
-// Plug-ins run with the page's privileges, which is why only the operator can install them.
+// Plug-in registry of the web client: what the sandboxed plug-ins (`../plugins/host`) added
+// to the interface, and which built-in features they hid. The reader, the composer, the
+// sidebar and the other slots read it; nothing here runs plug-in code.
 
 import { useSyncExternalStore } from 'react';
-import { get } from './api';
-
-import { t } from '../i18n';
-const PLUGIN_API_VERSION = 1;
 
 export interface PluginMessage {
   id: string;
@@ -19,6 +12,8 @@ export interface PluginMessage {
   receivedAt: string;
   /** Sanitized HTML of the message body. */
   html: string;
+  /** Files attached to the message (inline images excluded). `url` stays with the client. */
+  attachments: { id: string; name: string; type: string; size: number; url?: string }[];
 }
 
 export interface ComposerHandle {
@@ -27,6 +22,8 @@ export interface ComposerHandle {
   getRecipients(): string;
   /** Inserts sanitized HTML at the cursor. */
   insertHtml(html: string): void;
+  /** Attaches files, uploaded like ones the user picked. */
+  addFiles(files: File[]): Promise<void>;
 }
 
 export interface MessageAction {
@@ -48,112 +45,78 @@ export interface SidebarLink {
   href: string;
 }
 
+/** Places in the layout plug-ins can add to. */
+export const SLOTS = ['mail.toolbar', 'mail.sidebar', 'reader.header', 'reader.footer', 'composer.toolbar', 'app.navigation', 'settings.section', 'admin.section'] as const;
+export type Slot = (typeof SLOTS)[number];
+
+/** A button, link or badge a plug-in placed in a slot. */
+export interface SlotItem {
+  id: string;
+  plugin: string;
+  slot: Slot;
+  kind: 'button' | 'link' | 'badge';
+  label: string;
+  icon?: string;
+  href?: string;
+  onClick?: () => void;
+}
+
+/** A plug-in's own frame shown in a slot (a widget, a page, a settings or admin section). */
+export interface Mount {
+  id: string;
+  plugin: string;
+  pluginName: string;
+  commit: string;
+  /** A slot, or `replace:<feature>` for a view that takes a hidden feature's place. */
+  slot: Slot | `replace:${Feature}`;
+  title: string;
+  height: number;
+}
+
+/** Built-in features plug-ins may hide or replace (with `ui:replace`). */
+export const REMOVABLE_FEATURES = ['calendar', 'contacts', 'smart-reply', 'summary-cards', 'masked-email', 'templates', 'composer.emoji', 'composer.schedule'] as const;
+export type Feature = (typeof REMOVABLE_FEATURES)[number];
+
 export interface PluginEvents {
   'message:open': PluginMessage;
   'message:sent': { subject: string; recipients: string };
-}
-
-export interface PluginApi {
-  version: number;
-  /** Address of the signed-in user. */
-  account: string;
-  addMessageAction(action: MessageAction): void;
-  addComposerAction(action: ComposerAction): void;
-  addSidebarLink(link: SidebarLink): void;
-  on<K extends keyof PluginEvents>(event: K, handler: (payload: PluginEvents[K]) => void): void;
-  /** Shows a short notice to the user. */
-  notify(text: string): void;
-  log(...args: unknown[]): void;
 }
 
 interface Registry {
   messageActions: MessageAction[];
   composerActions: ComposerAction[];
   sidebarLinks: SidebarLink[];
-  loaded: string[];
+  items: SlotItem[];
+  mounts: Mount[];
+  /** Hidden features, with the plug-ins that hid them. */
+  hidden: Partial<Record<Feature, string[]>>;
 }
 
-let registry: Registry = { messageActions: [], composerActions: [], sidebarLinks: [], loaded: [] };
-const handlers: { [K in keyof PluginEvents]?: ((payload: PluginEvents[K]) => void)[] } = {};
+const EMPTY: Registry = { messageActions: [], composerActions: [], sidebarLinks: [], items: [], mounts: [], hidden: {} };
+let registry: Registry = EMPTY;
 const listeners = new Set<() => void>();
-let notifier: (text: string) => void = () => {};
 
-function update(change: Partial<Registry>) {
+/** Changes the registry (for the sandbox host). */
+export function updateRegistry(change: Partial<Registry>) {
   registry = { ...registry, ...change };
   listeners.forEach((listener) => listener());
 }
 
-export function setPluginNotifier(show: (text: string) => void) {
-  notifier = show;
+let host: (event: string, payload: unknown) => void = () => {};
+
+/** Lets the sandbox host receive every event. */
+export function registerHost(forward: (event: string, payload: unknown) => void) {
+  host = forward;
 }
 
-/** Tells plug-ins that something happened. A failing plug-in never breaks the client. */
+/** Tells plug-ins that something happened. */
 export function emit<K extends keyof PluginEvents>(event: K, payload: PluginEvents[K]) {
-  for (const handler of handlers[event] ?? []) {
-    try {
-      handler(payload);
-    } catch (err) {
-      console.error(`plug-in handler for ${event} failed`, err);
-    }
-  }
-}
-
-export function createPluginApi(id: string, account: string): PluginApi {
-  const scoped = (name: string) => `${id}:${name}`;
-  return {
-    version: PLUGIN_API_VERSION,
-    account,
-    addMessageAction: (action) => update({ messageActions: [...registry.messageActions.filter((a) => a.id !== scoped(action.id)), { ...action, id: scoped(action.id) }] }),
-    addComposerAction: (action) => update({ composerActions: [...registry.composerActions.filter((a) => a.id !== scoped(action.id)), { ...action, id: scoped(action.id) }] }),
-    addSidebarLink: (link) => {
-      // Links leave the application, so only real web addresses are accepted.
-      if (!/^https?:\/\//i.test(link.href)) throw new Error(t('sidebar links must be http(s) addresses'));
-      update({ sidebarLinks: [...registry.sidebarLinks.filter((l) => l.id !== scoped(link.id)), { ...link, id: scoped(link.id) }] });
-    },
-    on: (event, handler) => {
-      (handlers[event] ??= [] as never[]).push(handler as never);
-    },
-    notify: (text) => notifier(String(text).slice(0, 300)),
-    log: (...args) => console.info(`[plug-in ${id}]`, ...args),
-  };
+  host(event, payload);
 }
 
 export function resetPlugins() {
-  for (const key of Object.keys(handlers) as (keyof PluginEvents)[]) delete handlers[key];
-  update({ messageActions: [], composerActions: [], sidebarLinks: [], loaded: [] });
-}
-
-let loading: Promise<void> | null = null;
-
-/** Loads every enabled plug-in once per session (`known`: the list, if already fetched). */
-export function loadPlugins(account: string, known?: { id: string; enabled: boolean }[]): Promise<void> {
-  loading ??= (async () => {
-    let plugins: { id: string; enabled: boolean }[] = known ?? [];
-    if (!known) {
-      try {
-        plugins = await get('/api/plugins');
-      } catch {
-        return;
-      }
-    }
-    for (const plugin of plugins.filter((p) => p.enabled)) {
-      try {
-        const module = await import(/* @vite-ignore */ `/api/plugins/${encodeURIComponent(plugin.id)}/plugin.js`);
-        if (typeof module.default === 'function') {
-          await module.default(createPluginApi(plugin.id, account));
-          update({ loaded: [...registry.loaded, plugin.id] });
-        }
-      } catch (err) {
-        console.error(`plug-in ${plugin.id} failed to load`, err);
-      }
-    }
-  })();
-  return loading;
-}
-
-export function unloadPlugins() {
-  loading = null;
-  resetPlugins();
+  host = () => {};
+  updateRegistry(EMPTY);
 }
 
 /** The current registrations (for code outside React components). */
@@ -169,4 +132,9 @@ export function usePlugins(): Registry {
     },
     () => registry,
   );
+}
+
+/** Whether a built-in feature is shown (no plug-in hid it). */
+export function useFeature(feature: Feature): boolean {
+  return !usePlugins().hidden[feature]?.length;
 }

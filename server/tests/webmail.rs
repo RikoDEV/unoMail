@@ -471,7 +471,7 @@ async fn webhooks_are_signed_and_administrator_only() {
 }
 
 #[tokio::test]
-async fn skins_and_plugins() {
+async fn skins() {
     let (env, bob) = env_with_bob().await;
     env.account_with("admin@example.org", Role::SuperAdmin, None).await;
     let admin = Api::logged_in(&env, "admin@example.org").await;
@@ -482,31 +482,6 @@ async fn skins_and_plugins() {
     assert_eq!(admin.put("/api/skins", json!([ocean, ocean])).await.status, StatusCode::BAD_REQUEST);
     assert_eq!(admin.put("/api/skins", json!([ocean])).await.status, StatusCode::OK);
     assert_eq!(bob.get("/api/skins").await.body, json!([ocean]), "every user can pick an installed skin");
-
-    // Plug-ins are installed on disk by the server's operator.
-    let dir = env.app.cfg.data_dir.join("plugins");
-    std::fs::create_dir_all(dir.join("hello")).unwrap();
-    std::fs::write(dir.join("hello").join("plugin.json"), r#"{ "name": "Hello", "version": "1.0", "description": "Says hello" }"#).unwrap();
-    std::fs::write(dir.join("hello").join("plugin.js"), "export default function (api) { api.log('hello'); }").unwrap();
-    std::fs::create_dir_all(dir.join("no-script")).unwrap();
-    std::fs::write(dir.join("no-script").join("plugin.json"), "{}").unwrap();
-    std::fs::create_dir_all(dir.join("Bad Name")).unwrap();
-
-    assert_eq!(bob.get("/api/plugins").await.body, json!([{ "id": "hello", "name": "Hello", "version": "1.0", "description": "Says hello", "enabled": true }]));
-    let script = bob.get("/api/plugins/hello/plugin.js").await;
-    assert_eq!((script.status, script.headers["content-type"].to_str().unwrap()), (StatusCode::OK, "text/javascript; charset=utf-8"));
-    assert!(script.text.contains("api.log('hello')"));
-    assert_eq!(Api::new(&env).get("/api/plugins/hello/plugin.js").await.status, StatusCode::UNAUTHORIZED);
-    for escape in ["..", "..%2F..%2Funomail.db", "no-script", "missing"] {
-        assert_eq!(bob.get(&format!("/api/plugins/{escape}/plugin.js")).await.status, StatusCode::NOT_FOUND, "{escape}");
-    }
-
-    assert_eq!(bob.put("/api/plugins/hello", json!({ "enabled": false })).await.status, StatusCode::FORBIDDEN);
-    assert_eq!(admin.put("/api/plugins/hello", json!({ "enabled": false })).await.status, StatusCode::OK);
-    assert_eq!(bob.get("/api/plugins").await.body, json!([]), "a disabled plug-in is not offered to users");
-    assert_eq!(bob.get("/api/plugins/hello/plugin.js").await.status, StatusCode::NOT_FOUND);
-    assert_eq!(admin.get("/api/plugins").await.body[0]["enabled"], false);
-    assert_eq!(admin.put("/api/plugins/missing", json!({ "enabled": true })).await.status, StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

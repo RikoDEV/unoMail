@@ -1,13 +1,14 @@
 // Administration of everything that connects the server to its surroundings: single sign-on,
-// the LDAP directory, webhooks, skins and web client plug-ins.
+// the LDAP directory, webhooks, skins, and plug-in and theme packages.
 
 import Delete from '@mui/icons-material/Delete';
-import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, FormControlLabel, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, IconButton, Stack, Switch, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { del, formatTime, get, post, put, errorText } from '../lib/api';
 import { useAppearance } from '../app';
 import { BUILT_IN_SKINS } from '../ui/skins';
 import { PageHeader, useAction, useLoad, ScrollTable } from './common';
+import { Packages } from './Packages';
 
 import { t } from '../i18n';
 // --- Single sign-on ------------------------------------------------------------------------
@@ -303,58 +304,6 @@ function Skins() {
   );
 }
 
-// --- Plug-ins ------------------------------------------------------------------------------
-
-interface PluginInfo {
-  id: string;
-  name: string;
-  version: string;
-  description: string;
-  enabled: boolean;
-}
-
-function Plugins() {
-  const { run, feedback } = useAction();
-  const { data, reload } = useLoad(() => get<PluginInfo[]>('/api/plugins'), []);
-  return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="h6">{t('Web client plug-ins')}</Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
-          {t('A plug-in is a folder under')} <code>plugins/</code> {t("in the server's data directory, containing")} <code>plugin.json</code> {t('and')}{' '}
-          <code>plugin.js</code>{t(". Plug-ins run in every user's browser with the page's privileges, so they can only be installed by someone with access to the server itself. Changes apply the next time users load the page.")}
-        </Typography>
-        {feedback}
-        {(data?.length ?? 0) === 0 ? (
-          <Typography sx={{ color: 'text.secondary' }}>{t('No plug-ins are installed.')}</Typography>
-        ) : (
-          <ScrollTable size="small" aria-label={t('Plug-ins')}>
-            <TableBody>
-              {data!.map((plugin) => (
-                <TableRow key={plugin.id}>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 600 }}>{plugin.name || plugin.id}</Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                      {plugin.description}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{plugin.version && <Chip size="small" label={plugin.version} />}</TableCell>
-                  <TableCell align="right">
-                    <FormControlLabel
-                      label={t('Enabled')}
-                      control={<Switch checked={plugin.enabled} onChange={(e) => void run(async () => { await put(`/api/plugins/${encodeURIComponent(plugin.id)}`, { enabled: e.target.checked }); await reload(); }, e.target.checked ? t('Plug-in enabled') : t('Plug-in disabled'))} slotProps={{ input: { 'aria-label': t('Enable {{id}}', { id: plugin.id }) } }} />}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </ScrollTable>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function Integrations() {
   return (
     <>
@@ -363,8 +312,8 @@ export function Integrations() {
         <SingleSignOn />
         <Ldap />
         <Webhooks />
+        <Packages />
         <Skins />
-        <Plugins />
       </Stack>
     </>
   );
