@@ -70,7 +70,7 @@ export function MailSidebar({
   /** In the icon strip an entry has no visible text: name it for screen readers and show it in a tooltip. */
   const named = (name: string) => (mini ? { 'aria-label': name } : {});
   const pages = usePluginPages('app.navigation');
-  const tip = (name: string, item: ReactElement) => (mini ? <Tooltip key={item.key} title={name} placement="right">{item}</Tooltip> : item);
+  const tip = (name: string, item: ReactElement) => (mini ? <Tooltip key={item.key ?? undefined} title={name} placement="right">{item}</Tooltip> : item);
   return (
     <Box
       component="nav"
