@@ -387,11 +387,12 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
     // reject / ereject: the sender is told, when the return path can be believed.
     if let Some(reason) = &outcome.reject
         && result.is_ok()
+        && !junk
+        && !d.sender.is_empty()
+        && (d.sender_verified || d.author_verified)
     {
-        if !junk && !d.sender.is_empty() && (d.sender_verified || d.author_verified) {
-            // Boxed: the bounce may itself be delivered here.
-            Box::pin(crate::smtp::queue::bounce(app, d.sender, d.recipient, &format!("rejected by the recipient's mail filter: {reason}"), d.raw)).await;
-        }
+        // Boxed: the bounce may itself be delivered here.
+        Box::pin(crate::smtp::queue::bounce(app, d.sender, d.recipient, &format!("rejected by the recipient's mail filter: {reason}"), d.raw)).await;
     }
     if result.is_ok() && !outcome.duplicates.is_empty() {
         record_duplicates(app, d.account_id, &outcome.duplicates).await;

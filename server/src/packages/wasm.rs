@@ -235,9 +235,9 @@ impl Host {
                     .fetch_all(&self.db)
                     .await
                     .map_err(db_err)?;
-                return Ok(json!(keys.into_iter().map(|k| k[prefix.len()..].to_owned()).collect::<Vec<_>>()));
+                Ok(json!(keys.into_iter().map(|k| k[prefix.len()..].to_owned()).collect::<Vec<_>>()))
             }
-            _ if key.is_empty() || key.len() > 200 => return Err("keys must be 1 to 200 characters".into()),
+            _ if key.is_empty() || key.len() > 200 => Err("keys must be 1 to 200 characters".into()),
             Some("kv.get") => {
                 let value: Option<String> = sqlx::query_scalar("SELECT value FROM package_kv WHERE package_id = ? AND key = ?").bind(&self.package).bind(&stored).fetch_optional(&self.db).await.map_err(db_err)?;
                 Ok(value.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or(Value::Null))

@@ -1349,10 +1349,12 @@ impl Session {
     /// APPEND, with several messages at once (MULTIAPPEND, RFC 3502: all or none) and
     /// UTF-8 messages (`UTF8 (literal)`, RFC 6855).
     async fn cmd_append(&mut self, args: &[Arg]) -> CmdResult {
+        /// Flags, keywords, internal date and the literal of one message.
+        type Appended<'a> = (Flags, Vec<String>, Option<i64>, &'a [u8]);
         let mailbox = self.find_mailbox(args.first().and_then(Arg::text), "i").await?;
         // Each message: [flags] [date-time] literal. A quoted string is a date-time when another
         // string (the message) follows it.
-        let mut messages: Vec<(Flags, Vec<String>, Option<i64>, &[u8])> = Vec::new();
+        let mut messages: Vec<Appended> = Vec::new();
         let (mut flags, mut keywords, mut date) = (Flags::default(), Vec::new(), None);
         let rest = args.get(1..).unwrap_or_default();
         let mut i = 0;

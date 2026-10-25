@@ -306,8 +306,8 @@ enum Test {
     CurrentDate { part: String, keys: Vec<String>, spec: Spec },
     Environment { name: String, keys: Vec<String>, spec: Spec },
     Ihave(Vec<String>),
-    SpamTest { keys: Vec<String>, spec: Spec },
-    VirusTest { keys: Vec<String>, spec: Spec },
+    Spam { keys: Vec<String>, spec: Spec },
+    Virus { keys: Vec<String>, spec: Spec },
     Duplicate { handle: String, header: Option<String>, unique_id: Option<String>, seconds: i64, last: bool },
     MailboxExists(Vec<String>),
     SpecialUseExists { mailbox: Option<String>, uses: Vec<String> },
@@ -777,7 +777,7 @@ impl Parser<'_> {
                 self.need(&name, &format!("the {name} test"))?;
                 let spec = self.match_tags(&["percent"])?;
                 let keys = self.keys(&spec)?;
-                if name == "spamtest" { Test::SpamTest { keys, spec } } else { Test::VirusTest { keys, spec } }
+                if name == "spamtest" { Test::Spam { keys, spec } } else { Test::Virus { keys, spec } }
             }
             "duplicate" => {
                 self.need("duplicate", "the duplicate test")?;
@@ -1460,12 +1460,13 @@ fn percent_decode(text: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte) = u8::from_str_radix(&text[i + 1..i + 3], 16) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&text[i + 1..i + 3], 16)
+        {
+            out.push(byte);
+            i += 3;
+            continue;
         }
         out.push(bytes[i]);
         i += 1;
@@ -1905,8 +1906,8 @@ impl Runtime<'_> {
                 self.any(value.into_iter(), keys, spec)
             }
             Test::Ihave(extensions) => extensions.iter().all(|e| SUPPORTED.contains(&e.as_str())),
-            Test::SpamTest { keys, spec } => self.any(std::iter::once(context.spam.to_string()), keys, spec),
-            Test::VirusTest { keys, spec } => self.any(std::iter::once(context.virus.to_string()), keys, spec),
+            Test::Spam { keys, spec } => self.any(std::iter::once(context.spam.to_string()), keys, spec),
+            Test::Virus { keys, spec } => self.any(std::iter::once(context.virus.to_string()), keys, spec),
             Test::Duplicate { handle, header, unique_id, seconds, last } => {
                 let id = match (unique_id, header) {
                     (Some(id), _) => Some(self.expand(id)),
