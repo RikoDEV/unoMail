@@ -118,6 +118,8 @@ impl Session {
         // Credentials only over TLS.
         out.push_str(if self.conn.is_tls() && self.account.is_none() { "\"SASL\" \"PLAIN\"\r\n" } else { "\"SASL\" \"\"\r\n" });
         out.push_str(&format!("\"SIEVE\" {}\r\n", quoted(&sieve::SUPPORTED.join(" "))));
+        // RFC 5804: the notification methods enotify supports.
+        out.push_str("\"NOTIFY\" \"mailto\"\r\n");
         if !self.conn.is_tls() {
             out.push_str("\"STARTTLS\"\r\n");
         }

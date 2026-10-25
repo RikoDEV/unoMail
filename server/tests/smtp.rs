@@ -185,6 +185,42 @@ async fn submission_requires_tls_and_authentication() {
 }
 
 #[tokio::test]
+async fn future_release_deliver_by_and_priority() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+
+    // Holding mail is for signed-in senders; the MX does not offer it.
+    let mut mx = Client::smtp(env.mx).await;
+    let ehlo = mx.cmd("EHLO relay.example").await;
+    assert!(ehlo.contains("DELIVERBY 60") && ehlo.contains("MT-PRIORITY MIXER") && ehlo.contains("NO-SOLICITING") && !ehlo.contains("FUTURERELEASE"), "{ehlo}");
+    assert!(mx.cmd("MAIL FROM:<x@remote.example> HOLDFOR=60").await.starts_with("555"));
+
+    let mut c = Client::connect(env.submission).await;
+    c.read_reply().await;
+    c.starttls().await;
+    assert!(c.cmd("EHLO laptop").await.contains("FUTURERELEASE 2592000 "));
+    assert!(c.auth_plain("bob@example.org", PASSWORD).await.starts_with("235"));
+    assert!(c.cmd("MAIL FROM:<bob@example.org> HOLDFOR=99999999").await.starts_with("501"), "at most 30 days");
+    assert!(c.cmd("MAIL FROM:<bob@example.org> BY=10;R").await.starts_with("501"), "below the minimum");
+    assert!(c.cmd("MAIL FROM:<bob@example.org> MT-PRIORITY=12").await.starts_with("501"));
+    assert!(c.cmd("RSET").await.starts_with("250"));
+
+    let started = unomail::util::now();
+    let reply = c.send_mail_with("bob@example.org", "MAIL FROM:<bob@example.org> HOLDFOR=3600 MT-PRIORITY=4 SOLICIT=org.example:offer", &["far@remote.example"], &message("bob@example.org", "far@remote.example", "Later", "x")).await;
+    assert!(reply.starts_with("250"), "{reply}");
+    let (next, priority, expires): (i64, i64, i64) = sqlx::query_as("SELECT next_attempt_at, priority, expires_at FROM queue WHERE recipient = 'far@remote.example'").fetch_one(&env.app.db).await.unwrap();
+    assert!(next >= started + 3600 && next <= started + 3610, "held for an hour");
+    assert_eq!(priority, 4);
+    assert!(expires >= next + env.app.cfg.queue_max_age_secs - 5, "the time to live starts at release");
+
+    let reply = c.send_mail_with("bob@example.org", "MAIL FROM:<bob@example.org> BY=600;R", &["soon@remote.example"], &message("bob@example.org", "soon@remote.example", "Soon", "x")).await;
+    assert!(reply.starts_with("250"), "{reply}");
+    let expires: i64 = sqlx::query_scalar("SELECT expires_at FROM queue WHERE recipient = 'soon@remote.example'").fetch_one(&env.app.db).await.unwrap();
+    assert!(expires <= unomail::util::now() + 600, "returned if not delivered within ten minutes");
+}
+
+#[tokio::test]
 async fn starttls_command_injection_is_refused() {
     let env = TestEnv::start().await;
     let mut c = Client::smtp(env.submission).await;

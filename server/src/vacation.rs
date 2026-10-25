@@ -24,11 +24,19 @@ pub struct Vacation {
     #[serde(skip)]
     #[sqlx(skip)]
     pub mime: bool,
+    /// `vacation :seconds` (RFC 6131): the interval in seconds instead of days.
+    #[serde(skip)]
+    #[sqlx(skip)]
+    pub interval_seconds: Option<i64>,
+    /// `vacation :fcc` (RFC 8580): keep a copy of the reply.
+    #[serde(skip)]
+    #[sqlx(skip)]
+    pub fcc: Option<crate::sieve::Fcc>,
 }
 
 impl Default for Vacation {
     fn default() -> Self {
-        Vacation { enabled: false, subject: String::new(), body: String::new(), starts_at: None, ends_at: None, interval_days: 7, mime: false }
+        Vacation { enabled: false, subject: String::new(), body: String::new(), starts_at: None, ends_at: None, interval_days: 7, mime: false, interval_seconds: None, fcc: None }
     }
 }
 
@@ -198,6 +206,8 @@ pub async fn reply_from_sieve(app: &App, account_id: i64, recipient: &str, sende
         ends_at: None,
         interval_days: action.days,
         mime: action.mime,
+        interval_seconds: action.seconds,
+        fcc: action.fcc.clone(),
     };
     // Different handles (or reply texts) are tracked separately, as RFC 5230 requires.
     let handle = if action.handle.is_empty() { format!("{}\0{}", action.subject, action.reason) } else { action.handle.clone() };
@@ -217,7 +227,7 @@ async fn send_reply(app: &App, account_id: i64, recipient: &str, sender: &str, r
 
         // Smart deduplication: at most one reply per correspondent per interval. The row is
         // claimed atomically so concurrent deliveries cannot both reply.
-        let cutoff = now() - vacation.interval_days * 86400;
+        let cutoff = now() - vacation.interval_seconds.unwrap_or(vacation.interval_days * 86400);
         let claimed = sqlx::query(
             "INSERT INTO vacation_sent (account_id, sender, sent_at) VALUES (?1, ?2, ?3)
              ON CONFLICT(account_id, sender) DO UPDATE SET sent_at = excluded.sent_at WHERE vacation_sent.sent_at < ?4",
@@ -238,6 +248,9 @@ async fn send_reply(app: &App, account_id: i64, recipient: &str, sender: &str, r
         let domain = recipient.rsplit_once('@').map_or("", |(_, d)| d);
         let mut message = format!("Received: by {} (autoreply); {}\r\n", app.cfg.hostname, rfc2822_now()).into_bytes();
         message.extend_from_slice(&dkim::sign(&app.db, &app.secrets, domain, &reply).await?);
+        if let Some(fcc) = &vacation.fcc {
+            delivery::store_fcc(app, account_id, fcc, &message).await?;
+        }
 
         // The envelope sender is null so that a bounce or another autoresponder cannot loop.
         let targets = match delivery::resolve(app, &sender_address).await? {

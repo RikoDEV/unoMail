@@ -28,6 +28,20 @@ pub struct Dsn {
     /// The sender demanded verified encryption all the way (REQUIRETLS, RFC 8689). Not a DSN
     /// parameter, but it travels with them from the transaction to the queue.
     pub require_tls: bool,
+    /// Other transaction parameters that only matter when the message is queued.
+    pub queueing: Queueing,
+}
+
+/// What MAIL FROM asked of the queue: FUTURERELEASE (RFC 4865), DELIVERBY (RFC 2852) and
+/// MT-PRIORITY (RFC 6710).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Queueing {
+    /// Not to be sent before this Unix time.
+    pub hold_until: Option<i64>,
+    /// `BY=n;R`: returned as undeliverable if not delivered by this Unix time.
+    pub deliver_by: Option<i64>,
+    /// -9 to 9.
+    pub priority: i8,
 }
 
 impl Dsn {
@@ -61,6 +75,7 @@ pub struct Request {
     pub envid: Option<String>,
     /// REQUIRETLS was given on MAIL FROM.
     pub require_tls: bool,
+    pub queueing: Queueing,
     /// Lower-cased recipient address → (NOTIFY, ORCPT).
     pub recipients: HashMap<String, (Option<String>, Option<String>)>,
 }
@@ -68,7 +83,7 @@ pub struct Request {
 impl Request {
     pub fn for_recipient(&self, recipient: &str) -> Dsn {
         let (notify, orcpt) = self.recipients.get(&recipient.to_ascii_lowercase()).cloned().unwrap_or_default();
-        Dsn { notify, ret: self.ret.clone(), envid: self.envid.clone(), orcpt, require_tls: self.require_tls }
+        Dsn { notify, ret: self.ret.clone(), envid: self.envid.clone(), orcpt, require_tls: self.require_tls, queueing: self.queueing }
     }
 }
 
@@ -287,7 +302,7 @@ mod tests {
             if let Some(orcpt) = parse_orcpt(&text) {
                 assert!(!orcpt.contains(['\r', '\n']));
             }
-            let dsn = Dsn { notify: parse_notify(&text), ret: parse_ret(&text), envid: valid_xtext(&text, 100).then(|| text.clone()), orcpt: parse_orcpt(&text), require_tls: false };
+            let dsn = Dsn { notify: parse_notify(&text), ret: parse_ret(&text), envid: valid_xtext(&text, 100).then(|| text.clone()), orcpt: parse_orcpt(&text), require_tls: false, ..Default::default() };
             let report = build("mx.example", "a@b.example", "c@d.example", Action::Failed, &text, text.as_bytes(), &dsn);
             let head = String::from_utf8_lossy(&report[..report.windows(4).position(|w| w == b"\r\n\r\n").unwrap_or(report.len())]).into_owned();
             assert!(!head.contains("\nInjected"), "no header injection");
@@ -318,14 +333,14 @@ mod tests {
         let all = Dsn { notify: Some("DELAY,FAILURE,SUCCESS".into()), ..Dsn::default() };
         assert!(all.wants_failure() && all.wants_success() && all.wants_delay());
 
-        let passed = Dsn { notify: Some("FAILURE,SUCCESS".into()), ret: Some("HDRS".into()), envid: Some("QQ314159".into()), orcpt: None, require_tls: false };
+        let passed = Dsn { notify: Some("FAILURE,SUCCESS".into()), ret: Some("HDRS".into()), envid: Some("QQ314159".into()), orcpt: None, require_tls: false, ..Default::default() };
         assert_eq!(smtp_parameters(&passed, "bob@example.org"), (" RET=HDRS ENVID=QQ314159".into(), " NOTIFY=FAILURE,SUCCESS ORCPT=rfc822;bob@example.org".into()));
     }
 
     #[test]
     fn reports() {
         let original = b"Subject: Hi\r\nFrom: a@b.example\r\n\r\nSecret body\r\n";
-        let dsn = Dsn { notify: Some("SUCCESS".into()), ret: Some("FULL".into()), envid: Some("ID+2B1".into()), orcpt: Some("rfc822;list+2Bx@example.org".into()), require_tls: false };
+        let dsn = Dsn { notify: Some("SUCCESS".into()), ret: Some("FULL".into()), envid: Some("ID+2B1".into()), orcpt: Some("rfc822;list+2Bx@example.org".into()), require_tls: false, ..Default::default() };
         let report = String::from_utf8(build("mx.example", "a@b.example", "bob@example.org", Action::Delivered, "", original, &dsn)).unwrap();
         assert!(report.contains("Subject: Successful Mail Delivery Report\r\n"));
         assert!(report.contains("Original-Envelope-Id: ID+2B1\r\n"));

@@ -192,6 +192,21 @@ impl Client {
         self.cmd(".").await
     }
 
+    /// Like `send_mail`, with the MAIL FROM command given in full (for its parameters).
+    pub async fn send_mail_with(&mut self, _from: &str, mail_from: &str, to: &[&str], message: &str) -> String {
+        let reply = self.cmd(mail_from).await;
+        if !reply.starts_with("250") {
+            return reply;
+        }
+        for rcpt in to {
+            let reply = self.cmd(&format!("RCPT TO:<{rcpt}>")).await;
+            assert!(reply.starts_with("250"), "RCPT TO failed: {reply}");
+        }
+        assert!(self.cmd("DATA").await.starts_with("354"));
+        self.send_raw(message.as_bytes()).await;
+        self.cmd(".").await
+    }
+
     /// Whatever bytes arrive next (for compressed streams).
     pub async fn read_raw(&mut self) -> Vec<u8> {
         let reader = self.stream.as_mut().unwrap();

@@ -18,6 +18,10 @@ use crate::{
     util::{Address, is_valid_domain},
 };
 
+/// FUTURERELEASE: messages may be held for up to 30 days.
+const MAX_HOLD_SECS: i64 = 30 * 86400;
+/// DELIVERBY: the shortest deadline accepted.
+const MIN_DELIVER_BY: i64 = 60;
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_COMMAND_LINE: usize = 4096;
 /// Generous compared to the 998 octets of RFC 5322, but bounded.
@@ -319,6 +323,17 @@ impl Session {
             lines.push(format!("AUTH PLAIN LOGIN{oauth}"));
         }
         lines.push("ENHANCEDSTATUSCODES".into());
+        // RFC 2852: the shortest BY= time we accept, in seconds.
+        lines.push(format!("DELIVERBY {MIN_DELIVER_BY}"));
+        // RFC 6710 (honoured for signed-in senders), RFC 3865 (no keywords are refused).
+        lines.push("MT-PRIORITY MIXER".into());
+        lines.push("NO-SOLICITING".into());
+        // RFC 4865: holding mail for later is for signed-in senders.
+        if self.mode != Mode::Mx {
+            let latest = time::OffsetDateTime::now_utc() + time::Duration::seconds(MAX_HOLD_SECS);
+            let latest = latest.replace_nanosecond(0).unwrap_or(latest).format(&time::format_description::well_known::Rfc3339).unwrap_or_default();
+            lines.push(format!("FUTURERELEASE {MAX_HOLD_SECS} {latest}"));
+        }
         let last = lines.len() - 1;
         let text: String =
             lines.iter().enumerate().map(|(i, l)| format!("250{}{l}\r\n", if i == last { ' ' } else { '-' })).collect();
@@ -493,6 +508,63 @@ impl Session {
                     }
                 }
                 "BODY" if matches!(value.to_ascii_uppercase().as_str(), "7BIT" | "8BITMIME") => {}
+                // FUTURERELEASE (RFC 4865), for signed-in senders only.
+                "HOLDFOR" | "HOLDUNTIL" if self.mode != Mode::Mx && dsn.queueing.hold_until.is_none() => {
+                    let now = crate::util::now();
+                    let until = if key.eq_ignore_ascii_case("HOLDFOR") {
+                        value.parse::<i64>().ok().filter(|s| *s >= 0).map(|s| now + s)
+                    } else {
+                        time::OffsetDateTime::parse(value, &time::format_description::well_known::Rfc3339).ok().map(|t| t.unix_timestamp())
+                    };
+                    match until {
+                        Some(until) if until <= now + MAX_HOLD_SECS => dsn.queueing.hold_until = Some(until.max(now)),
+                        Some(_) => {
+                            self.error("501 5.5.4 Release time is too far in the future").await?;
+                            return Ok(Flow::Continue);
+                        }
+                        None => {
+                            self.error("501 5.5.4 Invalid HOLDFOR or HOLDUNTIL value").await?;
+                            return Ok(Flow::Continue);
+                        }
+                    }
+                }
+                // DELIVERBY (RFC 2852): BY=seconds;R|N[T]. R returns the message at the deadline;
+                // N only asks for a delay notice, which the usual DSN handling covers.
+                "BY" if dsn.queueing.deliver_by.is_none() => {
+                    let parsed = value.split_once(';').and_then(|(seconds, mode)| {
+                        let seconds = seconds.parse::<i64>().ok()?;
+                        let mode = mode.to_ascii_uppercase();
+                        let returning = match mode.trim_end_matches('T') {
+                            "R" => true,
+                            "N" => false,
+                            _ => return None,
+                        };
+                        Some((seconds, returning))
+                    });
+                    match parsed {
+                        Some((seconds, true)) if seconds >= MIN_DELIVER_BY => dsn.queueing.deliver_by = Some(crate::util::now() + seconds),
+                        Some((_, true)) => {
+                            self.error(&format!("501 5.5.4 BY time must be at least {MIN_DELIVER_BY} seconds")).await?;
+                            return Ok(Flow::Continue);
+                        }
+                        Some((_, false)) => {}
+                        None => {
+                            self.error("501 5.5.4 Invalid BY parameter").await?;
+                            return Ok(Flow::Continue);
+                        }
+                    }
+                }
+                // MT-PRIORITY (RFC 6710): from signed-in senders; others' is ignored (RFC 6710 5).
+                "MT-PRIORITY" => match value.parse::<i8>().ok().filter(|p| (-9..=9).contains(p)) {
+                    Some(priority) if self.mode != Mode::Mx => dsn.queueing.priority = priority,
+                    Some(_) => {}
+                    None => {
+                        self.error("501 5.5.4 Invalid MT-PRIORITY value").await?;
+                        return Ok(Flow::Continue);
+                    }
+                },
+                // NO-SOLICITING (RFC 3865): no solicitation keywords are refused here.
+                "SOLICIT" => {}
                 "REQUIRETLS" if value.is_empty() && !dsn.require_tls => {
                     if !self.tls() {
                         self.error("530 5.7.10 REQUIRETLS needs an encrypted session").await?;

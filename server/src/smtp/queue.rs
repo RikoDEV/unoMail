@@ -53,7 +53,7 @@ struct Entry {
 
 impl Entry {
     fn dsn(&self) -> Dsn {
-        Dsn { notify: self.dsn_notify.clone(), ret: self.dsn_ret.clone(), envid: self.dsn_envid.clone(), orcpt: self.dsn_orcpt.clone(), require_tls: self.require_tls != 0 }
+        Dsn { notify: self.dsn_notify.clone(), ret: self.dsn_ret.clone(), envid: self.dsn_envid.clone(), orcpt: self.dsn_orcpt.clone(), require_tls: self.require_tls != 0, ..Default::default() }
     }
 }
 
@@ -250,10 +250,10 @@ async fn claim_entries(app: &App, limit: usize) -> sqlx::Result<Vec<Entry>> {
     sqlx::query_as(
         "WITH busy AS (SELECT recipient_domain, COUNT(*) AS n FROM queue WHERE status = 'sending' GROUP BY recipient_domain),
               due AS (SELECT q.id, q.next_attempt_at,
-                             ROW_NUMBER() OVER (PARTITION BY q.recipient_domain ORDER BY q.next_attempt_at, q.id) + COALESCE(b.n, 0) AS slot
+                             ROW_NUMBER() OVER (PARTITION BY q.recipient_domain ORDER BY q.priority DESC, q.next_attempt_at, q.id) + COALESCE(b.n, 0) AS slot, q.priority
                       FROM queue q LEFT JOIN busy b ON b.recipient_domain = q.recipient_domain
                       WHERE q.status = 'queued' AND q.next_attempt_at <= ?1)
-         UPDATE queue SET status = 'sending' WHERE id IN (SELECT id FROM due WHERE slot <= ?2 ORDER BY next_attempt_at, id LIMIT ?3)
+         UPDATE queue SET status = 'sending' WHERE id IN (SELECT id FROM due WHERE slot <= ?2 ORDER BY priority DESC, next_attempt_at, id LIMIT ?3)
          RETURNING id, sender, recipient, blob_hash, size, attempts, expires_at, created_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt, delay_notified, require_tls",
     )
     .bind(now())

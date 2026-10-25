@@ -275,6 +275,27 @@ async fn pop3_login(s: &Servers, user: &str) -> Client {
 }
 
 #[tokio::test]
+async fn pop3_sasl_and_utf8() {
+    use base64::Engine;
+    let s = setup().await;
+    let plain = |user: &str, password: &str| base64::engine::general_purpose::STANDARD.encode(format!("\0{user}\0{password}"));
+    let mut c = Client::connect_tls(s.pop3).await;
+    assert!(c.read_line().await.unwrap().starts_with("+OK"));
+    let capa = pop3_multi(&mut c, "CAPA").await;
+    assert!(capa.contains(&"SASL PLAIN".to_owned()) && capa.contains(&"UTF8".to_owned()), "{capa:?}");
+    assert_eq!(pop3_multi(&mut c, "AUTH").await, ["+OK mechanisms", "PLAIN"]);
+    assert!(pop3_cmd(&mut c, "UTF8").await.starts_with("+OK"));
+    assert!(pop3_cmd(&mut c, "AUTH CRAM-MD5").await.starts_with("-ERR"));
+    assert!(pop3_cmd(&mut c, &format!("AUTH PLAIN {}", plain("bob@example.org", "wrong"))).await.starts_with("-ERR [AUTH]"));
+    // Without an initial response the server asks for it.
+    assert_eq!(pop3_cmd(&mut c, "AUTH PLAIN").await.trim_end(), "+");
+    assert!(pop3_cmd(&mut c, "*").await.starts_with("-ERR"), "the client may cancel");
+    assert_eq!(pop3_cmd(&mut c, "AUTH PLAIN").await.trim_end(), "+");
+    assert!(pop3_cmd(&mut c, &plain("bob@example.org", PASSWORD)).await.starts_with("+OK"));
+    assert!(pop3_cmd(&mut c, "STAT").await.starts_with("+OK 0 0"));
+}
+
+#[tokio::test]
 async fn pop3_session() {
     let s = setup().await;
     deliver(&s.env, "bob@example.org", "One", "first line\r\n..leading dot\r\nthird line").await;

@@ -24,7 +24,11 @@ use fetch::Section;
 use parse::{Arg, SequenceSet, Tokenizer, list_match, string, uid_set, utf7_decode, utf7_encode};
 
 const CAPABILITIES: &str = "IMAP4rev1 IMAP4rev2 LITERAL+ SASL-IR AUTH=PLAIN IDLE NAMESPACE ACL UIDPLUS MOVE UNSELECT CHILDREN SPECIAL-USE ID ENABLE CONDSTORE QRESYNC \
-     QUOTA QUOTA=RES-STORAGE SORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES ESEARCH LIST-EXTENDED LIST-STATUS STATUS=SIZE BINARY COMPRESS=DEFLATE";
+     QUOTA QUOTA=RES-STORAGE SORT SORT=DISPLAY ESORT THREAD=ORDEREDSUBJECT THREAD=REFERENCES ESEARCH SEARCHRES PARTIAL WITHIN LIST-EXTENDED LIST-STATUS \
+     STATUS=SIZE BINARY COMPRESS=DEFLATE MULTIAPPEND UTF8=ACCEPT UNAUTHENTICATE PREVIEW OBJECTID UIDONLY UIDBATCHES SAVELIMIT=100000";
+/// RFC 9738: COPY and APPEND of more messages than this are refused as a whole. (Not the
+/// MESSAGELIMIT variant, which would cut off FETCH and SEARCH results for clients unaware of it.)
+const SAVE_LIMIT: usize = 100_000;
 /// Advertised before STARTTLS: no authentication is possible in plaintext.
 const PLAINTEXT_CAPABILITIES: &str = "IMAP4rev1 STARTTLS LOGINDISABLED";
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(60);
@@ -69,6 +73,12 @@ struct Session {
     oauth: bool,
     /// The client enabled IMAP4rev2: UTF-8 mailbox names, ESEARCH replies, no RECENT.
     rev2: bool,
+    /// UTF8=ACCEPT (RFC 6855): UTF-8 mailbox names and messages.
+    utf8: bool,
+    /// UIDONLY (RFC 9586): no sequence numbers, UIDFETCH and VANISHED responses.
+    uid_only: bool,
+    /// SEARCHRES (RFC 5182): the UIDs the last SEARCH RETURN (SAVE) found, used as `$`.
+    saved: Vec<u32>,
 }
 
 enum Flow {
@@ -131,6 +141,59 @@ fn parse_flags(args: &[Arg]) -> Result<(Flags, Vec<String>), String> {
     Ok((flags, keywords))
 }
 
+/// RETURN options of SEARCH and SORT (RFC 4731, 5182, 5267, 9394). An empty list means ALL;
+/// PARTIAL keeps its range as `PARTIAL low:high`.
+fn return_options(options: &[Arg]) -> Option<Vec<String>> {
+    let mut out = Vec::new();
+    let mut iter = options.iter();
+    while let Some(option) = iter.next() {
+        let name = option.atom_upper()?;
+        match name.as_str() {
+            "MIN" | "MAX" | "COUNT" | "ALL" | "SAVE" => out.push(name),
+            "PARTIAL" => out.push(format!("PARTIAL {}", iter.next().and_then(Arg::text)?)),
+            _ => return None,
+        }
+    }
+    if out.is_empty() {
+        out.push("ALL".into());
+    }
+    Some(out)
+}
+
+/// A UID set holding exactly `uids`, in ranges where they are consecutive.
+fn uid_sequence(uids: &[u32]) -> SequenceSet {
+    let mut sorted: Vec<u32> = uids.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut ranges: Vec<(u32, u32)> = Vec::new();
+    for uid in sorted {
+        match ranges.last_mut() {
+            Some((_, end)) if *end + 1 == uid => *end = uid,
+            _ => ranges.push((uid, uid)),
+        }
+    }
+    SequenceSet(ranges)
+}
+
+/// The start of an untagged FETCH response; under UIDONLY (RFC 9586) a UIDFETCH named by UID.
+fn fetch_head(uid_only: bool, index: usize, uid: i64) -> String {
+    if uid_only { format!("* {uid} UIDFETCH (") } else { format!("* {} FETCH (", index + 1) }
+}
+
+/// RFC 9394 PARTIAL: `low:high` positions, 1-based, negative ones counted from the end.
+fn partial_range(text: &str, len: usize) -> Option<(String, std::ops::Range<usize>)> {
+    let (low, high) = text.split_once(':')?;
+    let (low, high): (i64, i64) = (low.parse().ok()?, high.parse().ok()?);
+    if low == 0 || high == 0 || (low < 0) != (high < 0) {
+        return None;
+    }
+    let (low, high) = (low.min(high), low.max(high));
+    let len = len as i64;
+    let (start, end) = if low > 0 { (low - 1, high) } else { (len + low, len + high + 1) };
+    let (start, end) = (start.clamp(0, len) as usize, end.clamp(0, len) as usize);
+    Some((format!("{low}:{high}"), start..end.max(start)))
+}
+
 fn special_use(role: Option<&str>) -> &'static str {
     match role {
         Some("sent") => " \\Sent",
@@ -138,6 +201,9 @@ fn special_use(role: Option<&str>) -> &'static str {
         Some("trash") => " \\Trash",
         Some("junk") => " \\Junk",
         Some("archive") => " \\Archive",
+        // RFC 9979.
+        Some("snoozed") => " \\Snoozed",
+        Some("scheduled") => " \\Scheduled",
         _ => "",
     }
 }
@@ -163,6 +229,11 @@ enum Key {
     Not(Box<Key>),
     Or(Box<Key>, Box<Key>),
     And(Vec<Key>),
+    /// OBJECTID (RFC 8474): `m<id>` and `t<id>`, as JMAP names them.
+    EmailId(String),
+    ThreadId(String),
+    /// `$`, the saved search result (RFC 5182); replaced by its UIDs before matching.
+    Saved,
 }
 
 /// FETCH responses collected before they are written to the connection.
@@ -172,6 +243,28 @@ const FETCH_BATCH: usize = 64 * 1024;
 const INDEXED_HEADERS: [&str; 5] = ["subject", "from", "to", "cc", "bcc"];
 
 impl Key {
+    /// Replaces `$` with the UIDs it stands for.
+    fn with_saved(self, saved: &[u32]) -> Key {
+        match self {
+            Key::Saved => Key::Uid(uid_sequence(saved)),
+            Key::Not(k) => Key::Not(Box::new(k.with_saved(saved))),
+            Key::Or(a, b) => Key::Or(Box::new(a.with_saved(saved)), Box::new(b.with_saved(saved))),
+            Key::And(keys) => Key::And(keys.into_iter().map(|k| k.with_saved(saved)).collect()),
+            other => other,
+        }
+    }
+
+    /// Whether the criteria use message sequence numbers (refused under UIDONLY).
+    fn uses_sequence_numbers(&self) -> bool {
+        match self {
+            Key::Seq(_) => true,
+            Key::Not(k) => k.uses_sequence_numbers(),
+            Key::Or(a, b) => a.uses_sequence_numbers() || b.uses_sequence_numbers(),
+            Key::And(keys) => keys.iter().any(Key::uses_sequence_numbers),
+            _ => false,
+        }
+    }
+
     /// Whether matching looks at the message text rather than at the stored columns.
     fn needs_content(&self) -> bool {
         match self {
@@ -260,6 +353,20 @@ fn parse_search(args: &mut std::slice::Iter<'_, Arg>, depth: usize) -> Result<Ke
         "SENTON" => date(args).map(|d| Key::Sent(d, d + DAY))?,
         "SENTSINCE" => Key::Sent(date(args)?, i64::MAX),
         "MODSEQ" => Key::Modseq(number(args)?),
+        // WITHIN (RFC 5032): relative to now, in seconds.
+        "YOUNGER" => Key::Internal(crate::util::now() - number(args)?, i64::MAX),
+        "OLDER" => Key::Internal(i64::MIN, crate::util::now() - number(args)? + 1),
+        // RFC 9738.
+        "UIDAFTER" => Key::Uid(SequenceSet(vec![((number(args)? as u32).saturating_add(1), u32::MAX)])),
+        "UIDBEFORE" => match number(args)? as u32 {
+            0 | 1 => Key::Not(Box::new(Key::All)),
+            n => Key::Uid(SequenceSet(vec![(1, n - 1)])),
+        },
+        // OBJECTID (RFC 8474).
+        "EMAILID" => Key::EmailId(text(args)?),
+        "THREADID" => Key::ThreadId(text(args)?),
+        // SEARCHRES (RFC 5182).
+        "$" => Key::Saved,
         "UID" => Key::Uid(args.next().and_then(Arg::text).and_then(|s| SequenceSet::parse(&s)).ok_or_else(syntax)?),
         "NOT" => Key::Not(Box::new(parse_search(args, depth + 1)?)),
         "OR" => Key::Or(Box::new(parse_search(args, depth + 1)?), Box::new(parse_search(args, depth + 1)?)),
@@ -276,6 +383,13 @@ enum SortKey {
     Size,
     Subject,
     To,
+    DisplayFrom,
+    DisplayTo,
+}
+
+/// The sender as RFC 5957 sorts it: the display name, or the address without one.
+fn display_from(message: &Message) -> String {
+    if message.from_name.trim().is_empty() { mailbox_part(&message.from_addr) } else { message.from_name.trim().to_lowercase() }
 }
 
 /// The date SORT and THREAD use: the sent date, else the arrival.
@@ -371,6 +485,9 @@ fn matches(key: &Key, ctx: &SearchContext<'_>) -> bool {
         Key::Uid(set) => set.contains(m.uid as u32, ctx.max_uid),
         Key::Modseq(value) => m.modseq >= *value,
         Key::Seq(set) => set.contains(ctx.seq, ctx.max_seq),
+        Key::EmailId(id) => *id == format!("m{}", m.id),
+        Key::ThreadId(id) => *id == format!("t{}", m.thread_id),
+        Key::Saved => false,
         Key::Not(inner) => !matches(inner, ctx),
         Key::Or(a, b) => matches(a, ctx) || matches(b, ctx),
         Key::And(keys) => keys.iter().all(|k| matches(k, ctx)),
@@ -579,6 +696,8 @@ impl Session {
                     match extension.as_str() {
                         "CONDSTORE" => self.condstore = true,
                         "IMAP4REV2" => self.rev2 = true,
+                        "UTF8=ACCEPT" => self.utf8 = true,
+                        "UIDONLY" => self.uid_only = true,
                         "QRESYNC" => {
                             self.condstore = true;
                             self.qresync = true;
@@ -591,6 +710,26 @@ impl Session {
                 Ok("ENABLE completed".into())
             }
             "SELECT" | "EXAMINE" => self.cmd_select(args, command == "EXAMINE").await?,
+            // UIDONLY (RFC 9586): commands that use sequence numbers are refused.
+            "FETCH" | "STORE" | "SEARCH" | "SORT" | "THREAD" | "COPY" | "MOVE" if self.uid_only => bad("[UIDREQUIRED] use the UID form of the command"),
+            "UNAUTHENTICATE" => {
+                // RFC 8437: back to the state before signing in, on the same connection.
+                self.account = None;
+                self.grant = None;
+                self.selected = None;
+                (self.condstore, self.qresync, self.rev2, self.utf8, self.uid_only) = (false, false, false, false, false);
+                self.saved.clear();
+                Ok("UNAUTHENTICATE completed".into())
+            }
+            "GETJMAPACCESS" => {
+                let url = format!("{}/.well-known/jmap", self.app.cfg.public_url().trim_end_matches('/'));
+                let mut line = b"* JMAPACCESS ".to_vec();
+                string(&mut line, url.as_bytes());
+                line.extend_from_slice(b"\r\n");
+                self.send(&line).await?;
+                Ok("GETJMAPACCESS completed".into())
+            }
+            "UIDBATCHES" => self.cmd_uidbatches(tag, args).await?,
             "CREATE" => self.cmd_mailbox(args, command).await,
             "DELETE" | "RENAME" | "SUBSCRIBE" | "UNSUBSCRIBE" => self.cmd_mailbox(args, command).await,
             "LIST" | "LSUB" => self.cmd_list(args, command == "LSUB").await?,
@@ -628,7 +767,7 @@ impl Session {
             "FETCH" => self.cmd_fetch(args, false).await?,
             "STORE" => self.cmd_store(args, false).await?,
             "SEARCH" => self.cmd_search(tag, args, false).await?,
-            "SORT" => self.cmd_sort(args, false).await?,
+            "SORT" => self.cmd_sort(tag, args, false).await?,
             "THREAD" => self.cmd_thread(args, false).await?,
             "COPY" => self.cmd_copy(args, false, false).await,
             "MOVE" => self.cmd_copy(args, false, true).await,
@@ -638,12 +777,12 @@ impl Session {
                     Some("FETCH") => self.cmd_fetch(rest, true).await?,
                     Some("STORE") => self.cmd_store(rest, true).await?,
                     Some("SEARCH") => self.cmd_search(tag, rest, true).await?,
-                    Some("SORT") => self.cmd_sort(rest, true).await?,
+                    Some("SORT") => self.cmd_sort(tag, rest, true).await?,
                     Some("THREAD") => self.cmd_thread(rest, true).await?,
                     Some("COPY") => self.cmd_copy(rest, true, false).await,
                     Some("MOVE") => self.cmd_copy(rest, true, true).await,
-                    Some("EXPUNGE") => match rest.first().and_then(Arg::text).and_then(|s| SequenceSet::parse(&s)) {
-                        Some(set) => self.expunge(Some(set), false).await,
+                    Some("EXPUNGE") => match self.sequence_arg(rest.first(), true) {
+                        Some((set, _)) => self.expunge(Some(set), false).await,
                         None => bad("usage: UID EXPUNGE set"),
                     },
                     _ => bad("unknown UID command"),
@@ -721,7 +860,12 @@ impl Session {
 
     /// Capabilities after TLS; token logins are offered only while single sign-on is set up.
     fn capabilities(&self) -> String {
-        if self.oauth { CAPABILITIES.replace("AUTH=PLAIN", "AUTH=PLAIN AUTH=XOAUTH2 AUTH=OAUTHBEARER") } else { CAPABILITIES.to_owned() }
+        let mut capabilities = if self.oauth { CAPABILITIES.replace("AUTH=PLAIN", "AUTH=PLAIN AUTH=XOAUTH2 AUTH=OAUTHBEARER") } else { CAPABILITIES.to_owned() };
+        // RFC 9698: the same credentials reach the same mail over JMAP.
+        if self.account.is_some() {
+            capabilities.push_str(" JMAPACCESS");
+        }
+        capabilities
     }
 
     /// False once the account was disabled or the credential it signed in with revoked.
@@ -734,12 +878,21 @@ impl Session {
 
     /// A mailbox name as the client sent it: modified UTF-7, or UTF-8 under IMAP4rev2.
     fn decode_name(&self, name: &str) -> String {
-        if self.rev2 { name.to_owned() } else { utf7_decode(name) }
+        if self.rev2 || self.utf8 { name.to_owned() } else { utf7_decode(name) }
     }
 
     /// A mailbox name as the client expects it.
     fn encode_name(&self, name: &str) -> String {
-        if self.rev2 { name.to_owned() } else { utf7_encode(name) }
+        if self.rev2 || self.utf8 { name.to_owned() } else { utf7_encode(name) }
+    }
+
+    /// A sequence set argument; `$` (SEARCHRES) stands for the saved UIDs, and makes it a UID set.
+    fn sequence_arg(&self, arg: Option<&Arg>, uid: bool) -> Option<(SequenceSet, bool)> {
+        let text = arg.and_then(Arg::text)?;
+        if text == "$" {
+            return Some((uid_sequence(&self.saved), true));
+        }
+        SequenceSet::parse(&text).map(|set| (set, uid))
     }
 
     fn account_id(&self) -> i64 {
@@ -857,6 +1010,7 @@ impl Session {
         if self.selected.take().is_some() && (self.rev2 || self.qresync) {
             self.line("* OK [CLOSED] previous mailbox is now closed").await?;
         }
+        self.saved.clear();
         let (mailbox, rights) = match self.find_mailbox_rights(args.first().and_then(Arg::text)).await {
             Ok(found) => found,
             Err(err) => return Ok(Err(err)),
@@ -872,11 +1026,12 @@ impl Session {
         let mut out = format!(
             "* {} EXISTS\r\n{recent}* FLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft)\r\n\
              * OK [PERMANENTFLAGS (\\Answered \\Flagged \\Deleted \\Seen \\Draft \\*)] flags\r\n\
-             * OK [UIDVALIDITY {}] valid\r\n* OK [UIDNEXT {}] next\r\n* OK [HIGHESTMODSEQ {}] modseq\r\n",
+             * OK [UIDVALIDITY {}] valid\r\n* OK [UIDNEXT {}] next\r\n* OK [HIGHESTMODSEQ {}] modseq\r\n* OK [MAILBOXID (b{})] id\r\n",
             messages.len(),
             mailbox.uid_validity,
             mailbox.uid_next,
-            mailbox.highest_modseq
+            mailbox.highest_modseq,
+            mailbox.id
         );
         if self.rev2 {
             // IMAP4rev2 names the mailbox in its canonical form instead of reporting UNSEEN.
@@ -910,7 +1065,7 @@ impl Session {
                                 out.push_str(&format!("* VANISHED (EARLIER) {}\r\n", uid_set(&vanished)));
                             }
                             for (index, message) in messages.iter().enumerate().filter(|(_, m)| m.modseq > modseq && in_known(m.uid)) {
-                                out.push_str(&format!("* {} FETCH (UID {} FLAGS ({}) MODSEQ ({}))\r\n", index + 1, message.uid, flags_text(message), message.modseq));
+                                out.push_str(&format!("{}UID {} FLAGS ({}) MODSEQ ({}))\r\n", fetch_head(self.uid_only, index, message.uid), message.uid, flags_text(message), message.modseq));
                             }
                         }
                     }
@@ -1084,6 +1239,11 @@ impl Session {
         };
         let mut parts = Vec::new();
         for item in items {
+            // OBJECTID (RFC 8474): the mailbox's lasting id.
+            if item.atom_upper().as_deref() == Some("MAILBOXID") {
+                parts.push(format!("MAILBOXID (b{})", mailbox.id));
+                continue;
+            }
             let value = match item.atom_upper().as_deref() {
                 Some("MESSAGES") => counts.total,
                 Some("RECENT") => 0,
@@ -1139,35 +1299,130 @@ impl Session {
         Ok(Ok(format!("{} completed", if by_mailbox { "GETQUOTAROOT" } else { "GETQUOTA" })))
     }
 
+    /// UIDBATCHES (RFC 10022): UID ranges of `size` messages each, newest first.
+    async fn cmd_uidbatches(&mut self, tag: &str, args: &[Arg]) -> std::io::Result<CmdResult> {
+        let Some(selected) = &self.selected else { return Ok(bad("no mailbox selected")) };
+        let Some(size) = args.first().and_then(Arg::text).and_then(|n| n.parse::<usize>().ok()).filter(|n| *n > 0) else { return Ok(bad("usage: UIDBATCHES size [first:last]")) };
+        if size < 500 {
+            return Ok(no("[TOOFEW] batches hold at least 500 messages"));
+        }
+        let total = selected.messages.len();
+        let batches = total.div_ceil(size);
+        let range = match args.get(1).and_then(Arg::text) {
+            None if total > 100_000 => return Ok(no("[TOOMANY] ask for a range of batches in a mailbox this large")),
+            None => 1..=batches.max(1),
+            Some(text) => {
+                let Some((first, last)) = text.split_once(':').and_then(|(a, b)| Some((a.parse::<usize>().ok().filter(|n| *n > 0)?, b.parse::<usize>().ok().filter(|n| *n > 0)?))) else {
+                    return Ok(bad("invalid batch range"));
+                };
+                if first > last {
+                    return Ok(bad("[CLIENTBUG] the batch range is reversed"));
+                }
+                if (last - first + 1) * size > 100_000 {
+                    return Ok(no("[TOOMANY] at most 100000 messages per request"));
+                }
+                first..=last
+            }
+        };
+        let mut ranges = Vec::new();
+        for batch in range {
+            if batch > batches {
+                break;
+            }
+            // Batch k: positions total-(k-1)*size down to total-k*size+1 (1-based).
+            let high = total - (batch - 1) * size;
+            let low = (total + 1).saturating_sub(batch * size).max(1);
+            let high_uid = selected.messages[high - 1].uid;
+            // The last batch reaches down to UID 1.
+            let low_uid = if low == 1 { 1 } else { selected.messages[low - 1].uid };
+            ranges.push(format!("{high_uid}:{low_uid}"));
+        }
+        let mut line = format!("* UIDBATCHES (TAG \"{tag}\")");
+        if !ranges.is_empty() {
+            line.push(' ');
+            line.push_str(&ranges.join(","));
+        }
+        self.line(&line).await?;
+        Ok(Ok("UIDBATCHES Completed".into()))
+    }
+
+    /// APPEND, with several messages at once (MULTIAPPEND, RFC 3502: all or none) and
+    /// UTF-8 messages (`UTF8 (literal)`, RFC 6855).
     async fn cmd_append(&mut self, args: &[Arg]) -> CmdResult {
         let mailbox = self.find_mailbox(args.first().and_then(Arg::text), "i").await?;
-        let Some(Arg::Str(raw)) = args.last().filter(|_| args.len() >= 2) else { return bad("usage: APPEND mailbox [flags] [date] literal") };
-        let mut flags = Flags::default();
-        let mut keywords = Vec::new();
-        let mut date = None;
-        for arg in &args[1..args.len() - 1] {
-            match arg {
+        // Each message: [flags] [date-time] literal. A quoted string is a date-time when another
+        // string (the message) follows it.
+        let mut messages: Vec<(Flags, Vec<String>, Option<i64>, &[u8])> = Vec::new();
+        let (mut flags, mut keywords, mut date) = (Flags::default(), Vec::new(), None);
+        let rest = args.get(1..).unwrap_or_default();
+        let mut i = 0;
+        while i < rest.len() {
+            match &rest[i] {
                 Arg::List(list) => (flags, keywords) = parse_flags(list)?,
-                Arg::Str(text) => {
-                    let text = String::from_utf8_lossy(text);
-                    date = Some(OffsetDateTime::parse(text.trim(), DATE_TIME).map_err(|_| "BAD invalid date-time".to_owned())?.unix_timestamp());
+                Arg::Atom(atom) if atom.eq_ignore_ascii_case("UTF8") => {
+                    let Some(Arg::List(inner)) = rest.get(i + 1) else { return bad("usage: UTF8 (literal)") };
+                    let [Arg::Str(raw)] = inner.as_slice() else { return bad("usage: UTF8 (literal)") };
+                    messages.push((flags, std::mem::take(&mut keywords), date.take(), raw));
+                    flags = Flags::default();
+                    i += 2;
+                    continue;
+                }
+                // A date-time is a short string that parses as one and has a message after it.
+                Arg::Str(text)
+                    if date.is_none()
+                        && text.len() < 64
+                        && matches!(rest.get(i + 1), Some(Arg::Str(_)) | Some(Arg::Atom(_)))
+                        && let Ok(parsed) = OffsetDateTime::parse(String::from_utf8_lossy(text).trim(), DATE_TIME) =>
+                {
+                    date = Some(parsed.unix_timestamp());
+                }
+                Arg::Str(raw) => {
+                    messages.push((flags, std::mem::take(&mut keywords), date.take(), raw));
+                    flags = Flags::default();
                 }
                 Arg::Atom(_) => return bad("unexpected argument"),
             }
+            i += 1;
         }
-        if raw.is_empty() {
-            return bad("empty message");
+        if messages.is_empty() {
+            return bad("usage: APPEND mailbox [flags] [date] literal");
+        }
+        if messages.len() > SAVE_LIMIT {
+            return Err(format!("NO [MESSAGELIMIT {SAVE_LIMIT}] too many messages at once"));
         }
         let foreign = self.account.as_ref().is_some_and(|account| account.id != mailbox.account_id);
-        let raw = crate::security::admit_stored(&self.app, raw, foreign).map_err(|name| format!("NO [CANNOT] the message contains an executable attachment ({name}), which this server does not accept"))?;
-        let appended = self.app.store.append(mailbox.account_id, mailbox.id, &raw, flags, date).await.map_err(|err| match err {
-            StoreError::QuotaExceeded => "NO [OVERQUOTA] mailbox quota exceeded".to_owned(),
-            other => internal(other),
-        })?;
-        if !keywords.is_empty() {
-            self.app.store.set_flags_and_keywords(mailbox.account_id, appended.id, flags, &keywords).await.map_err(internal)?;
+        // Everything is checked before anything is stored.
+        let mut admitted = Vec::with_capacity(messages.len());
+        for (flags, keywords, date, raw) in messages {
+            if raw.is_empty() {
+                return bad("empty message");
+            }
+            let raw = crate::security::admit_stored(&self.app, raw, foreign).map_err(|name| format!("NO [CANNOT] the message contains an executable attachment ({name}), which this server does not accept"))?;
+            admitted.push((flags, keywords, date, raw));
         }
-        Ok(format!("[APPENDUID {} {}] APPEND completed", mailbox.uid_validity, appended.uid))
+        let mut stored: Vec<(i64, i64)> = Vec::new();
+        for (flags, keywords, date, raw) in &admitted {
+            let appended = match self.app.store.append(mailbox.account_id, mailbox.id, raw, *flags, *date).await {
+                Ok(appended) => appended,
+                Err(err) => {
+                    // All or none: what was stored already goes again.
+                    for (id, _) in &stored {
+                        let _ = self.app.store.delete_message(mailbox.account_id, *id).await;
+                    }
+                    return Err(match err {
+                        StoreError::QuotaExceeded => "NO [OVERQUOTA] mailbox quota exceeded".to_owned(),
+                        other => internal(other),
+                    });
+                }
+            };
+            if !keywords.is_empty() {
+                self.app.store.set_flags_and_keywords(mailbox.account_id, appended.id, *flags, keywords).await.map_err(internal)?;
+            }
+            stored.push((appended.id, appended.uid));
+        }
+        let uids: Vec<u32> = stored.iter().map(|(_, uid)| *uid as u32).collect();
+        let set = if uids.len() == 1 { uids[0].to_string() } else { uid_set(&uids.iter().map(|&u| i64::from(u)).collect::<Vec<_>>()) };
+        Ok(format!("[APPENDUID {} {set}] APPEND completed", mailbox.uid_validity))
     }
 
     /// Reports changes made by other sessions (and by this one) to the selected mailbox.
@@ -1199,7 +1454,7 @@ impl Session {
             let uid = selected.messages[index].uid;
             if gone.contains(&uid) && !present.contains(&uid) {
                 let removed = selected.messages.remove(index);
-                if self.qresync {
+                if self.qresync || self.uid_only {
                     vanished.push(removed.uid);
                 } else {
                     out.push_str(&format!("* {} EXPUNGE\r\n", index + 1));
@@ -1233,7 +1488,7 @@ impl Session {
         for index in changed {
             let message = &selected.messages[index];
             let modseq = if self.condstore { format!(" MODSEQ ({})", message.modseq) } else { String::new() };
-            out.push_str(&format!("* {} FETCH (FLAGS ({}) UID {}{modseq})\r\n", index + 1, flags_text(message), message.uid));
+            out.push_str(&format!("{}FLAGS ({}) UID {}{modseq})\r\n", fetch_head(self.uid_only, index, message.uid), flags_text(message), message.uid));
         }
         if out.is_empty() { Ok(()) } else { self.send(out.as_bytes()).await }
     }
@@ -1283,7 +1538,7 @@ impl Session {
     }
 
     async fn cmd_fetch(&mut self, args: &[Arg], uid: bool) -> std::io::Result<CmdResult> {
-        let Some(set) = args.first().and_then(Arg::text).and_then(|s| SequenceSet::parse(&s)) else { return Ok(bad("invalid sequence set")) };
+        let Some((set, uid)) = self.sequence_arg(args.first(), uid) else { return Ok(bad("invalid sequence set")) };
         let mut items: Vec<String> = match args.get(1) {
             Some(Arg::List(list)) => list.iter().filter_map(|a| if let Arg::Atom(a) = a { Some(a.clone()) } else { None }).collect(),
             Some(Arg::Atom(item)) => match item.to_ascii_uppercase().as_str() {
@@ -1333,6 +1588,7 @@ impl Session {
                 None if matches!(
                     upper.as_str(),
                     "FLAGS" | "UID" | "MODSEQ" | "INTERNALDATE" | "RFC822.SIZE" | "ENVELOPE" | "BODY" | "BODYSTRUCTURE" | "RFC822" | "RFC822.HEADER" | "RFC822.TEXT"
+                        | "PREVIEW" | "EMAILID" | "THREADID"
                 ) =>
                 {
                     plan.push((upper, None))
@@ -1341,7 +1597,7 @@ impl Session {
             }
         }
         let want_flags = plan.iter().any(|(name, _)| name == "FLAGS");
-        let needs_content = plan.iter().any(|(name, _)| !matches!(name.as_str(), "FLAGS" | "UID" | "MODSEQ" | "INTERNALDATE" | "RFC822.SIZE"));
+        let needs_content = plan.iter().any(|(name, _)| !matches!(name.as_str(), "FLAGS" | "UID" | "MODSEQ" | "INTERNALDATE" | "RFC822.SIZE" | "PREVIEW" | "EMAILID" | "THREADID"));
         // Fetch modifiers: (CHANGEDSINCE modseq [VANISHED]).
         let mut changed_since: Option<i64> = None;
         let mut report_vanished = false;
@@ -1436,6 +1692,14 @@ impl Session {
                 match (name.as_str(), section) {
                     ("FLAGS" | "MODSEQ", _) => continue,
                     ("UID", _) => out.extend_from_slice(format!("UID {}", message.uid).as_bytes()),
+                    // PREVIEW (RFC 8970): the stored snippet, at most 256 characters.
+                    ("PREVIEW", _) => {
+                        out.extend_from_slice(b"PREVIEW ");
+                        let preview: String = message.snippet.chars().take(256).collect();
+                        if preview.is_empty() { out.extend_from_slice(b"NIL") } else { string(&mut out, preview.as_bytes()) }
+                    }
+                    ("EMAILID", _) => out.extend_from_slice(format!("EMAILID (m{})", message.id).as_bytes()),
+                    ("THREADID", _) => out.extend_from_slice(format!("THREADID (t{})", message.thread_id).as_bytes()),
                     ("RFC822.SIZE", _) => out.extend_from_slice(format!("RFC822.SIZE {}", message.size).as_bytes()),
                     ("INTERNALDATE", _) => {
                         let date = OffsetDateTime::from_unix_timestamp(message.internal_date).ok().and_then(|d| d.format(INTERNAL_DATE).ok()).unwrap_or_default();
@@ -1499,7 +1763,7 @@ impl Session {
             if want_modseq {
                 parts.push(format!("MODSEQ ({})", message.modseq).into_bytes());
             }
-            pending.extend_from_slice(format!("* {} FETCH (", index + 1).as_bytes());
+            pending.extend_from_slice(fetch_head(self.uid_only, index, message.uid).as_bytes());
             pending.extend_from_slice(&parts.join(&b' '));
             pending.extend_from_slice(b")\r\n");
             if pending.len() >= FETCH_BATCH {
@@ -1514,7 +1778,7 @@ impl Session {
     }
 
     async fn cmd_store(&mut self, args: &[Arg], uid: bool) -> std::io::Result<CmdResult> {
-        let Some(set) = args.first().and_then(Arg::text).and_then(|s| SequenceSet::parse(&s)) else { return Ok(bad("invalid sequence set")) };
+        let Some((set, uid)) = self.sequence_arg(args.first(), uid) else { return Ok(bad("invalid sequence set")) };
         // Optional store modifier: (UNCHANGEDSINCE modseq).
         let mut args = args.to_vec();
         let mut unchanged_since: Option<i64> = None;
@@ -1613,7 +1877,7 @@ impl Session {
             if let Ok(updated) = self.app.store.message(self.owner(), message.id).await {
                 if !silent || self.condstore {
                     let modseq = if self.condstore { format!(" MODSEQ ({})", updated.modseq) } else { String::new() };
-                    out.push_str(&format!("* {} FETCH (FLAGS ({}){}{modseq})\r\n", index + 1, flags_text(&updated), if uid { format!(" UID {}", updated.uid) } else { String::new() }));
+                    out.push_str(&format!("{}FLAGS ({}){}{modseq})\r\n", fetch_head(self.uid_only, index, updated.uid), flags_text(&updated), if uid { format!(" UID {}", updated.uid) } else { String::new() }));
                 }
                 if let Some(slot) = self.selected.as_mut().and_then(|s| s.messages.get_mut(index)) {
                     *slot = updated;
@@ -1647,10 +1911,13 @@ impl Session {
         let mut iter = args.iter();
         let mut keys = Vec::new();
         while iter.len() > 0 {
-            keys.push(parse_search(&mut iter, 0)?);
+            keys.push(parse_search(&mut iter, 0)?.with_saved(&self.saved));
         }
         if keys.is_empty() {
             return Err("BAD search criteria required".into());
+        }
+        if self.uid_only && keys.iter().any(Key::uses_sequence_numbers) {
+            return Err("BAD [UIDREQUIRED] search by UID instead of sequence numbers".into());
         }
         let uses_modseq = args.iter().any(|a| a.atom_upper().as_deref() == Some("MODSEQ"));
         if uses_modseq {
@@ -1718,12 +1985,8 @@ impl Session {
         let mut returns: Option<Vec<String>> = None;
         if args.first().and_then(Arg::atom_upper).as_deref() == Some("RETURN") {
             let Some(Arg::List(options)) = args.get(1) else { return Ok(bad("usage: SEARCH RETURN (options) criteria")) };
-            let options: Vec<String> = options.iter().filter_map(Arg::atom_upper).collect();
-            if options.iter().any(|o| !matches!(o.as_str(), "MIN" | "MAX" | "COUNT" | "ALL")) {
-                return Ok(bad("unsupported RETURN option"));
-            }
-            // An empty list means ALL.
-            returns = Some(if options.is_empty() { vec!["ALL".into()] } else { options });
+            let Some(parsed) = return_options(options) else { return Ok(bad("unsupported RETURN option")) };
+            returns = Some(parsed);
             args = &args[2..];
         } else if self.rev2 {
             // IMAP4rev2 has no SEARCH response: ESEARCH with ALL takes its place.
@@ -1734,6 +1997,16 @@ impl Session {
             Err(err) => return Ok(Err(err)),
         };
         let numbers: Vec<u32> = hits.iter().map(|&i| self.number(i, uid)).collect();
+        // SEARCHRES: SAVE keeps the result (as UIDs) for `$`; alone, it answers nothing.
+        if let Some(options) = &returns
+            && options.iter().any(|o| o == "SAVE")
+        {
+            let selected = self.selected.as_ref();
+            self.saved = hits.iter().filter_map(|&i| selected.and_then(|s| s.messages.get(i)).map(|m| m.uid as u32)).collect();
+            if options.len() == 1 {
+                return Ok(Ok(format!("{}SEARCH completed, result saved", if uid { "UID " } else { "" })));
+            }
+        }
         let line = match returns {
             None => {
                 let mut line = if numbers.is_empty() { "* SEARCH".to_owned() } else { format!("* SEARCH {}", numbers.iter().map(u32::to_string).collect::<Vec<_>>().join(" ")) };
@@ -1751,6 +2024,11 @@ impl Session {
                         "MAX" if !numbers.is_empty() => line.push_str(&format!(" MAX {}", numbers.iter().max().unwrap_or(&0))),
                         "COUNT" => line.push_str(&format!(" COUNT {}", numbers.len())),
                         "ALL" if !numbers.is_empty() => line.push_str(&format!(" ALL {}", sequence_set(&numbers))),
+                        partial if partial.starts_with("PARTIAL ") => {
+                            let Some((range, positions)) = partial_range(&partial["PARTIAL ".len()..], numbers.len()) else { return Ok(bad("invalid PARTIAL range")) };
+                            let slice = &numbers[positions];
+                            line.push_str(&format!(" PARTIAL ({range} {})", if slice.is_empty() { "NIL".to_owned() } else { sequence_set(slice) }));
+                        }
                         _ => {}
                     }
                 }
@@ -1765,7 +2043,18 @@ impl Session {
     }
 
     /// SORT (RFC 5256): SORT (criteria) charset search-criteria.
-    async fn cmd_sort(&mut self, args: &[Arg], uid: bool) -> std::io::Result<CmdResult> {
+    async fn cmd_sort(&mut self, tag: &str, args: &[Arg], uid: bool) -> std::io::Result<CmdResult> {
+        // ESORT (RFC 5267): SORT RETURN (options) (criteria) charset search.
+        let mut args = args;
+        let mut returns: Option<Vec<String>> = None;
+        if args.first().and_then(Arg::atom_upper).as_deref() == Some("RETURN") {
+            let Some(Arg::List(options)) = args.get(1) else { return Ok(bad("usage: SORT RETURN (options) (criteria) charset search")) };
+            match return_options(options) {
+                Some(parsed) if !parsed.iter().any(|o| o == "SAVE") => returns = Some(parsed),
+                _ => return Ok(bad("unsupported RETURN option")),
+            }
+            args = &args[2..];
+        }
         let Some(Arg::List(criteria)) = args.first() else { return Ok(bad("usage: SORT (criteria) charset search")) };
         let mut order: Vec<(SortKey, bool)> = Vec::new();
         let mut reverse = false;
@@ -1782,6 +2071,9 @@ impl Session {
                 "SIZE" => SortKey::Size,
                 "SUBJECT" => SortKey::Subject,
                 "TO" => SortKey::To,
+                // SORT=DISPLAY (RFC 5957).
+                "DISPLAYFROM" => SortKey::DisplayFrom,
+                "DISPLAYTO" => SortKey::DisplayTo,
                 _ => return Ok(bad("unknown sort criterion")),
             };
             order.push((key, reverse));
@@ -1811,6 +2103,8 @@ impl Session {
                     SortKey::From => mailbox_part(&a.from_addr).cmp(&mailbox_part(&b.from_addr)),
                     SortKey::To => mailbox_part(a.to_addrs.split(',').next().unwrap_or("")).cmp(&mailbox_part(b.to_addrs.split(',').next().unwrap_or(""))),
                     SortKey::Cc => mailbox_part(cca).cmp(&mailbox_part(ccb)),
+                    SortKey::DisplayFrom => display_from(a).cmp(&display_from(b)),
+                    SortKey::DisplayTo => mailbox_part(a.to_addrs.split(',').next().unwrap_or("")).cmp(&mailbox_part(b.to_addrs.split(',').next().unwrap_or(""))),
                 };
                 let ordering = if *reverse { ordering.reverse() } else { ordering };
                 if ordering != std::cmp::Ordering::Equal {
@@ -1820,7 +2114,28 @@ impl Session {
             ia.cmp(ib)
         });
         let numbers: Vec<String> = rows.iter().map(|(i, _, _)| self.number(*i, uid).to_string()).collect();
-        self.line(&format!("* SORT{}{}", if numbers.is_empty() { "" } else { " " }, numbers.join(" "))).await?;
+        let Some(options) = returns else {
+            self.line(&format!("* SORT{}{}", if numbers.is_empty() { "" } else { " " }, numbers.join(" "))).await?;
+            return Ok(Ok(format!("{}SORT completed", if uid { "UID " } else { "" })));
+        };
+        // ESORT answers with ESEARCH; MIN and MAX are the first and last in sort order, and
+        // ALL lists the messages in that order.
+        let mut line = format!("* ESEARCH (TAG \"{tag}\"){}", if uid { " UID" } else { "" });
+        for option in &options {
+            match option.as_str() {
+                "MIN" if !numbers.is_empty() => line.push_str(&format!(" MIN {}", numbers[0])),
+                "MAX" if !numbers.is_empty() => line.push_str(&format!(" MAX {}", numbers[numbers.len() - 1])),
+                "COUNT" => line.push_str(&format!(" COUNT {}", numbers.len())),
+                "ALL" if !numbers.is_empty() => line.push_str(&format!(" ALL {}", numbers.join(","))),
+                partial if partial.starts_with("PARTIAL ") => {
+                    let Some((range, positions)) = partial_range(&partial["PARTIAL ".len()..], numbers.len()) else { return Ok(bad("invalid PARTIAL range")) };
+                    let slice = &numbers[positions];
+                    line.push_str(&format!(" PARTIAL ({range} {})", if slice.is_empty() { "NIL".to_owned() } else { slice.join(",") }));
+                }
+                _ => {}
+            }
+        }
+        self.line(&line).await?;
         Ok(Ok(format!("{}SORT completed", if uid { "UID " } else { "" })))
     }
 
@@ -1865,7 +2180,11 @@ impl Session {
     }
 
     async fn cmd_copy(&mut self, args: &[Arg], uid: bool, remove: bool) -> CmdResult {
-        let set = args.first().and_then(Arg::text).and_then(|s| SequenceSet::parse(&s)).ok_or("BAD invalid sequence set")?;
+        let (set, uid) = self.sequence_arg(args.first(), uid).ok_or("BAD invalid sequence set")?;
+        // SAVELIMIT (RFC 9738): a copy this large is refused as a whole.
+        if !remove && self.resolve(&set, uid).len() > SAVE_LIMIT {
+            return Err(format!("NO [MESSAGELIMIT {SAVE_LIMIT}] too many messages to copy at once"));
+        }
         let target = self.find_mailbox(args.get(1).and_then(Arg::text), "i").await?;
         let name = if remove { "MOVE" } else { "COPY" };
         if remove && self.selected.as_ref().is_none_or(|s| s.read_only) {
@@ -1956,7 +2275,7 @@ async fn handle(app: AppState, tcp: TcpStream, peer: SocketAddr, starttls: bool)
             }
         }
     };
-    let session = Session { app, conn, peer, account: None, grant: None, selected: None, errors: 0, login_failures: 0, condstore: false, qresync: false, oauth: false, rev2: false };
+    let session = Session { app, conn, peer, account: None, grant: None, selected: None, errors: 0, login_failures: 0, condstore: false, qresync: false, oauth: false, rev2: false, utf8: false, uid_only: false, saved: Vec::new() };
     if let Err(err) = session.run().await {
         tracing::debug!(%err, %peer, "IMAP session ended with an error");
     }

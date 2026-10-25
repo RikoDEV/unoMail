@@ -1,6 +1,10 @@
-//! POP3 server (RFC 1939) over implicit TLS (port 995).
+//! POP3 server (RFC 1939) over implicit TLS (port 995), with CAPA (RFC 2449), SASL
+//! authentication (RFC 5034: PLAIN, and XOAUTH2/OAUTHBEARER while single sign-on is set up)
+//! and UTF8 (RFC 6856). STLS (RFC 2595) does not apply: there is no plaintext port.
 
 use std::{collections::HashSet, net::SocketAddr, time::Duration};
+
+use base64::{Engine, engine::general_purpose::STANDARD};
 
 use tokio::net::{TcpListener, TcpStream};
 
@@ -84,7 +88,66 @@ impl Session {
             self.err("USER first").await?;
             return Ok(true);
         };
-        match auth::authenticate_with(&self.app.db, &self.app.limiter, &user, password, self.peer.ip(), Protocol::Pop3).await {
+        let result = auth::authenticate_with(&self.app.db, &self.app.limiter, &user, password, self.peer.ip(), Protocol::Pop3).await;
+        self.finish_login(result.map(|(account, credential)| (account, Some(credential)))).await
+    }
+
+    /// AUTH (RFC 5034): `AUTH` lists the mechanisms; `AUTH mechanism [initial-response]`.
+    async fn authenticate(&mut self, arg: &str) -> std::io::Result<bool> {
+        let oauth = crate::oauth::active(&self.app).await.is_some();
+        let mut words = arg.split_whitespace();
+        let Some(mechanism) = words.next().map(str::to_ascii_uppercase) else {
+            let list = if oauth { "PLAIN\r\nXOAUTH2\r\nOAUTHBEARER\r\n" } else { "PLAIN\r\n" };
+            self.conn.write_all(format!("+OK mechanisms\r\n{list}.\r\n").as_bytes()).await?;
+            return Ok(true);
+        };
+        if !(mechanism == "PLAIN" || (oauth && matches!(mechanism.as_str(), "XOAUTH2" | "OAUTHBEARER"))) {
+            self.err("unsupported authentication mechanism").await?;
+            return Ok(true);
+        }
+        let response = match words.next() {
+            // "=" is an empty initial response.
+            Some("=") => String::new(),
+            Some(initial) => initial.to_owned(),
+            None => {
+                self.conn.write_all(b"+ \r\n").await?;
+                match self.conn.read_line(MAX_LINE).await {
+                    Ok(line) => String::from_utf8_lossy(&line).trim().to_owned(),
+                    Err(_) => return Ok(false),
+                }
+            }
+        };
+        if response == "*" {
+            self.err("authentication cancelled").await?;
+            return Ok(true);
+        }
+        let Ok(bytes) = STANDARD.decode(response.trim()) else {
+            self.err("malformed authentication data").await?;
+            return Ok(true);
+        };
+        if mechanism != "PLAIN" {
+            let Some((user, token)) = crate::oauth::parse_sasl(&mechanism, &bytes) else {
+                self.err("malformed authentication data").await?;
+                return Ok(true);
+            };
+            let result = crate::oauth::authenticate_token(&self.app, &user, &token, self.peer.ip(), Protocol::Pop3).await;
+            let ok = self.finish_login(result.map(|account| (account, None))).await;
+            self.grant = self.grant.take().map(|grant| grant.with_token(token));
+            return ok;
+        }
+        let mut parts = bytes.split(|b| *b == 0);
+        let credentials = (|| Some((String::from_utf8(parts.nth(1)?.to_vec()).ok()?, String::from_utf8(parts.next()?.to_vec()).ok()?)))();
+        let Some((user, password)) = credentials else {
+            self.err("malformed authentication data").await?;
+            return Ok(true);
+        };
+        let result = auth::authenticate_with(&self.app.db, &self.app.limiter, &user, &password, self.peer.ip(), Protocol::Pop3).await;
+        self.finish_login(result.map(|(account, credential)| (account, Some(credential)))).await
+    }
+
+    /// Opens the session after a successful sign-in; false ends the connection.
+    async fn finish_login(&mut self, result: Result<(Account, Option<auth::Credential>), AuthError>) -> std::io::Result<bool> {
+        match result {
             Ok((account, credential)) => {
                 let inbox = match self.app.store.mailbox_by_role(account.id, "inbox").await {
                     Ok(Some(inbox)) => inbox,
@@ -94,7 +157,7 @@ impl Session {
                     }
                 };
                 self.messages = self.app.store.messages_in(inbox.id).await.unwrap_or_default();
-                self.grant = Some(auth::Grant::new(&account, Protocol::Pop3, Some(credential)));
+                self.grant = Some(auth::Grant::new(&account, Protocol::Pop3, credential));
                 self.account = Some(account);
                 self.ok(&format!("{} messages", self.messages.len())).await?;
                 Ok(true)
@@ -156,7 +219,9 @@ impl Session {
             // Commands valid in any state.
             match verb.as_str() {
                 "CAPA" => {
-                    self.conn.write_all(b"+OK capabilities\r\nUSER\r\nUIDL\r\nTOP\r\nRESP-CODES\r\nAUTH-RESP-CODE\r\nPIPELINING\r\n.\r\n").await?;
+                    let sasl = if crate::oauth::active(&self.app).await.is_some() { "SASL PLAIN XOAUTH2 OAUTHBEARER" } else { "SASL PLAIN" };
+                    let capabilities = format!("+OK capabilities\r\nUSER\r\n{sasl}\r\nUIDL\r\nTOP\r\nRESP-CODES\r\nAUTH-RESP-CODE\r\nPIPELINING\r\nUTF8\r\n.\r\n");
+                    self.conn.write_all(capabilities.as_bytes()).await?;
                     continue;
                 }
                 "NOOP" => {
@@ -181,6 +246,14 @@ impl Session {
                             return Ok(());
                         }
                     }
+                    "AUTH" => {
+                        if !self.authenticate(arg).await? {
+                            return Ok(());
+                        }
+                    }
+                    // RFC 6856: user names, passwords and messages may be UTF-8, which they
+                    // always may here; the command only says the client relies on it.
+                    "UTF8" => self.ok("UTF-8 enabled").await?,
                     _ => self.err("authenticate first").await?,
                 }
                 continue;

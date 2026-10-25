@@ -110,7 +110,9 @@ pub async fn resolve(app: &App, recipient: &Address) -> sqlx::Result<Resolution>
                 break;
             }
             if let Some(id) = account_id(app, &candidate).await? {
-                account = Some((id, candidate));
+                // Delivered under the address it was sent to, +tag included: Sieve's
+                // subaddress tests (RFC 5233) and Delivered-To see it.
+                account = Some((id, addr.to_string()));
                 break;
             }
         }
@@ -254,9 +256,19 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
         .await;
         return Ok(());
     }
-    let mut message = Vec::with_capacity(d.raw.len() + 128);
+    // The filter runs first: its header edits change what is stored.
+    let script = crate::sieve::active_script(app, d.account_id).await;
+    let outcome = match &script {
+        Some(script) => {
+            let context = sieve_context(app, &d).await;
+            script.evaluate(&crate::sieve::Envelope { from: d.sender, to: d.recipient, raw: d.raw, context: &context })
+        }
+        None => crate::sieve::Outcome { keep: Some(Vec::new()), ..Default::default() },
+    };
+    let stored: &[u8] = outcome.edited.as_deref().unwrap_or(d.raw);
+    let mut message = Vec::with_capacity(stored.len() + 128);
     message.extend_from_slice(format!("Return-Path: <{}>\r\nDelivered-To: {}\r\n", d.sender, d.recipient).as_bytes());
-    message.extend_from_slice(d.raw);
+    message.extend_from_slice(stored);
     // Correspondents who sign with S/MIME can be written to encrypted.
     if !d.sender.is_empty() {
         crate::smime::collect(app, d.account_id, d.raw).await;
@@ -264,10 +276,6 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
     // Stored encrypted to the owner's OpenPGP key, when they asked for that.
     let message = crate::openpgp::protect(app, d.account_id, message).await;
 
-    let outcome = match crate::sieve::active_script(app, d.account_id).await {
-        Some(script) => script.evaluate(&crate::sieve::Envelope { from: d.sender, to: d.recipient, raw: d.raw }),
-        None => crate::sieve::Outcome { keep: Some(Vec::new()), ..Default::default() },
-    };
     // Mail from a sender the user blocked is accepted like any other (the sender learns
     // nothing) but treated as junk. Both the visible author and the envelope sender count.
     let author = crate::store::parse_metadata(d.raw).from_addr;
@@ -291,19 +299,10 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
     if let Some(flags) = &outcome.keep {
         targets.push((default_mailbox.id, flags.clone()));
     }
-    for (name, create, flags) in &outcome.fileinto {
-        let mailbox = if junk {
-            default_mailbox.id
-        } else {
-            match app.store.mailbox_by_name(d.account_id, name).await? {
-                Some(mailbox) => mailbox.id,
-                None if *create => app.store.create_mailbox(d.account_id, name).await.map_or(default_mailbox.id, |m| m.id),
-                // RFC 5228: a missing mailbox must not lose the message.
-                None => default_mailbox.id,
-            }
-        };
+    for target in &outcome.fileinto {
+        let mailbox = if junk { default_mailbox.id } else { filing_target(app, d.account_id, target, default_mailbox.id).await? };
         if !targets.iter().any(|(id, _)| *id == mailbox) {
-            targets.push((mailbox, flags.clone()));
+            targets.push((mailbox, target.flags.clone()));
         }
     }
 
@@ -370,7 +369,7 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
                 tracing::warn!(recipient = d.recipient, "Sieve redirect refused: the account is over its sending limit or blocked");
                 return Ok(());
             }
-            let copy = [format!("Delivered-To: {}\r\n", d.recipient).as_bytes(), d.raw].concat();
+            let copy = [format!("Delivered-To: {}\r\n", d.recipient).as_bytes(), stored].concat();
             let hash = app.store.put_blob(&copy).await?;
             let sender = forwarding_sender(app, d.sender, domain).await?;
             for target in &destinations {
@@ -385,8 +384,29 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
         }
     }
 
+    // reject / ereject: the sender is told, when the return path can be believed.
+    if let Some(reason) = &outcome.reject
+        && result.is_ok()
+    {
+        if !junk && !d.sender.is_empty() && (d.sender_verified || d.author_verified) {
+            // Boxed: the bounce may itself be delivered here.
+            Box::pin(crate::smtp::queue::bounce(app, d.sender, d.recipient, &format!("rejected by the recipient's mail filter: {reason}"), d.raw)).await;
+        }
+    }
+    if result.is_ok() && !outcome.duplicates.is_empty() {
+        record_duplicates(app, d.account_id, &outcome.duplicates).await;
+    }
+    if result.is_ok() && !junk && !outcome.notify.is_empty() {
+        for notification in &outcome.notify {
+            if let Err(err) = send_notification(app, d.account_id, d.recipient, notification).await {
+                tracing::warn!(error = ?err, recipient = d.recipient, "Sieve notification failed");
+            }
+        }
+    }
+
     let (status, detail) = match &result {
         Err(err) => ("rejected", err.to_string()),
+        Ok(()) if outcome.reject.is_some() => ("rejected", "rejected by the mailbox filter".to_owned()),
         Ok(()) if targets.is_empty() && redirected == 0 => ("discarded", "discarded by the mailbox filter".to_owned()),
         Ok(()) if targets.is_empty() => ("delivered", format!("redirected to {redirected} address(es) by the mailbox filter")),
         Ok(()) => (
@@ -436,6 +456,156 @@ pub async fn deliver_local(app: &App, d: LocalDelivery<'_>) -> Result<(), StoreE
     result
 }
 
+/// What a Sieve script may know besides the message: the spam and virus verdicts, the
+/// account's mailboxes, its address book and the messages it has seen.
+async fn sieve_context(app: &App, d: &LocalDelivery<'_>) -> crate::sieve::Context {
+    let headers = &d.raw[..crate::security::authn::find_header_end(d.raw)];
+    let text = String::from_utf8_lossy(headers);
+    let header = |name: &str| text.lines().find_map(|line| line.split_once(':').filter(|(n, _)| n.trim().eq_ignore_ascii_case(name)).map(|(_, v)| v.trim().to_owned()));
+    // spamtest: 10 for mail classified as spam; otherwise the server filter's score on a
+    // scale of 1 to 9 up to its junk threshold; 0 when the filter did not look at it.
+    let spam = if d.junk {
+        10
+    } else {
+        match header(crate::security::filter::HEADER).and_then(|v| v.split(';').find_map(|p| p.trim().strip_prefix("score=").and_then(|s| s.parse::<f64>().ok()))) {
+            Some(score) => {
+                let threshold = app.rt().native_filter_score.max(0.1);
+                (1.0 + (score.max(0.0) / threshold * 8.0)).round().clamp(1.0, 9.0) as u8
+            }
+            None => 0,
+        }
+    };
+    let virus = match header(crate::security::summary::VIRUS_HEADER) {
+        Some(value) if value.to_ascii_lowercase().starts_with("infected") => 5,
+        _ if app.rt().antivirus_inbound && matches!(d.direction, Direction::Inbound) => 1,
+        _ => 0,
+    };
+    let mailboxes = app
+        .store
+        .list_mailboxes(d.account_id)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| crate::sieve::MailboxInfo { id: format!("b{}", m.id), name: m.name, role: m.role })
+        .collect();
+    let duplicates: Vec<String> = sqlx::query_scalar("SELECT key FROM sieve_duplicates WHERE account_id = ? AND expires_at > ?").bind(d.account_id).bind(now()).fetch_all(&app.db).await.unwrap_or_default();
+    let contacts: Vec<String> = sqlx::query_scalar("SELECT lower(email) FROM contacts WHERE account_id = ? AND email != '' LIMIT 20000").bind(d.account_id).fetch_all(&app.db).await.unwrap_or_default();
+    crate::sieve::Context {
+        spam,
+        virus,
+        now: now(),
+        domain: d.recipient.rsplit_once('@').map_or("", |(_, domain)| domain).to_owned(),
+        host: app.cfg.hostname.clone(),
+        remote_ip: d.remote.to_owned(),
+        mailboxes,
+        duplicates: duplicates.into_iter().collect(),
+        contacts: contacts.into_iter().collect(),
+    }
+}
+
+/// The mailbox a `fileinto` names: by special use or id when it gives one and that mailbox
+/// exists, otherwise by name (created with `:create`), otherwise the default.
+async fn filing_target(app: &App, account_id: i64, target: &crate::sieve::FileInto, fallback: i64) -> Result<i64, StoreError> {
+    if let Some(role) = target.special_use.as_deref().and_then(crate::sieve::special_use_role)
+        && let Some(mailbox) = app.store.mailbox_by_role(account_id, role).await?
+    {
+        return Ok(mailbox.id);
+    }
+    if let Some(id) = target.mailbox_id.as_deref().and_then(|id| id.strip_prefix('b')).and_then(|id| id.parse::<i64>().ok())
+        && let Some(mailbox) = app.store.list_mailboxes(account_id).await?.into_iter().find(|m| m.id == id)
+    {
+        return Ok(mailbox.id);
+    }
+    Ok(match app.store.mailbox_by_name(account_id, &target.mailbox).await? {
+        Some(mailbox) => mailbox.id,
+        None if target.create => app.store.create_mailbox(account_id, &target.mailbox).await.map_or(fallback, |m| m.id),
+        // RFC 5228: a missing mailbox must not lose the message.
+        None => fallback,
+    })
+}
+
+async fn record_duplicates(app: &App, account_id: i64, keys: &[(String, i64)]) {
+    for (key, seconds) in keys {
+        let result = sqlx::query("INSERT INTO sieve_duplicates (account_id, key, expires_at) VALUES (?, ?, ?) ON CONFLICT(account_id, key) DO UPDATE SET expires_at = excluded.expires_at")
+            .bind(account_id)
+            .bind(key)
+            .bind(now() + seconds)
+            .execute(&app.db)
+            .await;
+        if let Err(err) = result {
+            tracing::warn!(error = %err, "Sieve duplicate tracking failed");
+        }
+    }
+    let _ = sqlx::query("DELETE FROM sieve_duplicates WHERE expires_at < ?").bind(now()).execute(&app.db).await;
+}
+
+/// Stores a copy of a message a script sent (`:fcc`, RFC 8580), marked as read.
+pub async fn store_fcc(app: &App, account_id: i64, fcc: &crate::sieve::Fcc, message: &[u8]) -> Result<(), StoreError> {
+    let mailbox = match app.store.mailbox_by_name(account_id, &fcc.mailbox).await? {
+        Some(mailbox) => mailbox,
+        None if fcc.create => app.store.create_mailbox(account_id, &fcc.mailbox).await?,
+        None => return Ok(()),
+    };
+    let mut names = fcc.flags.clone();
+    if !names.iter().any(|f| f.eq_ignore_ascii_case("\\seen")) {
+        names.push("\\Seen".into());
+    }
+    let (flags, keywords) = split_flags(&names);
+    app.store.append_with_provenance(account_id, mailbox.id, message, flags, None, &keywords, None).await.map(|_| ())
+}
+
+/// Sends a Sieve notification (RFC 5436) by mail on the user's behalf. Like redirects, it
+/// counts against the user's sending limits and reaches outside addresses only when the
+/// server allows filters to forward there.
+async fn send_notification(app: &App, account_id: i64, owner: &str, notification: &crate::sieve::Notification) -> anyhow::Result<()> {
+    let Some(target) = Address::parse(&notification.to) else { return Ok(()) };
+    let resolution = resolve(app, &target).await?;
+    if matches!(resolution, Resolution::NotLocal) && !app.rt().sieve_external_redirect {
+        tracing::info!(owner, "Sieve notification to an outside address refused by the server settings");
+        return Ok(());
+    }
+    let Some(account) = crate::auth::Account::by_id(&app.db, account_id).await? else { return Ok(()) };
+    if crate::security::outbound::register_submission(app, &account, 1).await?.is_err() {
+        return Ok(());
+    }
+    let domain = owner.rsplit_once('@').map_or("", |(_, domain)| domain);
+    let priority = match notification.importance {
+        1 => "Importance: high\r\nX-Priority: 1\r\n",
+        3 => "Importance: low\r\nX-Priority: 5\r\n",
+        _ => "",
+    };
+    let message_id = format!("<{}@{}>", crate::util::random_token(), app.cfg.hostname);
+    let text = format!(
+        "From: <{owner}>\r\nTo: <{target}>\r\nSubject: {}\r\nDate: {}\r\nMessage-ID: {message_id}\r\nAuto-Submitted: auto-notified\r\n{priority}MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{}\r\n",
+        crate::util::sanitize_line(&notification.subject),
+        rfc2822_now(),
+        notification.message.replace("\r\n", "\n").replace('\n', "\r\n"),
+    );
+    let message = crate::security::dkim::sign(&app.db, &app.secrets, domain, text.as_bytes()).await?;
+    if let Some(fcc) = &notification.fcc {
+        store_fcc(app, account_id, fcc, &message).await?;
+    }
+    // A null return path: notifications are never answered or bounced back into a loop.
+    match resolution {
+        Resolution::Deliver(list) => {
+            for target in list {
+                if let Target::Local { account_id: to, address } = target
+                    && let Some(inbox) = app.store.mailbox_by_role(to, "inbox").await?
+                {
+                    let local = [format!("Return-Path: <>\r\nDelivered-To: {address}\r\n").as_bytes(), &message].concat();
+                    app.store.append(to, inbox.id, &local, Flags::default(), None).await?;
+                }
+            }
+        }
+        Resolution::NotLocal => {
+            let hash = app.store.put_blob(&message).await?;
+            enqueue(app, "", &target, &hash, message.len(), Some(account_id)).await?;
+        }
+        Resolution::NoSuchUser => {}
+    }
+    Ok(())
+}
+
 /// Queues a message for delivery to a remote recipient.
 pub async fn enqueue(app: &App, sender: &str, recipient: &Address, blob_hash: &str, size: usize, account_id: Option<i64>) -> sqlx::Result<i64> {
     enqueue_via(app, sender, recipient, blob_hash, size, account_id, None).await
@@ -454,9 +624,13 @@ pub async fn enqueue_via(
     let now = now();
     // Within an SMTP transaction: what its sender asked to be notified about.
     let dsn = if sender.is_empty() { crate::smtp::dsn::Dsn::default() } else { crate::smtp::dsn::current(&recipient.to_string()) };
+    // FUTURERELEASE holds the message; its time to live starts at release. BY=…;R ends it at
+    // the deadline (and the usual bounce follows).
+    let release = dsn.queueing.hold_until.map_or(now, |at| at.max(now));
+    let expires = dsn.queueing.deliver_by.map_or(release + app.cfg.queue_max_age_secs, |deadline| deadline.min(release + app.cfg.queue_max_age_secs));
     let id = sqlx::query(
-        "INSERT INTO queue (sender, recipient, recipient_domain, blob_hash, size, account_id, next_attempt_at, created_at, expires_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt, require_tls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO queue (sender, recipient, recipient_domain, blob_hash, size, account_id, next_attempt_at, created_at, expires_at, relay_identity_id, dsn_notify, dsn_ret, dsn_envid, dsn_orcpt, require_tls, priority)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(sender)
     .bind(recipient.to_string())
@@ -464,15 +638,16 @@ pub async fn enqueue_via(
     .bind(blob_hash)
     .bind(size as i64)
     .bind(account_id)
+    .bind(release)
     .bind(now)
-    .bind(now)
-    .bind(now + app.cfg.queue_max_age_secs)
+    .bind(expires)
     .bind(relay_identity)
     .bind(dsn.notify)
     .bind(dsn.ret)
     .bind(dsn.envid)
     .bind(dsn.orcpt)
     .bind(i64::from(dsn.require_tls))
+    .bind(i64::from(dsn.queueing.priority))
     .execute(&app.db)
     .await?
     .last_insert_rowid();
