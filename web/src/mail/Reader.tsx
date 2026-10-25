@@ -23,7 +23,6 @@ import { downloadUrl, formatBytes, errorText } from '../lib/api';
 import { Invitation } from '../calendar/Invitation';
 import { emit, type PluginMessage, usePlugins } from '../lib/plugins';
 import { updatePrefs, usePrefs } from '../lib/prefs';
-import { ABOVE_SWIPE } from '../lib/swipe';
 import { imageProxyUrl } from './extra';
 import { answerReceipt, type EmailFull, formatAddress, labelsOf, normalizeLabel } from './jmapClient';
 import { SmimeBadges } from './Smime';
@@ -572,7 +571,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
   return (
     <Box className="um-part-reader" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label={t('Conversation')}>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', p: 1 }}>
-        <Tooltip title={t('Back to list (u)')}><IconButton sx={ABOVE_SWIPE} aria-label={t('Back to list')} onClick={onBack}><ArrowBack /></IconButton></Tooltip>
+        <Tooltip title={t('Back to list (u)')}><IconButton aria-label={t('Back to list')} onClick={onBack}><ArrowBack /></IconButton></Tooltip>
         <Tooltip title={t('Archive (e)')}><IconButton aria-label={t('Archive')} onClick={onArchive}><Archive /></IconButton></Tooltip>
         {onNotSpam ? (
           <Tooltip title={t('Not spam: move to the inbox')}><IconButton aria-label={t('Not spam')} onClick={onNotSpam}><ReportOff /></IconButton></Tooltip>
