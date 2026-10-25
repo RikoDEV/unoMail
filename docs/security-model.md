@@ -62,6 +62,7 @@ The operator can read all mail except OpenPGP-encrypted mail.
 - Strict CSP, HSTS, and no caching of API responses.
 - HTML mail is sanitized with DOMPurify and shown in a sandboxed frame without scripts.
 - Remote images go through a proxy that refuses private addresses.
+- Plug-ins run in sandboxed frames with an opaque origin, and their server modules as metered WebAssembly, each with only the permissions an administrator approved; see [Plug-ins and themes](plugins.md#security-model).
 - Attachments are served as downloads only. Executables can be refused at the server.
 - OpenPGP runs in the browser; the server never sees the passphrase.
 

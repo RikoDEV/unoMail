@@ -15,6 +15,9 @@
 | Guide | Contents |
 | --- | --- |
 | [Web client](web-client.md) | Mail, calendar, contacts and settings |
+| [Plug-ins and themes](plugins.md) | Installing, configuring and securing packages |
+| [Writing plug-ins](plugin-development.md) | Developer reference: manifest, SDK, server ABI |
+| [Writing themes](theme-development.md) | Theme tokens, images and parts |
 | [Mail programs](mail-programs.md) | IMAP, SMTP, JMAP, CalDAV and CardDAV setup |
 
 ## Build on it

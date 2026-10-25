@@ -44,6 +44,10 @@ Allowed addresses skip DNS blocklists, reputation checks and greylisting.
 ## Reports
 
 - **DMARC**: incoming aggregate reports are parsed; outgoing ones are sent daily to domains that ask (`rua`).
+- **Feedback reports** (ARF, RFC 5965): complaints and failure reports sent to a hosted domain are listed
+  under Insights → DMARC. **Send failure reports** (Server settings, off by default) sends
+  per-message reports for DMARC (`ruf`), DKIM (RFC 6651) and SPF (RFC 6652) failures, with recipient
+  addresses redacted and at most one an hour per domain.
 - **TLS** (RFC 8460): received reports and the server's own outbound sessions.
 - **MTA-STS and DANE** are enforced on outbound mail. Hosted domains can publish an MTA-STS policy.
 
@@ -97,33 +101,15 @@ holds addresses and sizes, never content.
 
 ### Skins
 
-JSON design tokens only, so a skin can't carry CSS or code:
+Skins pasted here are JSON design tokens only, so a skin can't carry CSS or code. The tokens
+are the same as a theme package's; see [Writing themes](theme-development.md).
 
-| Key | Values |
-| --- | --- |
-| `id`, `name` | Text |
-| `mode` | `light`, `dark`, `auto` |
-| `primary`, `secondary`, `background`, `paper`, `text` | `#rrggbb` |
-| `radius` | 0–32 |
-| `density` | `comfortable`, `compact` |
-| `font` | `roboto`, `system`, `serif`, `mono` |
+### Plug-ins and themes
 
-### Plug-ins
-
-A plug-in is `plugins/<id>/` in the data directory with `plugin.json` (`name`, `version`,
-`description`) and `plugin.js`. Enable it in the admin panel. API: [`web/src/lib/plugins.ts`](../web/src/lib/plugins.ts).
-
-```js
-export default function (api) {
-  api.addMessageAction({ id: 'translate', label: 'Translate', onClick: (message) => {} });
-  api.addComposerAction({ id: 'greeting', label: 'Greeting', onClick: (c) => c.insertHtml('<p>Hello,</p>') });
-  api.addSidebarLink({ id: 'wiki', label: 'Wiki', href: 'https://wiki.example.org/' });
-  api.on('message:sent', ({ subject }) => api.notify(`Sent: ${subject}`));
-}
-```
-
-> [!WARNING]
-> Plug-ins run in every user's browser with full page privileges.
+Install packages from a git repository at a tag, branch or commit. A plug-in's web part
+runs in sandboxed frames and its server part (WebAssembly) in a sandbox inside the server,
+both with only the permissions you approved. Plug-ins can declare settings for you (the gear
+button) and for each user. See [Plug-ins and themes](plugins.md).
 
 ## Mailing lists
 

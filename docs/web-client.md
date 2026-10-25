@@ -98,4 +98,5 @@ For programs, see [CalDAV and CardDAV](mail-programs.md#calendars-and-contacts).
 - **Notifications**: Web Push, also with no tab open.
 - **Usage**: quota and hourly sending limit in Settings → General.
 - **Languages**: English and Polish. Strings are in `web/src/locales/<code>.json`.
-- **Skins**: six built in, more from the [administrator](administration.md#integrations).
+- **Skins**: six built in, more from the [administrator](administration.md#integrations), including theme packages.
+- **Add-ons**: plug-ins the administrator made available, turned on per user in Settings → General. They can add buttons, views and pages, or hide some built-in features. See [Plug-ins and themes](plugins.md).

@@ -38,6 +38,7 @@ be changed at runtime, see [Runtime settings](#runtime-settings).
 | `UNOMAIL_TRUSTED_PROXIES` | – | CIDRs whose `X-Forwarded-For` is trusted |
 | `UNOMAIL_TRUSTED_NETWORKS` | – | CIDRs of relays that skip sender checks and may read `/metrics` |
 | `UNOMAIL_ALLOW_PRIVATE_DESTINATIONS` | `false` | Allow private addresses for outbound HTTP and SMTP (testing only) |
+| `UNOMAIL_PACKAGES_ALLOW_LOCAL` | `false` | Allow installing packages from local `file://` repositories (testing only) |
 
 > [!WARNING]
 > Don't add Docker or NAT networks to `UNOMAIL_TRUSTED_NETWORKS`: every client would appear

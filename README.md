@@ -27,10 +27,10 @@ and built-in spam and virus filtering. Written in Rust and React.
 - SMTP with DKIM signing, SPF/DKIM/DMARC/ARC verification, SRS, DSN, MTA-STS and DANE
 - IMAP4rev1 and IMAP4rev2 (IDLE, CONDSTORE/QRESYNC, ACL, QUOTA, SORT/THREAD, BINARY, COMPRESS…), POP3, ManageSieve, LMTP
 - JMAP (RFC 8620/8621) including WebSocket push, delayed send and undo, plus JMAP for
-  quotas, Sieve scripts, contacts and calendars
+  quotas, Sieve scripts, contacts, calendars, blob management and sharing principals
 - REQUIRETLS (RFC 8689) for mail that must never travel unencrypted
 - Internationalized addresses (SMTPUTF8) for mailboxes, aliases and recipients
-- CalDAV and CardDAV for Thunderbird, Apple Calendar/Contacts, DAVx⁵ and others
+- CalDAV and CardDAV (with quotas, extended MKCOL, `Prefer: return=minimal` and byte ranges) for Thunderbird, Apple Calendar/Contacts, DAVx⁵ and others
 - Automatic Let's Encrypt certificates (HTTP-01 and Cloudflare DNS-01)
 
 **Web client**
@@ -49,14 +49,15 @@ and built-in spam and virus filtering. Written in Rust and React.
   and previews for images, text and PDF attachments
 - OpenPGP and S/MIME, offline mode, Web Push notifications, several accounts at once
 - Passkeys, TOTP two-step sign-in, app passwords and OpenID Connect single sign-on
-- English and Polish interface, skins and a plug-in API; usable on small screens
+- 20 interface languages, themes with images and per-part styles, sandboxed plug-ins for the web client and the server; usable on small screens
 
 **Administration**
 - Domains with DNS record checks and DKIM key management, mailboxes, aliases and
   `postmaster@` mailboxes; domain administrators confined to their own domains
 - Mailbox import over IMAP or from a Maildir
 - Dashboard with daily and live traffic charts, queue, delivery, system and audit logs
-- TLS (RFC 8460) and DMARC aggregate reports, received and sent
+- TLS (RFC 8460) and DMARC aggregate reports, received and sent; feedback-loop complaints and
+  optional authentication failure reports (ARF)
 - Mailing lists with moderation, webhooks, LDAP lookups, milters, skins and plug-ins
 - AI model management for OpenAI-compatible providers, Anthropic, Gemini and local Ollama
 
