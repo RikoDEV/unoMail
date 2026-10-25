@@ -205,6 +205,11 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
                 {
                     crate::dmarc_outgoing::record(app, observation, &remote, msg.sender).await;
                 }
+                // Failure reports go out whatever happens to the message next.
+                if !verdict.failure_reports.is_empty() {
+                    let recipient = msg.recipients.first().map(|(a, _)| a.to_string()).unwrap_or_default();
+                    crate::security::feedback::send(app, &verdict.failure_reports, msg.ip, msg.sender, &recipient, &stripped, &verdict.header).await;
+                }
                 match verdict.disposition {
                     Disposition::Reject => {
                         return reject(
@@ -237,6 +242,26 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
             crate::milter::Verdict::TempFail(reply) => return Outcome::Deferred(reply),
             crate::milter::Verdict::Discard => {
                 tracing::info!(sender = msg.sender, "message discarded by a milter");
+                return Outcome::Accepted("250 2.0.0 Ok".into());
+            }
+        }
+    }
+
+    // Server plug-ins with a mail hook come after the milters and decide the same way.
+    {
+        let recipients: Vec<String> = msg.recipients.iter().map(|(a, _)| a.to_string()).collect();
+        match crate::packages::hooks::mail(app, false, msg.sender, &recipients, msg.ip, &stripped).await {
+            crate::milter::Verdict::Deliver { message, quarantine } => {
+                stripped = message;
+                if let Some(reason) = quarantine {
+                    tracing::info!(reason, "message quarantined by a plug-in");
+                    junk = true;
+                }
+            }
+            crate::milter::Verdict::Reject(reply) => return reject(&reply, "rejected by a plug-in".into()).await,
+            crate::milter::Verdict::TempFail(reply) => return Outcome::Deferred(reply),
+            crate::milter::Verdict::Discard => {
+                tracing::info!(sender = msg.sender, "message discarded by a plug-in");
                 return Outcome::Accepted("250 2.0.0 Ok".into());
             }
         }
@@ -474,6 +499,7 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
         {
             crate::dmarc_reports::ingest_mail(app, &stripped).await;
             crate::smtp::transport::ingest_mail(app, &stripped).await;
+            crate::security::feedback::ingest_mail(app, &stripped, &domain).await;
         }
     }
     Outcome::Accepted(format!("250 2.0.0 Ok: queued as {id}"))
@@ -650,6 +676,16 @@ pub async fn submit(app: &App, sub: Submission<'_>) -> Outcome {
     {
         return Outcome::Rejected(attachments::refusal(&name));
     }
+
+    // Server plug-ins with an outgoing hook may refuse, defer or tag what users send.
+    let recipients: Vec<String> = sub.recipients.iter().map(ToString::to_string).collect();
+    let hooked = match crate::packages::hooks::mail(app, true, &sub.sender.to_string(), &recipients, sub.ip, sub.raw).await {
+        crate::milter::Verdict::Deliver { message, .. } => message,
+        crate::milter::Verdict::Reject(reply) => return Outcome::Rejected(reply),
+        crate::milter::Verdict::TempFail(reply) => return Outcome::Deferred(reply),
+        crate::milter::Verdict::Discard => return Outcome::Rejected("554 5.7.1 Message refused".into()),
+    };
+    let sub = Submission { raw: &hooked, ..sub };
 
     // An identity with its own SMTP server hands everything to that server, local recipients
     // included: the message is not ours to sign or deliver.

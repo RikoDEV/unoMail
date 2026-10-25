@@ -101,10 +101,26 @@ async fn visible_domains(state: &AppState, session: &Session) -> Result<String, 
 pub async fn dmarc_overview(State(state): State<AppState>, session: Session, Query(query): Query<DmarcQuery>) -> JsonResult<Value> {
     let domains = visible_domains(&state, &session).await?;
     let since = now() - query.days.unwrap_or(30).clamp(1, 365) * 86400;
+    // Feedback reports (complaints, failure reports) about the domains this session sees.
+    let feedback: Vec<(i64, i64, String, String, String, String, String, String, String, i64)> = sqlx::query_as(
+        "SELECT id, received_at, reporter, feedback_type, auth_failure, source_ip, reported_domain, original_from, subject, incidents FROM feedback_reports
+         WHERE received_at >= ? AND lower(reported_domain) IN (SELECT lower(value) FROM json_each(?)) ORDER BY received_at DESC LIMIT 200",
+    )
+    .bind(since)
+    .bind(&domains)
+    .fetch_all(&state.db)
+    .await?;
+    let feedback: Vec<Value> = feedback
+        .into_iter()
+        .map(|(id, received_at, reporter, kind, auth_failure, source_ip, domain, from, subject, incidents)| {
+            json!({ "id": id, "received_at": received_at, "reporter": reporter, "type": kind, "auth_failure": auth_failure, "source_ip": source_ip, "domain": domain, "from": from, "subject": subject, "incidents": incidents })
+        })
+        .collect();
     Ok(Json(json!({
         "domains": dmarc_reports::summary(&state, &domains, since).await?,
         "sources": dmarc_reports::sources(&state, &domains, since).await?,
         "reports": dmarc_reports::reports(&state, &domains, since).await?,
+        "feedback": feedback,
     })))
 }
 

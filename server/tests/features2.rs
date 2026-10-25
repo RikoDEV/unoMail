@@ -119,6 +119,68 @@ async fn sieve_scripts_file_flag_redirect_and_discard_mail() {
 }
 
 #[tokio::test]
+async fn sieve_extensions_edit_headers_file_by_use_track_duplicates_notify_and_reject() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    let bob = env.account("bob@example.org").await;
+    let carol = env.account("carol@example.org").await;
+    let api = Api::logged_in(&env, "bob@example.org").await;
+    let script = r#"
+        require ["editheader", "fileinto", "special-use", "duplicate", "enotify", "reject", "variables", "relational", "subaddress", "envelope"];
+        if header :contains "subject" "go away" { reject "No, thank you."; stop; }
+        addheader "X-Filtered-By" "bob's script";
+        if duplicate { fileinto "Dupes"; stop; }
+        if header :contains "subject" "spammy" { fileinto :specialuse "\\Junk" "Spam folder"; stop; }
+        if header :contains "subject" "urgent" { notify :importance "1" :message "Urgent mail" "mailto:carol@example.org"; }
+        if envelope :detail "to" "lists" { fileinto "Lists"; }
+    "#;
+    let saved = api.put("/api/me/sieve", json!({ "script": script, "active": true })).await;
+    assert_eq!(saved.status, StatusCode::OK, "{}", saved.text);
+    let dupes = env.app.store.create_mailbox(bob.id, "Dupes").await.unwrap();
+    let lists = env.app.store.create_mailbox(bob.id, "Lists").await.unwrap();
+
+    let mail = |id: &str, subject: &str| format!("From: ann@remote.example\r\nTo: bob@example.org\r\nSubject: {subject}\r\nMessage-ID: <{id}@remote.example>\r\n\r\nHello\r\n");
+    let mut c = Client::smtp(env.mx).await;
+    for (rcpt, id, subject) in [
+        ("bob@example.org", "a1", "First"),
+        ("bob@example.org", "a1", "First again"),
+        ("bob@example.org", "a2", "spammy offer"),
+        ("bob@example.org", "a3", "urgent: call me"),
+        ("bob+lists@example.org", "a4", "List mail"),
+        ("bob@example.org", "a5", "go away"),
+    ] {
+        assert!(c.send_mail("ann@remote.example", &[rcpt], &mail(id, subject)).await.starts_with("250"), "{subject}");
+    }
+
+    let subjects = |mailbox: i64| {
+        let store = env.app.store.clone();
+        async move { store.messages_in(mailbox).await.unwrap().into_iter().map(|m| m.subject).collect::<Vec<_>>() }
+    };
+    let inbox = env.app.store.mailbox_by_role(bob.id, "inbox").await.unwrap().unwrap();
+    assert_eq!(subjects(inbox.id).await, ["First", "urgent: call me"], "duplicates, junk, lists and rejected mail are elsewhere");
+    let junk = env.app.store.mailbox_by_role(bob.id, "junk").await.unwrap().unwrap();
+    assert_eq!(subjects(junk.id).await, ["spammy offer"], ":specialuse finds the Junk mailbox whatever its name");
+    assert!(env.app.store.mailbox_by_name(bob.id, "Spam folder").await.unwrap().is_none());
+    assert_eq!(subjects(dupes.id).await, ["First again"], "the second copy of a message is a duplicate");
+    assert_eq!(subjects(lists.id).await, ["List mail"], ":detail of the recipient address");
+
+    // The added header is part of what was stored.
+    let first = &env.inbox(&bob).await[0];
+    assert!(first.contains("X-Filtered-By: bob's script"), "{first}");
+
+    // The notification reached Carol, marked as automatic.
+    let notes = env.inbox(&carol).await;
+    assert_eq!(notes.len(), 1);
+    assert!(notes[0].contains("Auto-Submitted: auto-notified") && notes[0].contains("Subject: Urgent mail") && notes[0].contains("Importance: high"), "{}", notes[0]);
+
+    // The duplicate was tracked, and the rejected message is logged as such.
+    let tracked: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sieve_duplicates WHERE account_id = ?").bind(bob.id).fetch_one(&env.app.db).await.unwrap();
+    assert!(tracked >= 1);
+    let rejected: String = sqlx::query_scalar("SELECT detail FROM delivery_log WHERE status = 'rejected' ORDER BY id DESC LIMIT 1").fetch_one(&env.app.db).await.unwrap();
+    assert_eq!(rejected, "rejected by the mailbox filter");
+}
+
+#[tokio::test]
 async fn sieve_forwarding_outside_is_announced_and_can_be_switched_off() {
     let sink = Sink::start().await;
     let relay = sink.relay();
@@ -195,6 +257,44 @@ MIME-Version: 1.0\r\nContent-Type: application/gzip; name=\"report.xml.gz\"\r\nC
     assert!(scoped["reports"].as_array().unwrap().iter().all(|r| r["domain"] == "example.org"));
     assert_eq!(dana.get(&format!("/api/dmarc/reports/{report_id}")).await.status, StatusCode::NOT_FOUND);
     assert_eq!(upload(&dana, "/api/dmarc/reports", report("r-9", "example.org").into_bytes()).await.0, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn feedback_reports_are_stored_and_failure_reports_sent_when_enabled() {
+    use mail_auth::report::{Feedback, FeedbackType};
+    use unomail::security::feedback::{Kind, PendingReport};
+    let (env, api) = admin_env().await;
+
+    // A complaint from a feedback loop about mail from a hosted domain.
+    let complaint = Feedback::new(FeedbackType::Abuse)
+        .with_source_ip("192.0.2.9".parse().unwrap())
+        .with_reported_domain("example.org")
+        .with_headers("From: news@example.org\r\nSubject: Weekly news\r\n");
+    let mut raw = Vec::new();
+    complaint.write_rfc5322(("FBL", "fbl@isp.example"), "abuse@example.org", "Complaint", &mut raw).unwrap();
+    assert!(unomail::security::feedback::ingest_mail(&env.app, &raw, "isp.example").await);
+    assert!(!unomail::security::feedback::ingest_mail(&env.app, b"Subject: hi\r\n\r\nnot a report", "isp.example").await);
+    let overview = api.get("/api/dmarc").await.body;
+    assert_eq!(overview["feedback"][0]["type"], "abuse");
+    assert_eq!(overview["feedback"][0]["reporter"], "isp.example");
+    assert_eq!(overview["feedback"][0]["subject"], "Weekly news");
+
+    // Failure reports: off by default, then sent with the recipients redacted.
+    let pending = [PendingReport { kind: Kind::Spf, domain: "remote.example".into(), addresses: vec!["spf-reports@remote.example".into()] }];
+    let message = b"From: x@remote.example\r\nTo: bob@example.org\r\nSubject: Spoofed\r\n\r\nbody";
+    unomail::security::feedback::send(&env.app, &pending, "192.0.2.1".parse().unwrap(), "x@remote.example", "bob@example.org", message, "Authentication-Results: mail; spf=fail").await;
+    let queued: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE recipient = 'spf-reports@remote.example'").fetch_one(&env.app.db).await.unwrap();
+    assert_eq!(queued, 0, "failure reports are off by default");
+    assert_eq!(api.patch("/api/settings", json!({ "auth_failure_reports": true })).await.status, StatusCode::OK);
+    unomail::security::feedback::send(&env.app, &pending, "192.0.2.1".parse().unwrap(), "x@remote.example", "bob@example.org", message, "Authentication-Results: mail; spf=fail").await;
+    let hash: String = sqlx::query_scalar("SELECT blob_hash FROM queue WHERE recipient = 'spf-reports@remote.example'").fetch_one(&env.app.db).await.unwrap();
+    let report = String::from_utf8(env.app.store.read_blob(&hash).await.unwrap()).unwrap();
+    assert!(report.contains("feedback-report") && report.contains("Auth-Failure: spf"), "{report}");
+    assert!(report.contains("To: redacted@example.org") && !report.contains("bob@example.org"), "{report}");
+    // At most one an hour per domain.
+    unomail::security::feedback::send(&env.app, &pending, "192.0.2.1".parse().unwrap(), "x@remote.example", "bob@example.org", message, "").await;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM queue WHERE recipient = 'spf-reports@remote.example'").fetch_one(&env.app.db).await.unwrap();
+    assert_eq!(count, 1);
 }
 
 #[tokio::test]

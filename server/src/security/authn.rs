@@ -35,6 +35,8 @@ pub struct Verdict {
     /// DKIM or SPF passed in alignment with the From domain (DMARC pass): the visible author
     /// is who the message says.
     pub author_aligned: bool,
+    /// Failure reports the sending domains asked for (DMARC `ruf`, DKIM and SPF `ra=`).
+    pub failure_reports: Vec<crate::security::feedback::PendingReport>,
 }
 
 /// One DMARC evaluation as aggregate reports (RFC 7489 appendix C) record it.
@@ -191,7 +193,37 @@ pub async fn verify(
         if arc_vouches { format!(" arc-override={}", arc_sealer.unwrap_or_default()) } else { String::new() }
     );
     let spf_pass = spf.result() == SpfResult::Pass && !mail_from.is_empty();
-    Some(Verdict { header, disposition, summary, arc_headers, dmarc: observation, spf_pass, author_aligned: aligned })
+
+    use crate::security::feedback::{Kind, PendingReport};
+    let mut failure_reports = Vec::new();
+    if dmarc_failed && !arc_vouches
+        && let Some(record) = dmarc.dmarc_record()
+    {
+        let addresses: Vec<String> = record.ruf.iter().filter_map(|uri| uri.uri().strip_prefix("mailto:").map(|a| a.split('!').next().unwrap_or_default().to_owned())).filter(|a| a.contains('@')).collect();
+        if !addresses.is_empty() {
+            failure_reports.push(PendingReport {
+                kind: Kind::Dmarc { dkim_aligned: matches!(dmarc.dkim_result(), DmarcResult::Pass), spf_aligned: matches!(dmarc.spf_result(), DmarcResult::Pass) },
+                domain: dmarc.domain().to_ascii_lowercase(),
+                addresses,
+            });
+        }
+    }
+    // RFC 6651: a failing signature with `r=y` whose key names a report address.
+    for output in dkim.iter().filter(|o| matches!(o.result(), DkimResult::Fail(_))) {
+        if let (Some(address), Some(signature)) = (output.failure_report_addr(), output.signature()) {
+            // mail-auth gives the full address: the key's `ra=` at the signing domain.
+            failure_reports.push(PendingReport { kind: Kind::Dkim, domain: signature.d.to_ascii_lowercase(), addresses: vec![address.to_owned()] });
+        }
+    }
+    // RFC 6652: an SPF failure, where the record's `ra=` modifier asks for reports.
+    if spf.result() == SpfResult::Fail
+        && let Some(address) = spf.report_address()
+    {
+        let domain = spf.domain().to_ascii_lowercase();
+        let address = if address.contains('@') { address.to_owned() } else { format!("{address}@{domain}") };
+        failure_reports.push(PendingReport { kind: Kind::Spf, domain, addresses: vec![address] });
+    }
+    Some(Verdict { header, disposition, summary, arc_headers, dmarc: observation, spf_pass, author_aligned: aligned, failure_reports })
 }
 
 /// Removes `Authentication-Results` headers that claim to come from us. Without this a sender

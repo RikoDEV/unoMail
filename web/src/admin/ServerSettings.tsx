@@ -193,6 +193,7 @@ const GROUPS: Group[] = [
       { key: 'mta_sts_enabled', label: t('Honour MTA-STS policies'), help: t('Deliver only over verified TLS to domains that ask for it (RFC 8461)'), kind: 'bool' },
       { key: 'dane_enabled', label: t('Check DANE (TLSA) records'), help: t('Verify certificates against DNSSEC-signed TLSA records where receivers publish them (RFC 7672)'), kind: 'bool' },
       { key: 'dmarc_reports_enabled', label: t('Send DMARC reports'), help: t('Daily aggregate reports to the sending domains whose DMARC policy asks for them (rua)'), kind: 'bool' },
+      { key: 'auth_failure_reports', label: t('Send failure reports'), help: t('Reports about single messages that failed DMARC, DKIM or SPF, to the domains asking for them (ruf, ra=). They include the message headers, with recipient addresses removed.'), kind: 'bool' },
       { key: 'tls_reports_enabled', label: t('Send TLS reports'), help: t('Daily SMTP TLS reports to the domains that publish a TLS-RPT record (RFC 8460)'), kind: 'bool' },
       { key: 'outbound_max_messages_per_hour', label: t('Messages per account per hour'), help: t('Exceeding this blocks the account from sending'), kind: 'number', min: 1, max: 1000000 },
       { key: 'outbound_max_recipients_per_hour', label: t('Recipients per account per hour'), help: t('Exceeding this blocks the account from sending'), kind: 'number', min: 1, max: 10000000 },

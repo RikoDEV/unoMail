@@ -42,6 +42,10 @@ pub struct Runtime {
     /// Send daily DMARC aggregate reports to the domains asking for them.
     #[serde(default = "yes")]
     pub dmarc_reports_enabled: bool,
+    /// Send authentication failure reports (DMARC `ruf`, DKIM and SPF `ra=`) to the domains
+    /// asking for them. Off by default: they show another party headers of users' mail.
+    #[serde(default)]
+    pub auth_failure_reports: bool,
     /// Ask GitHub whether a newer unoMail release is out (shown on the dashboard).
     #[serde(default = "yes")]
     pub update_check_enabled: bool,

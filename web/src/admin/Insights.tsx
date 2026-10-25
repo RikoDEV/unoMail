@@ -68,10 +68,23 @@ function Compliance({ passed, total }: { passed: number; total: number }) {
   );
 }
 
+interface FeedbackReport {
+  id: number;
+  received_at: number;
+  reporter: string;
+  type: string;
+  auth_failure: string;
+  source_ip: string;
+  domain: string;
+  from: string;
+  subject: string;
+  incidents: number;
+}
+
 export function Dmarc() {
   const { account } = useAuth();
   const [days, setDays] = useState(30);
-  const { data, error, reload } = useLoad(() => get<{ domains: DomainSummary[]; sources: Source[]; reports: Report[] }>(`/api/dmarc?days=${days}`), [days]);
+  const { data, error, reload } = useLoad(() => get<{ domains: DomainSummary[]; sources: Source[]; reports: Report[]; feedback?: FeedbackReport[] }>(`/api/dmarc?days=${days}`), [days]);
   const { run, feedback } = useAction();
   const [detail, setDetail] = useState<{ report: Report; records: ReportRecord[] } | null>(null);
 
@@ -174,6 +187,42 @@ export function Dmarc() {
                   <TableCell>{r.policy}</TableCell>
                   <TableCell align="right">{r.messages}</TableCell>
                   <TableCell><Compliance passed={r.passed} total={r.messages} /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ScrollTable>
+        </>
+      )}
+      {(data?.feedback?.length ?? 0) > 0 && (
+        <>
+          <Typography variant="h6" sx={{ mt: 3 }}>{t('Feedback reports')}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {t('Complaints from mailbox providers and authentication failure reports about mail sent in the name of your domains.')}
+          </Typography>
+          <ScrollTable size="small" aria-label={t('Feedback reports')}>
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('Received')}</TableCell>
+                <TableCell>{t('Reporter')}</TableCell>
+                <TableCell>{t('Type')}</TableCell>
+                <TableCell>{t('Domain')}</TableCell>
+                <TableCell>{t('Source address')}</TableCell>
+                <TableCell>{t('Subject')}</TableCell>
+                <TableCell align="right">{t('Messages')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {data!.feedback!.map((f) => (
+                <TableRow key={f.id}>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(f.received_at)}</TableCell>
+                  <TableCell>{f.reporter}</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={f.auth_failure ? `${f.type}: ${f.auth_failure}` : f.type} color={f.type === 'abuse' || f.type === 'fraud' ? 'error' : f.type === 'not-spam' ? 'success' : 'default'} />
+                  </TableCell>
+                  <TableCell>{f.domain}</TableCell>
+                  <TableCell sx={{ fontFamily: 'monospace' }}>{f.source_ip}</TableCell>
+                  <TableCell sx={{ overflowWrap: 'anywhere' }}>{f.subject}</TableCell>
+                  <TableCell align="right">{f.incidents}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -322,16 +371,19 @@ function Endpoint({ method, path, operation }: { method: string; path: string; o
   }
   return (
     <Accordion disableGutters variant="outlined" slotProps={{ transition: { unmountOnExit: true } }}>
-      <AccordionSummary expandIcon={<ExpandMore />}>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
-          <Chip size="small" label={method.toUpperCase()} color={METHOD_COLORS[method] ?? 'default'} sx={{ width: 72, fontWeight: 700 }} />
-          <Typography sx={{ fontFamily: 'monospace', fontSize: 14 }} noWrap>{path}</Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>{operation.summary}</Typography>
+      <AccordionSummary expandIcon={<ExpandMore />} sx={{ '& .MuiAccordionSummary-content': { minWidth: 0 } }}>
+        {/* On a phone the summary goes under the method and path, and long paths wrap. */}
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0.5, sm: 1.5 }} sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, minWidth: 0, width: '100%' }}>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0, maxWidth: '100%' }}>
+            <Chip size="small" label={method.toUpperCase()} color={METHOD_COLORS[method] ?? 'default'} sx={{ width: 72, flexShrink: 0, fontWeight: 700 }} />
+            <Typography sx={{ fontFamily: 'monospace', fontSize: 14, minWidth: 0, overflowWrap: 'anywhere', whiteSpace: { xs: 'normal', sm: 'nowrap' } }}>{path}</Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: { xs: 'normal', sm: 'nowrap' } }}>{operation.summary}</Typography>
         </Stack>
       </AccordionSummary>
       <AccordionDetails>
-        <Typography variant="body2">{operation.description}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{operation.description}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1, overflowWrap: 'anywhere' }}>
           {operation.security ? (method === 'get' ? t('Authentication: session cookie') : t('Authentication: session cookie and X-CSRF-Token header')) : t('No authentication required')}
           {operation.parameters.length > 0 && t(' · Path parameters: {{value}}', { value: operation.parameters.map((p) => p.name).join(', ') })}
         </Typography>
@@ -363,10 +415,10 @@ export function ApiDocs() {
   return (
     <>
       <PageHeader title={t('API reference')}>
-        <TextField label={t('Filter')} value={filter} onChange={(e) => setFilter(e.target.value)} sx={{ width: 240 }} />
+        <TextField label={t('Filter')} value={filter} onChange={(e) => setFilter(e.target.value)} sx={{ width: { xs: '100%', sm: 240 } }} />
         <Button component="a" href="/api/openapi.json" target="_blank" rel="noopener">{t('OpenAPI JSON')}</Button>
       </PageHeader>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, overflowWrap: 'anywhere' }}>
         {data.info.title} {data.info.version}. {data.info.description}
       </Typography>
       {[...groups.entries()].map(([tag, endpoints]) => (
