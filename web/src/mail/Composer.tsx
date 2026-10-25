@@ -44,7 +44,8 @@ const SIGNATURE_CLASS = 'unomail-signature';
 /** Languages offered for spell checking; the browser provides the dictionaries. */
 const SPELL_LANGUAGES: [string, string][] = [
   ['', 'Browser default'], ['en', 'English'], ['pl', 'Polski'], ['de', 'Deutsch'], ['fr', 'Français'], ['es', 'Español'], ['it', 'Italiano'],
-  ['nl', 'Nederlands'], ['pt', 'Português'], ['cs', 'Čeština'], ['sk', 'Slovenčina'], ['uk', 'Українська'],
+  ['nl', 'Nederlands'], ['pt', 'Português'], ['cs', 'Čeština'], ['sk', 'Slovenčina'], ['sv', 'Svenska'], ['hu', 'Magyar'], ['ro', 'Română'],
+  ['tr', 'Türkçe'], ['ru', 'Русский'], ['uk', 'Українська'], ['ar', 'العربية'],
 ];
 
 async function toBase64(file: Blob): Promise<string> {

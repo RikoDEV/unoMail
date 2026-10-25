@@ -31,7 +31,8 @@ export function AiModelsProvider({ children }: { children: ReactNode }) {
 
 const LANGUAGES = [
   ['en', 'English'], ['pl', 'Polski'], ['de', 'Deutsch'], ['fr', 'Français'], ['cs', 'Čeština'], ['sk', 'Slovenčina'],
-  ['es', 'Español'], ['it', 'Italiano'], ['pt', 'Português'], ['nl', 'Nederlands'], ['uk', 'Українська'], ['ja', '日本語'], ['ko', '한국어'], ['zh', '中文'], ['ar', 'العربية'],
+  ['es', 'Español'], ['it', 'Italiano'], ['pt', 'Português'], ['nl', 'Nederlands'], ['sv', 'Svenska'], ['hu', 'Magyar'], ['ro', 'Română'], ['tr', 'Türkçe'],
+  ['ru', 'Русский'], ['uk', 'Українська'], ['ja', '日本語'], ['ko', '한국어'], ['zh', '中文'], ['ar', 'العربية'],
 ];
 type Task = 'summary' | 'translate';
 

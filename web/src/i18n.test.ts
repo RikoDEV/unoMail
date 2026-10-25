@@ -6,13 +6,27 @@ import { t } from './i18n';
 import { SERVER_TEXTS } from './admin/serverTexts';
 import { SERVER_ERRORS } from './lib/serverErrors';
 import en from './locales/en.json';
+import ar from './locales/ar.json';
 import cs from './locales/cs.json';
 import de from './locales/de.json';
+import es from './locales/es.json';
 import fr from './locales/fr.json';
+import hu from './locales/hu.json';
+import italian from './locales/it.json';
+import ja from './locales/ja.json';
+import ko from './locales/ko.json';
+import nl from './locales/nl.json';
 import pl from './locales/pl.json';
+import pt from './locales/pt.json';
+import ro from './locales/ro.json';
+import ru from './locales/ru.json';
 import sk from './locales/sk.json';
+import sv from './locales/sv.json';
+import tr from './locales/tr.json';
+import uk from './locales/uk.json';
+import zh from './locales/zh.json';
 
-const translations: Record<string, Record<string, string>> = { pl, de, fr, cs, sk };
+const translations: Record<string, Record<string, string>> = { ar, cs, de, es, fr, hu, it: italian, ja, ko, nl, pl, pt, ro, ru, sk, sv, tr, uk, zh };
 /** The plural suffixes i18next looks up for a language, e.g. `_one`, `_other`. */
 const pluralForms = (language: string) => new Intl.PluralRules(language).resolvedOptions().pluralCategories.map((form) => `_${form}`);
 
@@ -38,7 +52,7 @@ function usedKeys(): Set<string> {
 }
 
 const placeholders = (text: string) => [...text.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).filter((name) => name !== 'count').sort();
-const base = (key: string) => key.replace(/_(one|few|many|other|folder)$/, '');
+const base = (key: string) => key.replace(/_(zero|one|two|few|many|other|folder)$/, '');
 
 describe('translations', () => {
   it('cover every text of the interface', () => {
@@ -56,7 +70,7 @@ describe('translations', () => {
       }
     }
     for (const [language, table] of Object.entries(translations)) {
-      const pluralKeys = new Set(Object.keys(table).filter((key) => /_(one|few|many|other)$/.test(key)).map(base));
+      const pluralKeys = new Set(Object.keys(table).filter((key) => /_(zero|one|two|few|many|other)$/.test(key)).map(base));
       for (const key of pluralKeys) {
         for (const form of pluralForms(language)) expect(table, `${language}: ${key}${form}`).toHaveProperty([key + form]);
         expect(en, `${key}_one`).toHaveProperty([`${key}_one`]);

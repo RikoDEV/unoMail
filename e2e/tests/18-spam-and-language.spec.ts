@@ -102,4 +102,15 @@ test.describe('spam reports and interface language', () => {
     await page.getByRole('option', { name: 'English' }).click();
     await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   });
+
+  test('a right-to-left language mirrors the page', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByRole('combobox', { name: 'Language' }).click();
+    await page.getByRole('option', { name: 'العربية' }).click();
+    await expect(page.getByRole('button', { name: 'تسجيل الدخول', exact: true })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.getByRole('combobox', { name: 'اللغة' }).click();
+    await page.getByRole('option', { name: 'English' }).click();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+  });
 });

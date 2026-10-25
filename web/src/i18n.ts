@@ -18,7 +18,23 @@ export const LANGUAGES: { code: string; name: string }[] = [
   { code: 'fr', name: 'Français' },
   { code: 'cs', name: 'Čeština' },
   { code: 'sk', name: 'Slovenčina' },
+  { code: 'es', name: 'Español' },
+  { code: 'pt', name: 'Português' },
+  { code: 'it', name: 'Italiano' },
+  { code: 'nl', name: 'Nederlands' },
+  { code: 'sv', name: 'Svenska' },
+  { code: 'hu', name: 'Magyar' },
+  { code: 'ro', name: 'Română' },
+  { code: 'tr', name: 'Türkçe' },
+  { code: 'ru', name: 'Русский' },
+  { code: 'uk', name: 'Українська' },
+  { code: 'ar', name: 'العربية' },
+  { code: 'zh', name: '中文（简体）' },
+  { code: 'ja', name: '日本語' },
+  { code: 'ko', name: '한국어' },
 ];
+/** Languages written right to left: the page and its layout are mirrored for them. */
+const RTL_LANGUAGES = new Set(['ar']);
 const TRANSLATIONS = import.meta.glob<Record<string, string>>(['./locales/*.json', '!./locales/en.json'], { import: 'default' });
 const STORAGE_KEY = 'unomail.language';
 
@@ -63,7 +79,15 @@ export async function loadInterfaceLanguage(): Promise<void> {
       /* not reachable (offline, outdated page): the interface stays in English */
     }
   }
-  if (typeof document !== 'undefined') document.documentElement.lang = i18next.language;
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = i18next.language;
+    document.documentElement.dir = isRtl() ? 'rtl' : 'ltr';
+  }
+}
+
+/** Whether the interface language is written right to left. */
+export function isRtl(): boolean {
+  return RTL_LANGUAGES.has(i18next.language);
 }
 
 /** Translates an English text; `{{name}}` placeholders are filled from `values`. */

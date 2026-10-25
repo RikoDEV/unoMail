@@ -1,4 +1,8 @@
-import { Alert, Button, CssBaseline, ThemeProvider, useMediaQuery } from '@mui/material';
+import createCache from '@emotion/cache';
+import { CacheProvider } from '@emotion/react';
+import { Alert, Button, CssBaseline, ThemeProvider, createTheme, useMediaQuery } from '@mui/material';
+import { prefixer } from 'stylis';
+import rtlPlugin from 'stylis-plugin-rtl';
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { type Account, get, post, setCsrfToken, setUnauthorizedHandler } from './lib/api';
@@ -11,9 +15,13 @@ import { loadPlugins } from './lib/plugins';
 import { loadPrefs, type Prefs, primePrefs, updatePrefs, usePrefs } from './lib/prefs';
 import { BUILT_IN_SKINS, buildTheme, sanitizeSkin, type Skin } from './ui/skins';
 
-import { chosenLanguage, setLanguage } from './i18n';
+import { chosenLanguage, isRtl, setLanguage } from './i18n';
 import { readLocal, writeLocal } from './lib/storage';
 const LOGOUT_PENDING = 'unomail.logoutPending';
+// The language is fixed for the page's lifetime, so the direction is too. Right to left, the
+// styles are mirrored as they are inserted (margins, paddings, positions swap sides).
+const RTL = isRtl();
+const rtlCache = RTL ? createCache({ key: 'muirtl', stylisPlugins: [prefixer, rtlPlugin] }) : null;
 const MailPage = lazy(() => import('./mail/MailPage'));
 const AdminApp = lazy(() => import('./admin/AdminApp'));
 const SettingsPage = lazy(() => import('./settings/SettingsPage'));
@@ -308,13 +316,16 @@ export function App() {
     }),
     [mode, seed, skin, skins, reloadSkins],
   );
-  const theme = useMemo(() => buildTheme(skin, seed, mode === 'dark' || (mode === 'system' && prefersDark)), [skin, seed, mode, prefersDark]);
+  const theme = useMemo(() => {
+    const built = buildTheme(skin, seed, mode === 'dark' || (mode === 'system' && prefersDark));
+    return RTL ? createTheme(built, { direction: 'rtl' }) : built;
+  }, [skin, seed, mode, prefersDark]);
   const auth = useMemo(
     () => ({ account, accounts, refreshAccounts, switchAccount, login, completeLogin, logout }),
     [account, accounts, refreshAccounts, switchAccount, login, completeLogin, logout],
   );
 
-  return (
+  const page = (
     <AppearanceContext.Provider value={appearance}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
@@ -346,4 +357,5 @@ export function App() {
       </ThemeProvider>
     </AppearanceContext.Provider>
   );
+  return rtlCache ? <CacheProvider value={rtlCache}>{page}</CacheProvider> : page;
 }
