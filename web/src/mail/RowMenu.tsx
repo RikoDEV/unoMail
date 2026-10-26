@@ -2,10 +2,7 @@
 // row (or of the whole selection, when the row is part of it), with Move to, Label as and
 // Snooze opening to the side.
 
-import Archive from '@mui/icons-material/Archive';
-import Unarchive from '@mui/icons-material/Unarchive';
 import ChevronRight from '@mui/icons-material/ChevronRight';
-import Delete from '@mui/icons-material/Delete';
 import DriveFileMove from '@mui/icons-material/DriveFileMove';
 import Forward from '@mui/icons-material/Forward';
 import LabelIcon from '@mui/icons-material/Label';
@@ -14,8 +11,6 @@ import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
 import OpenInNew from '@mui/icons-material/OpenInNew';
 import Reply from '@mui/icons-material/Reply';
 import ReplyAll from '@mui/icons-material/ReplyAll';
-import Report from '@mui/icons-material/Report';
-import ReportOff from '@mui/icons-material/ReportOff';
 import SearchIcon from '@mui/icons-material/Search';
 import Snooze from '@mui/icons-material/Snooze';
 import Star from '@mui/icons-material/Star';
@@ -23,11 +18,12 @@ import StarBorder from '@mui/icons-material/StarBorder';
 import { Checkbox, Divider, ListItemIcon, ListItemText, Menu, MenuItem, MenuList, Paper, Popper, Typography } from '@mui/material';
 import { type ReactNode, useRef, useState } from 'react';
 import { t, uiLocale } from '../i18n';
+import { ActionMenuItem, type FolderAction, folderActions, type Place } from './actions';
 import { type EmailSummary, folderName, type Mailbox } from './jmapClient';
 import { snoozePresets } from './timePresets';
 
 export type RowMenuPick =
-  | { kind: 'reply' | 'replyAll' | 'forward' | 'archive' | 'unarchive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'star' | 'findFrom' | 'newTab' }
+  | { kind: FolderAction | 'reply' | 'replyAll' | 'forward' | 'read' | 'unread' | 'star' | 'findFrom' | 'newTab' }
   | { kind: 'move'; mailbox: Mailbox }
   | { kind: 'label'; name: string; on: boolean }
   | { kind: 'snooze'; until: Date };
@@ -46,10 +42,8 @@ interface Props {
   folders: Mailbox[];
   labels: string[];
   labelColor: (name: string) => string;
-  canArchive: boolean;
-  inArchive: boolean;
-  inTrash: boolean;
-  inJunk: boolean;
+  /** Where the conversations the menu acts on are, which decides the folder actions offered. */
+  place: Place;
   onPick: (pick: RowMenuPick, target: RowMenuTarget) => void;
   onClose: () => void;
 }
@@ -58,7 +52,7 @@ type Side = 'move' | 'label' | 'snooze';
 
 const WHEN = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' } as const;
 
-export function RowMenu({ target, folders, labels, labelColor, canArchive, inArchive, inTrash, inJunk, onPick, onClose }: Props) {
+export function RowMenu({ target, folders, labels, labelColor, place, onPick, onClose }: Props) {
   const [side, setSide] = useState<{ kind: Side; anchor: HTMLElement } | null>(null);
   const sideList = useRef<HTMLUListElement>(null);
   const email = target?.email;
@@ -134,11 +128,9 @@ export function RowMenu({ target, folders, labels, labelColor, canArchive, inArc
         {single && item(t('Reply all'), <ReplyAll fontSize="small" />, { kind: 'replyAll' })}
         {single && item(t('Forward'), <Forward fontSize="small" />, { kind: 'forward' })}
         {single && <Divider />}
-        {inArchive
-          ? item(t('Move to inbox'), <Unarchive fontSize="small" />, { kind: 'unarchive' })
-          : canArchive && item(t('Archive'), <Archive fontSize="small" />, { kind: 'archive' })}
-        {item(inTrash ? t('Delete forever') : t('Delete'), <Delete fontSize="small" />, { kind: 'trash' })}
-        {inJunk ? item(t('Not spam'), <ReportOff fontSize="small" />, { kind: 'inbox' }) : item(t('Report spam'), <Report fontSize="small" />, { kind: 'junk' })}
+        {folderActions(place).map((action) => (
+          <ActionMenuItem key={action} action={action} place={place} onRun={(kind) => pick({ kind })} onMouseEnter={() => setSide(null)} />
+        ))}
         {single
           ? unread
             ? item(t('Mark as read'), <MarkEmailRead fontSize="small" />, { kind: 'read' })
@@ -148,7 +140,7 @@ export function RowMenu({ target, folders, labels, labelColor, canArchive, inArc
               <MenuItem key="unread" dense onClick={() => pick({ kind: 'unread' })} onMouseEnter={() => setSide(null)}><ListItemIcon><MarkEmailUnread fontSize="small" /></ListItemIcon><ListItemText>{t('Mark as unread')}</ListItemText></MenuItem>,
             ]}
         {single && item(email?.keywords.$flagged ? t('Remove star') : t('Star'), email?.keywords.$flagged ? <StarBorder fontSize="small" /> : <Star fontSize="small" />, { kind: 'star' })}
-        {single && !inTrash && opener('snooze', t('Snooze'), <Snooze fontSize="small" />)}
+        {single && !place.trash && opener('snooze', t('Snooze'), <Snooze fontSize="small" />)}
         <Divider />
         {opener('move', t('Move to'), <DriveFileMove fontSize="small" />)}
         {opener('label', t('Label as'), <LabelIcon fontSize="small" />)}

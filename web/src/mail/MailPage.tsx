@@ -42,7 +42,8 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { EmptyState, type EmptyKind } from './EmptyState';
 import { CategoryTabs } from './CategoryTabs';
 import { type LabelDialogState, MailSidebar } from './MailSidebar';
-import { EmailRow, type RowHandlers } from './EmailRow';
+import { EmailRow, type RowAction, type RowHandlers } from './EmailRow';
+import { type Destination, destinationOf, doneText, type Origins, originsOf, type Place, placeOf, rolesOf } from './actions';
 import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
 import { AttachmentPreview, type PreviewFile } from './Preview';
 import { parseMailto } from './mailto';
@@ -65,6 +66,9 @@ function decodeLabel(value: string): string {
   }
 }
 
+/** Row menu choices that apply to every selected conversation when the row is part of the selection. */
+const BULK_KINDS = new Set<string>(['archive', 'unarchive', 'junk', 'notSpam', 'trash', 'read', 'unread']);
+
 export default function MailPage() {
   const { account } = useAuth();
   const navigate = useNavigate();
@@ -83,9 +87,9 @@ export default function MailPage() {
   const [cursorShown, setCursorShown] = useState(false);
   const [thread, setThread] = useState<EmailFull[] | null>(null);
   const [draft, setDraft] = useState<{ key: number; draft: Draft; emailId?: string } | null>(null);
-  const [notice, setNotice] = useState('');
-  /** An Undo for the notice it was shown with; dropped once another notice replaces that one. */
-  const [noticeUndo, setNoticeUndo] = useState<{ notice: string; run: () => Promise<void> } | null>(null);
+  const [notice, setNotice] = useState<{ text: string; undo?: () => void } | null>(null);
+  /** Shows a notice, with an Undo button when `undo` is given; an empty text hides it. */
+  const notify = useCallback((text: string, undo?: () => void) => setNotice(text ? { text, undo } : null), []);
   // A message just sent that can still be called back.
   const [undoable, setUndoable] = useState<SentInfo | null>(null);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -157,6 +161,7 @@ export default function MailPage() {
   );
   const slug = label ? `label:${encodeURIComponent(label)}` : allMail ? 'all' : (mailbox?.id ?? 'inbox');
   const byRole = useCallback((role: string) => mailboxes.find((m) => m.role === role), [mailboxes]);
+  const roles = useMemo(() => rolesOf(mailboxes), [mailboxes]);
 
   const [searchPanel, setSearchPanel] = useState<HTMLElement | null>(null);
   const [preview, setPreview] = useState<PreviewFile | null>(null);
@@ -235,8 +240,8 @@ export default function MailPage() {
         if (pendingCount() > 0) {
           const flushed = await flushOutbox();
           setPending(flushed.remaining);
-          if (flushed.rejected.length > 0) setNotice(t('A change made offline was refused: {{value}}', { value: flushed.rejected[0] }));
-          else if (flushed.done > 0) setNotice(t('{{count}} offline changes synchronised', { count: flushed.done }));
+          if (flushed.rejected.length > 0) notify(t('A change made offline was refused: {{value}}', { value: flushed.rejected[0] }));
+          else if (flushed.done > 0) notify(t('{{count}} offline changes synchronised', { count: flushed.done }));
         }
         if (cacheKey) cacheList(cacheKey, result.emails, result.total);
         setTotal(result.total);
@@ -245,7 +250,7 @@ export default function MailPage() {
         if (seq !== requestSeq.current) return;
         // Network failure: keep working from the saved copy.
         if (err instanceof TypeError) setOffline(true);
-        else setNotice(errorText(err, t('Could not load messages')));
+        else notify(errorText(err, t('Could not load messages')));
       } finally {
         if (seq === requestSeq.current) setLoading(false);
       }
@@ -324,7 +329,7 @@ export default function MailPage() {
           void setKeyword(unread, '$seen', true).then(refreshMailboxes);
         }
       })
-      .catch(() => !cancelled && !savedThread && setNotice(t('Could not open the conversation')));
+      .catch(() => !cancelled && !savedThread && notify(t('Could not open the conversation')));
     return () => {
       cancelled = true;
     };
@@ -394,38 +399,59 @@ export default function MailPage() {
   const open = useCallback((email: EmailSummary) => navigate(`/mail/${slug}/${email.threadId}`), [navigate, slug]);
   const closeThread = useCallback(() => navigate(`/mail/${slug}`), [navigate, slug]);
 
-  /** Undoes a move: each message goes back to the folder it was moved from, given as folder id → message ids. */
+  /** Changes made offline wait in the outbox: show the offline state and how much is waiting. */
+  const savedOffline = useCallback(() => {
+    setOffline(true);
+    setPending(pendingCount());
+  }, []);
+
+  /** Undoes a move: each message goes back to the folder it was moved from. */
   const moveBack = useCallback(
-    async (origins: Record<string, string[]>) => {
+    async (origins: Origins) => {
       try {
         let wasQueued = false;
         for (const [mailboxId, ids] of Object.entries(origins)) {
           if (await performOrQueue({ type: 'move', ids, mailboxId })) wasQueued = true;
         }
-        if (wasQueued) {
-          setOffline(true);
-          setPending(pendingCount());
-        }
-        setNotice(t('Move undone'));
+        if (wasQueued) savedOffline();
+        notify(t('Move undone'));
         void refreshMailboxes();
         await load(0);
       } catch (err) {
-        setNotice(errorText(err, t('The message could not be moved')));
+        notify(errorText(err, t('The message could not be moved')));
       }
     },
-    [refreshMailboxes, load],
+    [refreshMailboxes, load, notify, savedOffline],
+  );
+
+  /**
+   * Moves messages to a folder, or deletes them for good, and says so. `origins` is where they
+   * were, for Undo; a deletion for good cannot be undone.
+   */
+  const relocate = useCallback(
+    async (ids: string[], to: Destination, done: string, origins?: Origins) => {
+      const wasQueued = await performOrQueue(to === 'destroy' ? { type: 'destroy', ids } : { type: 'move', ids, mailboxId: to.mailboxId });
+      if (wasQueued) {
+        savedOffline();
+        notify(t('Saved on this device; it will be synchronised when you are back online'));
+      } else {
+        const canUndo = to !== 'destroy' && origins && Object.keys(origins).length > 0;
+        notify(done, canUndo ? () => void moveBack(origins) : undefined);
+      }
+      void refreshMailboxes();
+    },
+    [moveBack, notify, refreshMailboxes, savedOffline],
   );
 
   /** Applies an action to a whole conversation, updating the list optimistically. */
   const act = useCallback(
-    async (target: EmailSummary | undefined, action: 'archive' | 'unarchive' | 'trash' | 'junk' | 'inbox' | 'unread' | 'read' | 'star') => {
+    async (target: EmailSummary | undefined, action: RowAction) => {
       if (!target) return;
       const ids = thread && thread[0]?.threadId === target.threadId ? thread.map((e) => e.id) : [target.id];
       const remove = () => setEmails((current) => current.filter((e) => e.threadId !== target.threadId));
       const queued = () => {
-        setOffline(true);
-        setPending(pendingCount());
-        setNotice(t('Saved on this device; it will be synchronised when you are back online'));
+        savedOffline();
+        notify(t('Saved on this device; it will be synchronised when you are back online'));
       };
       try {
         if (action === 'star') {
@@ -441,33 +467,21 @@ export default function MailPage() {
           // An open conversation would be marked as read again at once.
           if (!seen && threadId === target.threadId) closeThread();
         } else {
-          const destination = byRole(action === 'unarchive' ? 'inbox' : action);
-          if (!destination) return;
-          // Where each message was, so that the move can be undone.
-          const origins: Record<string, string[]> = {};
-          for (const email of thread && thread[0]?.threadId === target.threadId ? thread : [target]) {
-            const from = Object.keys(email.mailboxIds)[0];
-            if (from) (origins[from] ??= []).push(email.id);
-          }
+          const to = destinationOf(action, placeOf(roles, [target]), roles);
+          if (!to) return;
+          const conversation = thread && thread[0]?.threadId === target.threadId ? thread : [target];
           remove();
           if (threadId === target.threadId) closeThread();
-          // Deleting from the trash removes the conversation for good.
-          const wasQueued =
-            action === 'trash' && mailbox?.role === 'trash' ? await performOrQueue({ type: 'destroy', ids }) : await performOrQueue({ type: 'move', ids, mailboxId: destination.id });
-          if (wasQueued) queued();
-          else {
-            const doneNotice = action === 'archive' ? t('Conversation archived') : action === 'unarchive' ? t('Conversation moved to the inbox') : action === 'junk' ? t('Reported as spam') : action === 'inbox' ? t('Marked as not spam and moved to the inbox') : t('Conversation deleted');
-            setNotice(doneNotice);
-            if (!(action === 'trash' && mailbox?.role === 'trash')) setNoticeUndo({ notice: doneNotice, run: () => moveBack(origins) });
-          }
+          await relocate(ids, to, doneText(action, 1), originsOf(conversation));
+          return;
         }
         void refreshMailboxes();
       } catch (err) {
-        setNotice(errorText(err, t('The action failed')));
+        notify(errorText(err, t('The action failed')));
         void load(0);
       }
     },
-    [thread, byRole, threadId, closeThread, mailbox?.role, refreshMailboxes, load, moveBack],
+    [thread, roles, threadId, closeThread, refreshMailboxes, load, relocate, notify, savedOffline],
   );
 
   /** Adds or removes a label on every message of the open conversation. */
@@ -479,25 +493,22 @@ export default function MailPage() {
       setThread((current) => current && current.map(apply));
       setEmails((current) => current.map(apply));
       try {
-        if (await performOrQueue({ type: 'keyword', ids, keyword: name, value: on })) {
-          setOffline(true);
-          setPending(pendingCount());
-        }
+        if (await performOrQueue({ type: 'keyword', ids, keyword: name, value: on })) savedOffline();
         await refreshLabels();
       } catch (err) {
-        setNotice(errorText(err, t('Could not change the label')));
+        notify(errorText(err, t('Could not change the label')));
       }
     },
-    [thread, refreshLabels],
+    [thread, refreshLabels, notify, savedOffline],
   );
 
   const compose = useCallback((initial: Draft = EMPTY_DRAFT) => setDraft({ key: Date.now(), draft: initial }), []);
 
   // Plug-ins report to the user through the page's own notice bar.
   useEffect(() => {
-    setHostNotifier(setNotice);
+    setHostNotifier(notify);
     return () => setHostNotifier(() => {});
-  }, []);
+  }, [notify]);
 
   // "/mail/inbox?compose=address" opens a new message, e.g. from the address book, and
   // "?mailto=<url>" one described by a mailto: link (unoMail as the browser's mail handler).
@@ -546,60 +557,56 @@ export default function MailPage() {
     }
   }, []);
 
-  /** Message ids covered by the current selection. */
-  async function selectionIds(all = allInFolder): Promise<string[]> {
-    if (all) return queryAllIds({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory });
-    const groups = await Promise.all(emails.filter((email) => selected.has(email.id)).map(conversationIds));
-    return [...new Set(groups.flat())];
+  /**
+   * The messages covered by the current selection, by the folder they are listed in (for Undo).
+   * "Everything here" is only known by folder when a folder is shown.
+   */
+  async function selectionOrigins(all = allInFolder): Promise<{ ids: string[]; origins?: Origins }> {
+    if (all) {
+      const ids = await queryAllIds({ mailboxId: mailbox?.id, otherThan, label: label ?? undefined, search: searchFilter, category: activeCategory });
+      return { ids, origins: mailbox ? { [mailbox.id]: ids } : undefined };
+    }
+    const origins: Origins = {};
+    for (const email of emails.filter((e) => selected.has(e.id))) {
+      const source = Object.keys(email.mailboxIds)[0];
+      if (source) (origins[source] ??= []).push(...(await conversationIds(email)));
+    }
+    return { ids: [...new Set(Object.values(origins).flat())], origins };
+  }
+
+  /** Where the selected conversations are; "everything here" is where the folder shown is. */
+  function selectionPlace(all = allInFolder): Place {
+    if (all) return placeOf(roles, [{ mailboxIds: mailbox ? { [mailbox.id]: true } : {} }]);
+    return placeOf(roles, emails.filter((e) => selected.has(e.id)));
   }
 
   /** Applies one action to everything that is selected. */
   async function bulk(action: BulkAction, argument?: string, all = allInFolder) {
     const count = all ? total : selected.size;
     try {
-      const ids = await selectionIds(all);
+      const { ids, origins } = await selectionOrigins(all);
       if (ids.length === 0) return;
-      let wasQueued = false;
-      if (action === 'read' || action === 'unread') {
-        wasQueued = await performOrQueue({ type: 'keyword', ids, keyword: '$seen', value: action === 'read' });
-      } else if (action === 'label') {
-        wasQueued = await performOrQueue({ type: 'keyword', ids, keyword: argument!, value: true });
+      if (action === 'read' || action === 'unread' || action === 'label') {
+        const keyword = action === 'label' ? argument! : '$seen';
+        if (await performOrQueue({ type: 'keyword', ids, keyword, value: action !== 'unread' })) savedOffline();
+        notify(
+          action === 'label'
+            ? t('{{count}} conversations labelled “{{label}}”', { count, label: argument })
+            : action === 'read'
+              ? t('{{count}} conversations marked as read', { count })
+              : t('{{count}} conversations marked as unread', { count }),
+        );
       } else {
-        const destination = action === 'move' ? argument : byRole(action === 'unarchive' ? 'inbox' : action)?.id;
-        if (!destination) return;
-        // Deleting from the trash removes the conversations for good.
-        wasQueued = action === 'trash' && mailbox?.role === 'trash' ? await performOrQueue({ type: 'destroy', ids }) : await performOrQueue({ type: 'move', ids, mailboxId: destination });
-      }
-      if (wasQueued) {
-        setOffline(true);
-        setPending(pendingCount());
-      }
-      const done = {
-        archive: () => t('{{count}} conversations archived', { count }),
-        unarchive: () => t('{{count}} conversations moved to the inbox', { count }),
-        trash: () => t('{{count}} conversations deleted', { count }),
-        junk: () => t('{{count}} conversations reported as spam', { count }),
-        inbox: () => t('{{count}} conversations marked as not spam', { count }),
-        read: () => t('{{count}} conversations marked as read', { count }),
-        unread: () => t('{{count}} conversations marked as unread', { count }),
-        move: () => t('{{count}} conversations moved', { count }),
-        label: () => t('{{count}} conversations labelled “{{label}}”', { count, label: argument }),
-      }[action];
-      const doneNotice = done();
-      setNotice(doneNotice);
-      // Moves can be undone while the folder they came from is known; deleting from the trash is final.
-      const source = mailbox?.id;
-      const final = action === 'trash' && mailbox?.role === 'trash';
-      if (source && !final && ['move', 'archive', 'unarchive', 'trash', 'junk', 'inbox'].includes(action)) {
-        setNoticeUndo({ notice: doneNotice, run: () => moveBack({ [source]: ids }) });
+        const to = action === 'move' ? (argument ? { mailboxId: argument } : null) : destinationOf(action, selectionPlace(all), roles);
+        if (!to) return;
+        await relocate(ids, to, action === 'move' ? t('{{count}} conversations moved', { count }) : doneText(action, count), origins);
       }
       setSelected(new Set());
       setAllInFolder(false);
-      void refreshMailboxes();
       void refreshLabels();
       await load(0);
     } catch (err) {
-      setNotice(errorText(err, t('The action failed')));
+      notify(errorText(err, t('The action failed')));
       void load(0);
     }
   }
@@ -625,18 +632,15 @@ export default function MailPage() {
         if (target.label) {
           const name = target.label;
           setEmails((current) => current.map((e) => (e.id === email.id ? { ...e, keywords: { ...e.keywords, [name]: true } } : e)));
-          if (await performOrQueue({ type: 'keyword', ids: [email.id], keyword: name, value: true })) {
-            setOffline(true);
-            setPending(pendingCount());
-          }
-          setNotice(t('Labelled “{{name}}”', { name }));
+          if (await performOrQueue({ type: 'keyword', ids: [email.id], keyword: name, value: true })) savedOffline();
+          notify(t('Labelled “{{name}}”', { name }));
           return;
         }
         if (target.category) {
           const moved = target.category;
           await setCategory(await conversationIds(email), moved);
           setEmails((current) => current.filter((e) => e.threadId !== email.threadId));
-          setNotice(t('Moved to {{label}}. New mail from this sender will go there too.', { label: CATEGORIES.find((c) => c.id === moved)?.label }));
+          notify(t('Moved to {{label}}. New mail from this sender will go there too.', { label: CATEGORIES.find((c) => c.id === moved)?.label }));
           refreshCategories();
           return;
         }
@@ -644,30 +648,16 @@ export default function MailPage() {
         if (!destination || email.mailboxIds[destination.id]) return;
         // The whole conversation moves, as far as it lives in the folder it was dragged from.
         const source = Object.keys(email.mailboxIds)[0];
-        let ids = [email.id];
-        try {
-          const members = (await getThread(email.threadId)).filter((e) => e.mailboxIds[source]).map((e) => e.id);
-          if (members.length > 0) ids = members;
-        } catch {
-          // Offline: move the message that is listed.
-        }
+        const ids = await conversationIds(email);
         setEmails((current) => current.filter((e) => e.threadId !== email.threadId));
-        if (threadId === email.threadId) navigate(`/mail/${slug}`);
-        const wasQueued = await performOrQueue({ type: 'move', ids, mailboxId: destination.id });
-        if (wasQueued) {
-          setOffline(true);
-          setPending(pendingCount());
-        }
-        const movedNotice = t('Moved to {{value}}', { value: folderName(destination) });
-        setNotice(movedNotice);
-        if (source) setNoticeUndo({ notice: movedNotice, run: () => moveBack({ [source]: ids }) });
-        void refreshMailboxes();
+        if (threadId === email.threadId) closeThread();
+        await relocate(ids, { mailboxId: destination.id }, t('Moved to {{value}}', { value: folderName(destination) }), source ? { [source]: ids } : undefined);
       } catch (err) {
-        setNotice(errorText(err, t('The message could not be moved')));
+        notify(errorText(err, t('The message could not be moved')));
         void load(0);
       }
     },
-    [threadId, navigate, slug, refreshMailboxes, load, conversationIds, moveBack],
+    [threadId, closeThread, load, conversationIds, relocate, notify, savedOffline, refreshCategories],
   );
 
   async function importInto(file: File | undefined) {
@@ -675,11 +665,11 @@ export default function MailPage() {
     if (!file || !target) return;
     try {
       const result = await importMessages(target.id, file);
-      setNotice(t('{{count}} messages imported', { count: result.imported }) + (result.skipped ? t(', {{count}} skipped', { count: result.skipped }) : ''));
+      notify(t('{{count}} messages imported', { count: result.imported }) + (result.skipped ? t(', {{count}} skipped', { count: result.skipped }) : ''));
       await refreshMailboxes();
       void load(0);
     } catch (err) {
-      setNotice(errorText(err, t('The file could not be imported')));
+      notify(errorText(err, t('The file could not be imported')));
     }
   }
 
@@ -701,11 +691,6 @@ export default function MailPage() {
   const ownMailboxes = mailboxes.filter((m) => !m.shareOwner);
   const sharedMailboxes = mailboxes.filter((m) => m.shareOwner);
   const current = threadId ? emails.find((e) => e.threadId === threadId) : visible[cursor];
-  /** Whether a conversation sits in the folder with this role, wherever it is being listed. */
-  const isIn = (email: EmailSummary | undefined, role: string) => {
-    const id = byRole(role)?.id;
-    return Boolean(email && id && email.mailboxIds[id]);
-  };
 
   // Keyboard shortcuts (Gmail style). Ignored while typing.
   useEffect(() => {
@@ -737,7 +722,7 @@ export default function MailPage() {
           if (threadId) closeThread();
           break;
         case 'e':
-          void act(current, isIn(current, 'archive') ? 'unarchive' : 'archive');
+          void act(current, current && placeOf(roles, [current]).archive ? 'unarchive' : 'archive');
           break;
         case '#':
           void act(current, 'trash');
@@ -794,7 +779,7 @@ export default function MailPage() {
       if (label === name) navigate(`/mail/label:${encodeURIComponent(next)}`);
       else void load(0);
     } catch (err) {
-      setNotice(errorText(err, t('Could not rename the label')));
+      notify(errorText(err, t('Could not rename the label')));
     }
   }
 
@@ -806,7 +791,7 @@ export default function MailPage() {
       if (label === name) navigate('/mail/inbox');
       else void load(0);
     } catch (err) {
-      setNotice(errorText(err, t('Could not delete the label')));
+      notify(errorText(err, t('Could not delete the label')));
     }
   }
 
@@ -818,7 +803,7 @@ export default function MailPage() {
       setNewFolder(null);
       await refreshMailboxes();
     } catch (err) {
-      setNotice(errorText(err, t('Could not create the folder')));
+      notify(errorText(err, t('Could not create the folder')));
     }
   }
 
@@ -829,7 +814,7 @@ export default function MailPage() {
       if (mailbox?.id === folder.id) navigate('/mail/inbox');
       await refreshMailboxes();
     } catch (err) {
-      setNotice(errorText(err, t('Could not delete the folder')));
+      notify(errorText(err, t('Could not delete the folder')));
     }
   }
 
@@ -867,7 +852,7 @@ export default function MailPage() {
     if (count > 1) {
       if (pick.kind === 'move') void bulk('move', pick.mailbox.id);
       else if (pick.kind === 'label') void bulk('label', pick.name);
-      else if (pick.kind === 'archive' || pick.kind === 'unarchive' || pick.kind === 'trash' || pick.kind === 'junk' || pick.kind === 'inbox' || pick.kind === 'read' || pick.kind === 'unread') void bulk(pick.kind);
+      else if (BULK_KINDS.has(pick.kind)) void bulk(pick.kind as BulkAction);
       return;
     }
     try {
@@ -887,11 +872,8 @@ export default function MailPage() {
           const ids = await conversationIds(email);
           const { name, on } = pick;
           setEmails((current) => current.map((e) => (e.threadId === email.threadId ? { ...e, keywords: { ...e.keywords, [name]: on } } : e)));
-          if (await performOrQueue({ type: 'keyword', ids, keyword: name, value: on })) {
-            setOffline(true);
-            setPending(pendingCount());
-          }
-          setNotice(on ? t('Labelled “{{name}}”', { name }) : t('Label “{{name}}” removed', { name }));
+          if (await performOrQueue({ type: 'keyword', ids, keyword: name, value: on })) savedOffline();
+          notify(on ? t('Labelled “{{name}}”', { name }) : t('Label “{{name}}” removed', { name }));
           void refreshLabels();
           return;
         }
@@ -900,7 +882,7 @@ export default function MailPage() {
           await snooze(ids, pick.until);
           setEmails((current) => current.filter((e) => e.threadId !== email.threadId));
           if (threadId === email.threadId) closeThread();
-          setNotice(t('Snoozed until {{value}}', { value: pick.until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+          notify(t('Snoozed until {{value}}', { value: pick.until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
           void refreshMailboxes();
           return;
         }
@@ -919,7 +901,7 @@ export default function MailPage() {
           return void act(email, pick.kind);
       }
     } catch (err) {
-      setNotice(errorText(err, t('The action failed')));
+      notify(errorText(err, t('The action failed')));
     }
   }
 
@@ -1045,8 +1027,7 @@ export default function MailPage() {
             total={total}
             selected={selected}
             allInFolder={allInFolder}
-            inArchive={mailbox?.role === 'archive'}
-            inJunk={mailbox?.role === 'junk'}
+            place={selectionPlace()}
             folders={mailboxes.filter((m) => m.id !== mailbox?.id && (!m.shareOwner || m.myRights?.mayAddItems))}
             labels={labels}
             labelColor={labelColor}
@@ -1099,9 +1080,7 @@ export default function MailPage() {
                       first={item.index === 0}
                       last={item.index === visible.length - 1}
                       labelColors={labelColors}
-                      canArchive={mailbox?.role !== 'archive' && Boolean(byRole('archive'))}
-                      inArchive={mailbox?.role === 'archive'}
-                      inTrash={mailbox?.role === 'trash'}
+                      roles={roles}
                       handlers={rowHandlers}
                     />
                   </div>
@@ -1123,41 +1102,38 @@ export default function MailPage() {
               ownEmail={account?.email ?? ''}
               inboxId={byRole('inbox')?.id ?? ''}
               onBack={closeThread}
-              onArchive={() => void act(current, 'archive')}
-              onUnarchive={isIn(current, 'archive') ? () => void act(current, 'unarchive') : undefined}
-              onDelete={() => void act(current, 'trash')}
-              onJunk={() => void act(current, 'junk')}
-              onNotSpam={isIn(current, 'junk') ? () => void act(current, 'inbox') : undefined}
+              place={placeOf(roles, current ? [current] : [])}
+              onFolderAction={(action) => void act(current, action)}
               onMarkUnread={() => void act(current, 'unread')}
               onSnooze={async (until) => {
                 const ids = (thread ?? []).filter((e) => !e.keywords.$draft && !e.keywords.$scheduled).map((e) => e.id);
                 try {
                   await snooze(ids, until);
-                  setNotice(t('Snoozed until {{value}}', { value: until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+                  notify(t('Snoozed until {{value}}', { value: until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
                   closeThread();
                   void refreshMailboxes();
                   void load(0);
                 } catch (err) {
-                  setNotice(errorText(err, t('The conversation could not be snoozed')));
+                  notify(errorText(err, t('The conversation could not be snoozed')));
                 }
               }}
               onCancelScheduled={async (emailId) => {
                 try {
                   const pending = (await listScheduled()).find((s) => s.emailId === emailId);
                   if (pending) await cancelSubmission(pending.id);
-                  setNotice(t('Sending cancelled. The message is in Drafts'));
+                  notify(t('Sending cancelled. The message is in Drafts'));
                   setScheduledCount((n) => Math.max(0, n - 1));
                   closeThread();
                   void load(0);
                 } catch (err) {
-                  setNotice(errorText(err, t('Sending could not be cancelled')));
+                  notify(errorText(err, t('Sending could not be cancelled')));
                 }
               }}
               labels={labels}
               onToggleLabel={(name, on) => void toggleLabel(name, on)}
               onAction={(action, email, suggestedText) => {
                 if (!account) return;
-                if (suggestedText && draft) { setNotice(t('Close the current draft before choosing a suggested reply.')); return; }
+                if (suggestedText && draft) { notify(t('Close the current draft before choosing a suggested reply.')); return; }
                 compose(draftFor(action, email, account.email, accountId, suggestedText));
               }}
             />
@@ -1183,12 +1159,12 @@ export default function MailPage() {
             if (wasQueued) {
               setOffline(true);
               setPending(pendingCount());
-              setNotice(t('You are offline. The message will be sent when the connection returns'));
+              notify(t('You are offline. The message will be sent when the connection returns'));
             } else if (info?.scheduledAt) {
-              setNotice(t('Scheduled for {{value}}', { value: info.scheduledAt.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+              notify(t('Scheduled for {{value}}', { value: info.scheduledAt.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
               void listScheduled().then((list) => setScheduledCount(list.length), () => {});
             } else if (info?.submissionId && info.undoSeconds) setUndoable(info);
-            else if (wasSent) setNotice(t('Message sent'));
+            else if (wasSent) notify(t('Message sent'));
             void refreshMailboxes();
             void load(0);
           }}
@@ -1206,10 +1182,7 @@ export default function MailPage() {
         folders={mailboxes.filter((m) => m.id !== mailbox?.id && (!m.shareOwner || m.myRights?.mayAddItems))}
         labels={labels}
         labelColor={labelColor}
-        canArchive={mailbox?.role !== 'archive' && Boolean(byRole('archive'))}
-        inArchive={mailbox?.role === 'archive'}
-        inTrash={mailbox?.role === 'trash'}
-        inJunk={mailbox?.role === 'junk'}
+        place={rowMenu && rowMenu.count <= 1 ? placeOf(roles, [rowMenu.email]) : selectionPlace()}
         onPick={(pick, target) => void rowMenuPick(pick, target)}
         onClose={() => setRowMenu(null)}
       />
@@ -1223,8 +1196,8 @@ export default function MailPage() {
             setLabelDialog(null);
             void saveLabel(name, color)
               .then(refreshLabels)
-              .then(() => setNotice(labelDialog.existing ? t('Label updated') : t('Label “{{name}}” created', { name })))
-              .catch((err) => setNotice(errorText(err, t('The label could not be saved'))));
+              .then(() => notify(labelDialog.existing ? t('Label updated') : t('Label “{{name}}” created', { name })))
+              .catch((err) => notify(errorText(err, t('The label could not be saved'))));
           }}
         />
       )}
@@ -1268,11 +1241,11 @@ export default function MailPage() {
       <Snackbar
         open={Boolean(notice)}
         autoHideDuration={4000}
-        onClose={() => { setNotice(''); setNoticeUndo(null); }}
-        message={notice}
+        onClose={() => notify('')}
+        message={notice?.text}
         action={
-          noticeUndo?.notice === notice && (
-            <Button color="secondary" size="small" onClick={() => { const undo = noticeUndo; setNotice(''); setNoticeUndo(null); void undo?.run(); }}>
+          notice?.undo && (
+            <Button color="secondary" size="small" onClick={() => { const undo = notice.undo; notify(''); undo?.(); }}>
               {t('Undo')}
             </Button>
           )
@@ -1295,9 +1268,9 @@ export default function MailPage() {
                 await cancelSubmission(info.submissionId);
                 // Back in the composer, continuing the same draft.
                 setDraft({ key: Date.now(), draft: { ...info.draft }, emailId: info.emailId });
-                setNotice(t('Sending undone'));
+                notify(t('Sending undone'));
               } catch (err) {
-                setNotice(errorText(err, t('The message could not be called back')));
+                notify(errorText(err, t('The message could not be called back')));
               }
             }}
           >

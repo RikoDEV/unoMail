@@ -78,7 +78,7 @@ test.describe('web mail', () => {
     await page.keyboard.press('s');
     await expect(rows.filter({ hasText: 'Quarterly numbers' }).getByRole('button', { name: 'Remove star' })).toBeVisible();
     await page.keyboard.press('e');
-    await expect(page.getByText('Conversation archived')).toBeVisible();
+    await expect(page.getByText('1 conversation archived')).toBeVisible();
     await expect(rows.filter({ hasText: 'Quarterly numbers' })).toHaveCount(0);
     await page.getByRole('navigation', { name: 'Folders' }).getByText('Archive', { exact: true }).click();
     await expect(rows.filter({ hasText: 'Quarterly numbers' })).toHaveCount(1);

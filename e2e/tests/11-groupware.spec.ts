@@ -83,11 +83,11 @@ test.describe('groupware', () => {
 
     await row(page, 'Hover to archive').hover();
     await row(page, 'Hover to archive').getByRole('button', { name: 'Archive', exact: true }).click();
-    await expect(page.getByText('Conversation archived')).toBeVisible();
+    await expect(page.getByText('1 conversation archived')).toBeVisible();
     await expect(row(page, 'Hover to archive')).toHaveCount(0);
     await row(page, 'Hover to delete').hover();
     await row(page, 'Hover to delete').getByRole('button', { name: 'Delete', exact: true }).click();
-    await expect(page.getByText('Conversation deleted')).toBeVisible();
+    await expect(page.getByText('1 conversation deleted')).toBeVisible();
     await expect(rows(page)).toHaveCount(1);
 
     // The archived conversation is in the archive, where archiving is not offered again.

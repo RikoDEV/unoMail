@@ -1,25 +1,21 @@
 // The bar above the message list: select, act on the selection, refresh, and the count.
 
-import Archive from '@mui/icons-material/Archive';
-import Unarchive from '@mui/icons-material/Unarchive';
 import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
-import Delete from '@mui/icons-material/Delete';
 import DriveFileMove from '@mui/icons-material/DriveFileMove';
 import LabelIcon from '@mui/icons-material/Label';
 import MarkEmailRead from '@mui/icons-material/MarkEmailRead';
 import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
 import MoreVert from '@mui/icons-material/MoreVert';
 import Refresh from '@mui/icons-material/Refresh';
-import Report from '@mui/icons-material/Report';
-import ReportOff from '@mui/icons-material/ReportOff';
 import { Box, Checkbox, IconButton, ListItemIcon, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { t } from '../i18n';
+import { ActionButton, type FolderAction, folderActions, type Place } from './actions';
 import { type EmailSummary, folderName, type Mailbox } from './jmapClient';
 
-export type BulkAction = 'archive' | 'unarchive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'move' | 'label';
+export type BulkAction = FolderAction | 'read' | 'unread' | 'move' | 'label';
 
-export function ListToolbar({ heading, showHeading, visible, total, selected, allInFolder, inArchive, inJunk, folders, labels, labelColor, onSelect, onBulk, onRefresh }: {
+export function ListToolbar({ heading, showHeading, visible, total, selected, allInFolder, place, folders, labels, labelColor, onSelect, onBulk, onRefresh }: {
   /** What the list shows, for screen readers. */
   heading: string;
   /** Shows the heading above the toolbar too (phones, where the sidebar is hidden). */
@@ -28,8 +24,8 @@ export function ListToolbar({ heading, showHeading, visible, total, selected, al
   total: number;
   selected: Set<string>;
   allInFolder: boolean;
-  inArchive: boolean;
-  inJunk: boolean;
+  /** Where the selected conversations are, which decides the folder actions offered. */
+  place: Place;
   /** Where the selection can be moved. */
   folders: Mailbox[];
   labels: string[];
@@ -64,17 +60,9 @@ export function ListToolbar({ heading, showHeading, visible, total, selected, al
         </IconButton>
         {selected.size > 0 ? (
           <Stack direction="row" role="toolbar" aria-label={t('Actions for the selection')} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
-            {inArchive ? (
-              <Tooltip title={t('Move to inbox')}><IconButton aria-label={t('Move selected to inbox')} onClick={() => onBulk('unarchive')}><Unarchive /></IconButton></Tooltip>
-            ) : (
-              <Tooltip title={t('Archive')}><IconButton aria-label={t('Archive selected')} onClick={() => onBulk('archive')}><Archive /></IconButton></Tooltip>
-            )}
-            {inJunk ? (
-              <Tooltip title={t('Not spam')}><IconButton aria-label={t('Mark selected as not spam')} onClick={() => onBulk('inbox')}><ReportOff /></IconButton></Tooltip>
-            ) : (
-              <Tooltip title={t('Report spam')}><IconButton aria-label={t('Report selected as spam')} onClick={() => onBulk('junk')}><Report /></IconButton></Tooltip>
-            )}
-            <Tooltip title={t('Delete')}><IconButton aria-label={t('Delete selected')} onClick={() => onBulk('trash')}><Delete /></IconButton></Tooltip>
+            {folderActions(place).map((action) => (
+              <ActionButton key={action} action={action} place={place} variant="selection" onRun={onBulk} />
+            ))}
             <Tooltip title={t('Mark as read')}><IconButton aria-label={t('Mark selected as read')} onClick={() => onBulk('read')}><MarkEmailRead /></IconButton></Tooltip>
             <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark selected as unread')} onClick={() => onBulk('unread')}><MarkEmailUnread /></IconButton></Tooltip>
             <Tooltip title={t('Move to')}><IconButton aria-label={t('Move selected to a folder')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'move' })}><DriveFileMove /></IconButton></Tooltip>

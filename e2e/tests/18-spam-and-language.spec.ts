@@ -34,7 +34,7 @@ test.describe('spam reports and interface language', () => {
     await login(page, FIONA, USER_PASSWORD);
     await rows(page).filter({ hasText: 'You won a million' }).click();
     await page.getByRole('region', { name: 'Conversation' }).getByRole('button', { name: 'Report spam' }).click();
-    await expect(page.getByText('Reported as spam')).toBeVisible();
+    await expect(page.getByText('1 conversation reported as spam')).toBeVisible();
 
     await openSettings(page, 'Inbox');
     const filter = page.getByTestId('spam-filter');
@@ -47,7 +47,7 @@ test.describe('spam reports and interface language', () => {
     const reader = page.getByRole('region', { name: 'Conversation' });
     await expect(reader.getByRole('button', { name: 'Report spam' })).toHaveCount(0);
     await reader.getByRole('button', { name: 'Not spam' }).click();
-    await expect(page.getByText('Marked as not spam and moved to the inbox')).toBeVisible();
+    await expect(page.getByText('1 conversation marked as not spam')).toBeVisible();
     await openSettings(page, 'Inbox');
     await expect(filter).toContainText('Still learning: 0 of 10 spam and 1 of 10 wanted messages seen.', { timeout: 10_000 });
 

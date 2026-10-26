@@ -1,8 +1,5 @@
-import Archive from '@mui/icons-material/Archive';
-import Unarchive from '@mui/icons-material/Unarchive';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import AttachFile from '@mui/icons-material/AttachFile';
-import Delete from '@mui/icons-material/Delete';
 import Forward from '@mui/icons-material/Forward';
 import ImageIcon from '@mui/icons-material/Image';
 import Label from '@mui/icons-material/Label';
@@ -11,8 +8,6 @@ import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
 import Reply from '@mui/icons-material/Reply';
 import WarningAmber from '@mui/icons-material/WarningAmber';
 import ReplyAll from '@mui/icons-material/ReplyAll';
-import Report from '@mui/icons-material/Report';
-import ReportOff from '@mui/icons-material/ReportOff';
 import Snooze from '@mui/icons-material/Snooze';
 import {
   Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogContent, DialogTitle, IconButton, ListItemText, Menu, MenuItem, Paper, Stack, TextField, Tooltip,
@@ -37,6 +32,7 @@ import { adaptForDark, type Rgb } from './darkColors';
 const DARK_PAGE: Rgb = [29, 27, 32];
 import { guardedDownload, useRiskConfirm } from './RiskConfirm';
 import { attachmentRisk } from './risk';
+import { ActionButton, type FolderAction, folderActions, type Place } from './actions';
 import { AttachmentPreview, type PreviewFile, previewKind } from './Preview';
 import { listDate } from './EmailRow';
 import { MessageMenu, UnsubscribeButton } from './MessageTools';
@@ -498,13 +494,9 @@ export interface ReaderProps {
   /** Id of the user's inbox, where categories apply. */
   inboxId: string;
   onBack: () => void;
-  onArchive: () => void;
-  /** Set while the conversation is archived: it goes back to the inbox. */
-  onUnarchive?: () => void;
-  onDelete: () => void;
-  onJunk: () => void;
-  /** Set while the conversation is in Junk: it is wanted after all. */
-  onNotSpam?: () => void;
+  /** Where the conversation is, which decides the folder actions offered. */
+  place: Place;
+  onFolderAction: (action: FolderAction) => void;
   onMarkUnread: () => void;
   /** Puts the conversation away until a time. */
   onSnooze: (until: Date) => void;
@@ -556,7 +548,7 @@ function ReceiptRequest({ emails, ownEmail }: { emails: EmailFull[]; ownEmail: s
 }
 
 /** Conversation view: every message of a thread, the latest one expanded. */
-export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive, onUnarchive, onDelete, onJunk, onNotSpam, onMarkUnread, onSnooze, onCancelScheduled, onAction, labels, onToggleLabel }: ReaderProps) {
+export function Reader({ emails, accountId, ownEmail, inboxId, onBack, place, onFolderAction, onMarkUnread, onSnooze, onCancelScheduled, onAction, labels, onToggleLabel }: ReaderProps) {
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
   const [snoozeAnchor, setSnoozeAnchor] = useState<HTMLElement | null>(null);
   const [snoozeAt, setSnoozeAt] = useState<string | null>(null);
@@ -578,17 +570,9 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
     <Box className="um-part-reader" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label={t('Conversation')}>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', p: 1 }}>
         <Tooltip title={t('Back to list (u)')}><IconButton aria-label={t('Back to list')} onClick={onBack}><ArrowBack /></IconButton></Tooltip>
-        {onUnarchive ? (
-          <Tooltip title={t('Move to inbox (e)')}><IconButton aria-label={t('Move to inbox')} onClick={onUnarchive}><Unarchive /></IconButton></Tooltip>
-        ) : (
-          <Tooltip title={t('Archive (e)')}><IconButton aria-label={t('Archive')} onClick={onArchive}><Archive /></IconButton></Tooltip>
-        )}
-        {onNotSpam ? (
-          <Tooltip title={t('Not spam: move to the inbox')}><IconButton aria-label={t('Not spam')} onClick={onNotSpam}><ReportOff /></IconButton></Tooltip>
-        ) : (
-          <Tooltip title={t('Report spam')}><IconButton aria-label={t('Report spam')} onClick={onJunk}><Report /></IconButton></Tooltip>
-        )}
-        <Tooltip title={t('Delete (#)')}><IconButton aria-label={t('Delete')} onClick={onDelete}><Delete /></IconButton></Tooltip>
+        {folderActions(place).map((action) => (
+          <ActionButton key={action} action={action} place={place} variant="hint" onRun={onFolderAction} />
+        ))}
         <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark as unread')} onClick={onMarkUnread}><MarkEmailUnread /></IconButton></Tooltip>
         <Tooltip title={t('Snooze')}><IconButton aria-label={t('Snooze')} onClick={(e) => setSnoozeAnchor(e.currentTarget)}><Snooze /></IconButton></Tooltip>
         <Menu anchorEl={snoozeAnchor} open={Boolean(snoozeAnchor)} onClose={() => setSnoozeAnchor(null)}>
