@@ -61,7 +61,7 @@ async fn latest(http: &reqwest::Client) -> anyhow::Result<Release> {
     struct GitHubRelease { tag_name: String, html_url: String, published_at: Option<String> }
     let release: GitHubRelease = http
         .get(LATEST_RELEASE)
-        .header("User-Agent", format!("unoMail/{VERSION}"))
+        .header("User-Agent", "unoMail")
         .header("Accept", "application/vnd.github+json")
         .timeout(Duration::from_secs(10))
         .send()

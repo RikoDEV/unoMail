@@ -1899,7 +1899,7 @@ impl Runtime<'_> {
                     "location" => Some("MDA".to_owned()),
                     "name" => Some("unoMail".to_owned()),
                     "phase" => Some("during".to_owned()),
-                    "version" => Some(env!("CARGO_PKG_VERSION").to_owned()),
+                    "version" => Some(crate::update_check::VERSION.to_owned()),
                     "remote-ip" if !context.remote_ip.is_empty() => Some(context.remote_ip.clone()),
                     _ => None,
                 };

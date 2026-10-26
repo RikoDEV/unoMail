@@ -152,7 +152,7 @@ pub async fn send(app: &App, reports: &[PendingReport], ip: IpAddr, mail_from: &
         };
         let feedback = Feedback::new(FeedbackType::AuthFailure)
             .with_version(1)
-            .with_user_agent(format!("unoMail/{}", env!("CARGO_PKG_VERSION")))
+            .with_user_agent("unoMail")
             .with_arrival_date(now())
             .with_source_ip(ip)
             .with_reporting_mta(app.cfg.hostname.clone())

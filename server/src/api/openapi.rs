@@ -307,7 +307,8 @@ pub fn document(hostname: &str) -> Value {
         "openapi": "3.1.0",
         "info": {
             "title": "unoMail API",
-            "version": crate::update_check::VERSION,
+            // The version of the API description, not of the server: the document is public.
+            "version": "1",
             "description": "Management API of the unoMail server. Sign in with POST /api/auth/login; the session is an HttpOnly cookie and every state-changing request must carry the CSRF token returned at login in the X-CSRF-Token header. Mail access uses JMAP.",
         },
         "servers": [{ "url": format!("https://{hostname}") }],
