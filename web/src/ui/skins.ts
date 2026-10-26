@@ -11,6 +11,7 @@ import { alpha, createTheme, type Theme, type ThemeOptions } from '@mui/material
 import '@fontsource-variable/roboto-flex';
 
 import { t } from '../i18n';
+import { readableOn } from '../mail/extra';
 import { type Images, type Part, type PartStyle, partStyles, sanitizeImages, sanitizeParts } from './skinParts';
 export interface Skin {
   id: string;
@@ -24,6 +25,8 @@ export interface Skin {
   background?: string;
   paper?: string;
   text?: string;
+  /** Background of selected and prominent items (the current folder, chosen chips and toggles, the Compose button); their text is black or white, whichever reads. */
+  selected?: string;
   /** Corner radius in pixels (0 to 32). */
   radius?: number;
   density?: 'comfortable' | 'compact';
@@ -81,7 +84,7 @@ export const BUILT_IN_SKINS: Skin[] = [
   { id: 'compact', name: t('Compact'), radius: 8, density: 'compact' },
   { id: 'paper', name: t('Paper'), mode: 'light', primary: '#5d4037', background: '#f4ecd8', paper: '#fbf5e6', text: '#3e2723', radius: 6, font: 'serif' },
   { id: 'midnight', name: t('Midnight'), mode: 'dark', primary: '#8ab4f8', background: '#0b0f17', paper: '#141a24', radius: 12 },
-  { id: 'contrast', name: t('High contrast'), mode: 'dark', primary: '#ffff00', background: '#000000', paper: '#000000', text: '#ffffff', radius: 0, font: 'system' },
+  { id: 'contrast', name: t('High contrast'), mode: 'dark', primary: '#ffff00', background: '#000000', paper: '#000000', text: '#ffffff', selected: '#ffff00', radius: 0, font: 'system' },
 ];
 
 const FONTS: Record<NonNullable<Skin['font']>, string> = {
@@ -100,7 +103,7 @@ export function sanitizeSkin(input: unknown): Skin | null {
   if (typeof raw.id !== 'string' || typeof raw.name !== 'string' || !/^[a-z0-9-]{1,40}$/.test(raw.id)) return null;
   const skin: Skin = { id: raw.id, name: raw.name.slice(0, 60) };
   if (raw.mode === 'light' || raw.mode === 'dark' || raw.mode === 'auto') skin.mode = raw.mode;
-  for (const key of ['primary', 'secondary', 'tertiary', 'error', 'background', 'paper', 'text'] as const) {
+  for (const key of ['primary', 'secondary', 'tertiary', 'error', 'background', 'paper', 'text', 'selected'] as const) {
     const value = raw[key];
     if (typeof value === 'string' && COLOR.test(value)) skin[key] = value;
   }
@@ -209,6 +212,9 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
     ...(skin.paper ? { surface: skin.paper, surfaceContainerLowest: skin.paper, surfaceContainerHigh: skin.paper, surfaceContainerHighest: skin.paper } : {}),
     ...(skin.text ? { onSurface: skin.text, onSurfaceVariant: skin.text } : {}),
     ...(skin.tertiary ? { tertiary: skin.tertiary } : {}),
+    ...(skin.selected
+      ? { secondaryContainer: skin.selected, onSecondaryContainer: readableOn(skin.selected), primaryContainer: skin.selected, onPrimaryContainer: readableOn(skin.selected) }
+      : {}),
   };
   const options: ThemeOptions = {
     palette: {
@@ -444,6 +450,10 @@ function components(theme: Theme, { radius, compact, expressive }: { radius: num
             fontWeight: 600,
             '& .MuiListItemIcon-root': { color: m3.onSecondaryContainer },
             '& .MuiListItemText-primary': { fontWeight: 600 },
+            // The row's own buttons and counts (a folder's menu, its message count) follow its text.
+            '& .MuiIconButton-root, & .MuiTypography-caption': { color: 'inherit' },
+            // A skin whose selection is its accent colour would hide an accent badge in it: invert it.
+            ...(m3.secondaryContainer.toLowerCase() === theme.palette.primary.main.toLowerCase() ? { '& .MuiBadge-colorPrimary': { backgroundColor: m3.onSecondaryContainer, color: m3.secondaryContainer } } : {}),
           },
           '&.Mui-selected:hover, &.active:hover': { backgroundColor: `color-mix(in srgb, ${m3.onSecondaryContainer} 8%, ${m3.secondaryContainer})` },
         },
