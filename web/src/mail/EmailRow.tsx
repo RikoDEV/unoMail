@@ -2,6 +2,7 @@
 // email, selection or highlight changes, not on every change of the page around it.
 
 import Archive from '@mui/icons-material/Archive';
+import Unarchive from '@mui/icons-material/Unarchive';
 import AttachFile from '@mui/icons-material/AttachFile';
 import Delete from '@mui/icons-material/Delete';
 import MarkEmailRead from '@mui/icons-material/MarkEmailRead';
@@ -16,7 +17,7 @@ import { type EmailSummary, labelsOf } from './jmapClient';
 import { ListAttachments, ListAvatar, listedAttachments } from './ListParts';
 import type { PreviewFile } from './Preview';
 
-export type RowAction = 'archive' | 'trash' | 'read' | 'unread' | 'star';
+export type RowAction = 'archive' | 'unarchive' | 'trash' | 'read' | 'unread' | 'star';
 
 /** What a row can ask of the page. The object stays the same across renders. */
 export interface RowHandlers {
@@ -47,6 +48,8 @@ export interface EmailRowProps {
   /** Colours of the labels in use (an unchanged object keeps rows from rendering again). */
   labelColors: Record<string, string>;
   canArchive: boolean;
+  /** Listed in Archive: the row offers to go back to the inbox instead. */
+  inArchive: boolean;
   inTrash: boolean;
   handlers: RowHandlers;
 }
@@ -91,7 +94,7 @@ const ATTACH_ICON_SX = { fontSize: 16, color: 'text.secondary', flexShrink: 0 } 
 const PRIMARY_SX = { color: 'text.primary' } as const;
 const SECONDARY_SX = { color: 'text.secondary' } as const;
 
-function EmailRowView({ email, index, accountId, density, narrow, showRecipients, chosen, highlighted, first, last, labelColors, canArchive, inTrash, handlers }: EmailRowProps) {
+function EmailRowView({ email, index, accountId, density, narrow, showRecipients, chosen, highlighted, first, last, labelColors, canArchive, inArchive, inTrash, handlers }: EmailRowProps) {
   const unread = !email.keywords.$seen;
   const expanded = density === 'expanded';
   const people = showRecipients ? (email.to ?? []) : (email.from ?? []);
@@ -120,7 +123,9 @@ function EmailRowView({ email, index, accountId, density, narrow, showRecipients
   // Shown over the date while the pointer is on the row (or a control in it has the focus).
   const quick = (
     <Stack className="row-actions" direction="row" role="group" aria-label={t('Quick actions for {{subject}}', { subject })} onClick={(e) => e.stopPropagation()} sx={expanded ? QUICK_EXPANDED_SX : QUICK_CONDENSED_SX}>
-      {canArchive && (
+      {inArchive ? (
+        <Tooltip title={t('Move to inbox')}><IconButton size="small" aria-label={t('Move to inbox')} onClick={() => handlers.act(email, 'unarchive')}><Unarchive fontSize="small" /></IconButton></Tooltip>
+      ) : canArchive && (
         <Tooltip title={t('Archive')}><IconButton size="small" aria-label={t('Archive')} onClick={() => handlers.act(email, 'archive')}><Archive fontSize="small" /></IconButton></Tooltip>
       )}
       <Tooltip title={inTrash ? t('Delete forever') : t('Delete')}>

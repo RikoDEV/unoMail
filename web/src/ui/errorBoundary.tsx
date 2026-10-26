@@ -1,18 +1,20 @@
-import { Alert, Button } from '@mui/material';
 import { Component, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { t } from '../i18n';
+import { isUnreachable, ProblemPage } from './ProblemPage';
 
 interface State {
-  failed: boolean;
+  failed: 'unreachable' | 'failed' | null;
 }
+
+const reload = () => window.location.reload();
 
 /** Keeps one page's rendering error (from hostile message content, say) from blanking the app. */
 class Boundary extends Component<{ children: ReactNode; resetKey: string }, State> {
-  state: State = { failed: false };
+  state: State = { failed: null };
 
-  static getDerivedStateFromError(): State {
-    return { failed: true };
+  // A page whose code could not be downloaded means the server is gone, not that the page is broken.
+  static getDerivedStateFromError(error: unknown): State {
+    return { failed: isUnreachable(error) ? 'unreachable' : 'failed' };
   }
 
   componentDidCatch(error: unknown) {
@@ -21,16 +23,15 @@ class Boundary extends Component<{ children: ReactNode; resetKey: string }, Stat
 
   componentDidUpdate(previous: { resetKey: string }) {
     // Going somewhere else is the way out: try again there.
-    if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false });
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: null });
   }
+
+  retry = () => this.setState({ failed: null });
 
   render() {
     if (!this.state.failed) return this.props.children;
-    return (
-      <Alert severity="error" sx={{ m: 2 }} action={<Button color="inherit" onClick={() => this.setState({ failed: false })}>{t('Try again')}</Button>}>
-        {t('This page could not be shown.')}
-      </Alert>
-    );
+    // Code that failed to load stays failed until the page is loaded again.
+    return <ProblemPage kind={this.state.failed} onRetry={this.state.failed === 'unreachable' ? reload : this.retry} />;
   }
 }
 

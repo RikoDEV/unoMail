@@ -3,6 +3,7 @@
 // Snooze opening to the side.
 
 import Archive from '@mui/icons-material/Archive';
+import Unarchive from '@mui/icons-material/Unarchive';
 import ChevronRight from '@mui/icons-material/ChevronRight';
 import Delete from '@mui/icons-material/Delete';
 import DriveFileMove from '@mui/icons-material/DriveFileMove';
@@ -26,7 +27,7 @@ import { type EmailSummary, folderName, type Mailbox } from './jmapClient';
 import { snoozePresets } from './timePresets';
 
 export type RowMenuPick =
-  | { kind: 'reply' | 'replyAll' | 'forward' | 'archive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'star' | 'findFrom' | 'newTab' }
+  | { kind: 'reply' | 'replyAll' | 'forward' | 'archive' | 'unarchive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'star' | 'findFrom' | 'newTab' }
   | { kind: 'move'; mailbox: Mailbox }
   | { kind: 'label'; name: string; on: boolean }
   | { kind: 'snooze'; until: Date };
@@ -46,6 +47,7 @@ interface Props {
   labels: string[];
   labelColor: (name: string) => string;
   canArchive: boolean;
+  inArchive: boolean;
   inTrash: boolean;
   inJunk: boolean;
   onPick: (pick: RowMenuPick, target: RowMenuTarget) => void;
@@ -56,7 +58,7 @@ type Side = 'move' | 'label' | 'snooze';
 
 const WHEN = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' } as const;
 
-export function RowMenu({ target, folders, labels, labelColor, canArchive, inTrash, inJunk, onPick, onClose }: Props) {
+export function RowMenu({ target, folders, labels, labelColor, canArchive, inArchive, inTrash, inJunk, onPick, onClose }: Props) {
   const [side, setSide] = useState<{ kind: Side; anchor: HTMLElement } | null>(null);
   const sideList = useRef<HTMLUListElement>(null);
   const email = target?.email;
@@ -132,7 +134,9 @@ export function RowMenu({ target, folders, labels, labelColor, canArchive, inTra
         {single && item(t('Reply all'), <ReplyAll fontSize="small" />, { kind: 'replyAll' })}
         {single && item(t('Forward'), <Forward fontSize="small" />, { kind: 'forward' })}
         {single && <Divider />}
-        {canArchive && item(t('Archive'), <Archive fontSize="small" />, { kind: 'archive' })}
+        {inArchive
+          ? item(t('Move to inbox'), <Unarchive fontSize="small" />, { kind: 'unarchive' })
+          : canArchive && item(t('Archive'), <Archive fontSize="small" />, { kind: 'archive' })}
         {item(inTrash ? t('Delete forever') : t('Delete'), <Delete fontSize="small" />, { kind: 'trash' })}
         {inJunk ? item(t('Not spam'), <ReportOff fontSize="small" />, { kind: 'inbox' }) : item(t('Report spam'), <Report fontSize="small" />, { kind: 'junk' })}
         {single

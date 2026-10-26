@@ -1,4 +1,5 @@
 import Archive from '@mui/icons-material/Archive';
+import Unarchive from '@mui/icons-material/Unarchive';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import AttachFile from '@mui/icons-material/AttachFile';
 import Delete from '@mui/icons-material/Delete';
@@ -8,7 +9,6 @@ import Label from '@mui/icons-material/Label';
 import Lock from '@mui/icons-material/Lock';
 import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
 import Reply from '@mui/icons-material/Reply';
-import Visibility from '@mui/icons-material/Visibility';
 import WarningAmber from '@mui/icons-material/WarningAmber';
 import ReplyAll from '@mui/icons-material/ReplyAll';
 import Report from '@mui/icons-material/Report';
@@ -40,7 +40,7 @@ import { attachmentRisk } from './risk';
 import { AttachmentPreview, type PreviewFile, previewKind } from './Preview';
 import { listDate } from './EmailRow';
 import { MessageMenu, UnsubscribeButton } from './MessageTools';
-import { SecurityWarnings, SenderAvatar, SenderHover, useAvatarInfo } from './Sender';
+import { DetailsButton, SecurityWarnings, SenderAvatar, SenderCard, useAvatarInfo } from './Sender';
 import { type Decrypted, decryptArmored, fetchKeys, isUnlocked, localPrivateKey, lookupKeys, looksEncrypted, unlock } from './pgp';
 import { buildFrameDocument, sanitizeEmail, sanitizeEmailHtml, textToHtml } from './sanitize';
 
@@ -104,19 +104,18 @@ function AttachmentChip({ file, size, onPreview }: { file: PreviewFile; size: nu
           variant="outlined"
           data-risk={risk?.level}
           onClick={(event: React.MouseEvent) => {
-            if (!risk) return;
-            event.preventDefault();
-            void guardedDownload(ask, file.name, file.url);
+            // A file that can be shown opens in the preview (safely: HTML as its source), which has
+            // its own download button. Anything else downloads, after a warning when it is risky.
+            if (previewKind(file)) {
+              event.preventDefault();
+              onPreview(file);
+            } else if (risk) {
+              event.preventDefault();
+              void guardedDownload(ask, file.name, file.url);
+            }
           }}
         />
       </Tooltip>
-      {previewKind(file) && (
-        <Tooltip title={t('Preview')}>
-          <IconButton size="small" aria-label={t('Preview {{name}}', { name: file.name })} onClick={() => onPreview(file)}>
-            <Visibility fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      )}
     </Stack>
   );
 }
@@ -394,28 +393,33 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
     <Paper variant="outlined" sx={{ borderRadius: { xs: 0, sm: 1.5 }, borderLeft: { xs: 0, sm: 1 }, borderRight: { xs: 0, sm: 1 }, borderColor: { xs: 'divider', sm: 'divider' }, overflow: 'hidden' }} data-testid="message">
       <Stack direction="row" spacing={1.5} onClick={collapsible ? onToggle : undefined} data-collapsible={collapsible} sx={{ alignItems: 'center', p: 1.5, cursor: collapsible ? 'pointer' : 'default' }}>
         <Box onClick={keepOpen} sx={{ display: 'flex', cursor: expanded ? 'default' : undefined }}>
-          <SenderAvatar accountId={accountId} email={email} info={avatarInfo} />
+          <SenderCard accountId={accountId} email={email} info={avatarInfo} enabled={expanded} testId="sender-avatar">
+            <SenderAvatar accountId={accountId} email={email} info={avatarInfo} />
+          </SenderCard>
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box onClick={keepOpen} sx={{ display: 'inline-block', maxWidth: '100%', cursor: expanded ? 'text' : undefined }} data-testid="sender-block">
           <Typography noWrap sx={{ fontWeight: 600 }}>
-            <SenderHover email={email} info={avatarInfo}>{sender ? sender.name || sender.email : t('Unknown sender')}</SenderHover>
+            <SenderCard accountId={accountId} email={email} info={avatarInfo} enabled={expanded} testId="sender-name">{sender ? sender.name || sender.email : t('Unknown sender')}</SenderCard>
             {sender?.name && expanded && (
               <Typography component="span" variant="body2" sx={{ color: 'text.secondary', ml: 1 }}>
                 &lt;{sender.email}&gt;
               </Typography>
             )}
           </Typography>
-          <Typography variant="body2" noWrap sx={{ color: 'text.secondary' }}>
-            {expanded ? t('to {{recipients}}', { recipients: (email.to ?? []).map(formatAddress).join(', ') || t('undisclosed recipients') }) : encrypted ? t('Encrypted message') : email.preview}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+            <Typography variant="body2" noWrap sx={{ color: 'text.secondary', minWidth: 0 }}>
+              {expanded ? t('to {{recipients}}', { recipients: (email.to ?? []).map(formatAddress).join(', ') || t('undisclosed recipients') }) : encrypted ? t('Encrypted message') : email.preview}
+            </Typography>
+            {expanded && <DetailsButton email={email} info={avatarInfo} />}
+          </Box>
           </Box>
         </Box>
         {/* Clicks inside these tools (and their dialogs) must not toggle the message. */}
         {expanded && (
           <Box onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {!encrypted && !email.smime?.encrypted && <AiAssistButtons ai={ai} compact={phone} />}
-            <UnsubscribeButton email={email} />
+            {!phone && <UnsubscribeButton email={email} />}
           </Box>
         )}
         {encrypted && <Lock fontSize="small" color="action" aria-label={t('Encrypted')} />}
@@ -425,7 +429,7 @@ function Message({ email, accountId, ownEmail, inboxId, expanded, collapsible, o
         </Typography>
         {expanded && (
           <Box onClick={(e) => e.stopPropagation()} sx={{ flexShrink: 0 }}>
-            <MessageMenu email={email} accountId={accountId} ownEmail={ownEmail} inInbox={Boolean(inboxId) && Boolean(email.mailboxIds[inboxId])} />
+            <MessageMenu email={email} accountId={accountId} ownEmail={ownEmail} inInbox={Boolean(inboxId) && Boolean(email.mailboxIds[inboxId])} withUnsubscribe={phone} />
           </Box>
         )}
       </Stack>
@@ -495,9 +499,11 @@ export interface ReaderProps {
   inboxId: string;
   onBack: () => void;
   onArchive: () => void;
+  /** Set while the conversation is archived: it goes back to the inbox. */
+  onUnarchive?: () => void;
   onDelete: () => void;
   onJunk: () => void;
-  /** Set while reading in Junk: the conversation is wanted after all. */
+  /** Set while the conversation is in Junk: it is wanted after all. */
   onNotSpam?: () => void;
   onMarkUnread: () => void;
   /** Puts the conversation away until a time. */
@@ -550,7 +556,7 @@ function ReceiptRequest({ emails, ownEmail }: { emails: EmailFull[]; ownEmail: s
 }
 
 /** Conversation view: every message of a thread, the latest one expanded. */
-export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive, onDelete, onJunk, onNotSpam, onMarkUnread, onSnooze, onCancelScheduled, onAction, labels, onToggleLabel }: ReaderProps) {
+export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive, onUnarchive, onDelete, onJunk, onNotSpam, onMarkUnread, onSnooze, onCancelScheduled, onAction, labels, onToggleLabel }: ReaderProps) {
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
   const [snoozeAnchor, setSnoozeAnchor] = useState<HTMLElement | null>(null);
   const [snoozeAt, setSnoozeAt] = useState<string | null>(null);
@@ -572,7 +578,11 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, onArchive
     <Box className="um-part-reader" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }} role="region" aria-label={t('Conversation')}>
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', p: 1 }}>
         <Tooltip title={t('Back to list (u)')}><IconButton aria-label={t('Back to list')} onClick={onBack}><ArrowBack /></IconButton></Tooltip>
-        <Tooltip title={t('Archive (e)')}><IconButton aria-label={t('Archive')} onClick={onArchive}><Archive /></IconButton></Tooltip>
+        {onUnarchive ? (
+          <Tooltip title={t('Move to inbox (e)')}><IconButton aria-label={t('Move to inbox')} onClick={onUnarchive}><Unarchive /></IconButton></Tooltip>
+        ) : (
+          <Tooltip title={t('Archive (e)')}><IconButton aria-label={t('Archive')} onClick={onArchive}><Archive /></IconButton></Tooltip>
+        )}
         {onNotSpam ? (
           <Tooltip title={t('Not spam: move to the inbox')}><IconButton aria-label={t('Not spam')} onClick={onNotSpam}><ReportOff /></IconButton></Tooltip>
         ) : (

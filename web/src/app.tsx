@@ -19,7 +19,9 @@ import { BUILT_IN_SKINS, buildTheme, sanitizeSkin, type Skin } from './ui/skins'
 
 import { chosenLanguage, isRtl, setLanguage } from './i18n';
 import { readLocal, writeLocal } from './lib/storage';
+import { isUnreachable, ProblemPage } from './ui/ProblemPage';
 const LOGOUT_PENDING = 'unomail.logoutPending';
+const reloadPage = () => window.location.reload();
 // The language is fixed for the page's lifetime, so the direction is too. Right to left, the
 // styles are mirrored as they are inserted (margins, paddings, positions swap sides).
 const RTL = isRtl();
@@ -119,6 +121,8 @@ export function App() {
   const [account, setAccount] = useState<Account | null>(null);
   const [accounts, setAccounts] = useState<SignedInAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  // The server did not answer the session check: say so, instead of showing the sign-in page.
+  const [unreachable, setUnreachable] = useState(false);
   const [logoutPending, setLogoutPending] = useState(() => readLocal(LOGOUT_PENDING) === 'true');
   const [mode, setModeState] = useState<Mode>(() => stored('unomail.mode', 'system') as Mode);
   const [seed, setSeedState] = useState(() => stored('unomail.seed', SEEDS[0]));
@@ -175,7 +179,11 @@ export function App() {
         setCsrfToken(data.csrf_token);
         setAccount(data.account);
       })
-      .catch(clearSession)
+      .catch((error) => {
+        if (cancelled) return;
+        if (isUnreachable(error)) setUnreachable(true);
+        else clearSession();
+      })
       .finally(() => setLoading(false));
     return () => { cancelled = true; setUnauthorizedHandler(() => {}); };
   }, [clearSession, retryLogout]);
@@ -338,6 +346,8 @@ export function App() {
             <Alert severity="warning" sx={{ m: 3 }} action={<Button color="inherit" onClick={() => void retryLogout()}>Retry sign-out</Button>}>
               Mail is locked on this device, but server sign-out could not be confirmed. Reconnect and retry before leaving this shared device.
             </Alert>
+          ) : unreachable ? (
+            <ProblemPage kind="unreachable" onRetry={reloadPage} />
           ) : loading ? null : (
             <BrowserRouter>
               {/* A boundary of its own: loading the reminders must not suspend (and remount) the pages. */}

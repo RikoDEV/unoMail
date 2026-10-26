@@ -396,7 +396,7 @@ function components(theme: Theme, { radius, compact, expressive }: { radius: num
     MuiDrawer: { styleOverrides: { paper: { borderRadius: expressive ? `0 ${CORNER.large}px ${CORNER.large}px 0` : 0 } } },
     // Expressive menus: a rounded surface container, items with their own rounded shape, the
     // chosen item in the tertiary container colour.
-    MuiPopover: { styleOverrides: { paper: { borderRadius: corner(CORNER.large), backgroundColor: m3.surfaceContainer, boxShadow: theme.shadows[3] } } },
+    MuiPopover: { styleOverrides: { paper: { borderRadius: corner(CORNER.large), backgroundColor: m3.surfaceContainerHigh, boxShadow: theme.shadows[3] } } },
     MuiMenu: { styleOverrides: { list: { padding: 4 } } },
     MuiMenuItem: {
       styleOverrides: {
@@ -419,13 +419,15 @@ function components(theme: Theme, { radius, compact, expressive }: { radius: num
         },
       },
     },
+    // Tooltips and snackbars invert the page. The scheme's own inverse pair comes out as grey on
+    // near-black in light mode, so the text and surface colours are swapped instead.
     MuiTooltip: {
       styleOverrides: {
-        tooltip: { borderRadius: CORNER.extraSmall, backgroundColor: m3.inverseSurface, color: m3.inverseOnSurface, fontSize: '0.75rem', fontWeight: 400, padding: '4px 8px' },
-        arrow: { color: m3.inverseSurface },
+        tooltip: { borderRadius: CORNER.extraSmall, backgroundColor: m3.onSurface, color: m3.surface, fontSize: '0.75rem', fontWeight: 400, padding: '4px 8px' },
+        arrow: { color: m3.onSurface },
       },
     },
-    MuiSnackbarContent: { styleOverrides: { root: { borderRadius: corner(CORNER.extraSmall), backgroundColor: m3.inverseSurface, color: m3.inverseOnSurface } } },
+    MuiSnackbarContent: { styleOverrides: { root: { borderRadius: corner(CORNER.extraSmall), backgroundColor: m3.onSurface, color: m3.surface } } },
     MuiAlert: { styleOverrides: { root: { borderRadius: corner(CORNER.medium) } } },
     MuiTabs: { styleOverrides: { indicator: { height: 3, borderRadius: '3px 3px 0 0' } } },
     MuiTab: { styleOverrides: { root: { textTransform: 'none', fontWeight: 500, '&.Mui-selected': { fontWeight: 600 } } } },

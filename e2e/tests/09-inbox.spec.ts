@@ -99,12 +99,32 @@ test.describe('inbox tools', () => {
     await page.getByRole('navigation', { name: 'Folders' }).getByText('Archive', { exact: true }).click();
     await expect(rows(page)).toHaveCount(3);
 
-    // Move two of them back with "Move to".
+    // An archived conversation offers to go back to the inbox instead of being archived.
+    await row(page, 'Third stays unread').click();
+    const reader = page.getByRole('region', { name: 'Conversation' });
+    await expect(reader.getByRole('button', { name: 'Move to inbox' })).toBeVisible();
+    await expect(reader.getByRole('button', { name: 'Archive' })).toHaveCount(0);
+    await reader.getByRole('button', { name: 'Back to list' }).click();
+
+    // Move two of them back with "Move to". In Archive the selection offers the inbox, not the archive.
+    await page.getByLabel('Select First to select').check();
+    await page.getByLabel('Select Second to select').check();
+    await expect(page.getByRole('button', { name: 'Move selected to inbox' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Archive selected' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Move selected to a folder' }).click();
+    await page.getByRole('menuitem', { name: 'Inbox' }).click();
+    await expect(page.getByText('2 conversations moved')).toBeVisible();
+    await expect(rows(page)).toHaveCount(1);
+
+    // The move can be undone from its notice.
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByText('Move undone')).toBeVisible();
+    await expect(rows(page)).toHaveCount(3);
+    // And moved again: the next test expects them in the inbox.
     await page.getByLabel('Select First to select').check();
     await page.getByLabel('Select Second to select').check();
     await page.getByRole('button', { name: 'Move selected to a folder' }).click();
     await page.getByRole('menuitem', { name: 'Inbox' }).click();
-    await expect(page.getByText('2 conversations moved')).toBeVisible();
     await expect(rows(page)).toHaveCount(1);
   });
 

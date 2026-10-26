@@ -139,37 +139,46 @@ function OriginalDialog({ email, accountId, onClose }: { email: EmailFull; accou
   );
 }
 
-/** "Unsubscribe" next to the sender of a mailing-list message (RFC 2369 / RFC 8058). */
+/**
+ * Unsubscribes from a mailing-list message (RFC 2369 / RFC 8058) after asking. Returns what to tell
+ * the reader, or null when they changed their mind.
+ */
+async function unsubscribeFrom(email: EmailFull): Promise<string | null> {
+  const sender = email.from?.[0]?.name || email.from?.[0]?.email || t('this sender');
+  if (!window.confirm(t('Unsubscribe from {{sender}}?', { sender }))) return null;
+  try {
+    const result = await post<{ method: 'one-click' | 'mail' | 'link'; to?: string; url?: string }>('/api/me/unsubscribe', { email_id: email.id });
+    if (result.method === 'link' && result.url && /^https?:\/\//i.test(result.url)) {
+      // The sender only offers a web page: open it, without telling it where the reader came from.
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+      return t('The sender asks you to finish unsubscribing on their page, which was opened in a new tab.');
+    }
+    if (result.method === 'mail') return t('An unsubscribe request was sent to {{to}}.', { to: result.to });
+    return t('You have been unsubscribed.');
+  } catch (err) {
+    return errorText(err, t('Unsubscribing failed.'));
+  }
+}
+
+/** "Unsubscribe" next to the sender of a mailing-list message. */
 export function UnsubscribeButton({ email }: { email: EmailFull }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   if (!email.unsubscribe) return null;
 
-  async function unsubscribe() {
-    const sender = email.from?.[0]?.name || email.from?.[0]?.email || t('this sender');
-    if (!window.confirm(t('Unsubscribe from {{sender}}?', { sender }))) return;
-    setBusy(true);
-    try {
-      const result = await post<{ method: 'one-click' | 'mail' | 'link'; to?: string; url?: string }>('/api/me/unsubscribe', { email_id: email.id });
-      if (result.method === 'link' && result.url && /^https?:\/\//i.test(result.url)) {
-        // The sender only offers a web page: open it, without telling it where the reader came from.
-        window.open(result.url, '_blank', 'noopener,noreferrer');
-        setNotice(t('The sender asks you to finish unsubscribing on their page, which was opened in a new tab.'));
-      } else if (result.method === 'mail') {
-        setNotice(t('An unsubscribe request was sent to {{to}}.', { to: result.to }));
-      } else {
-        setNotice(t('You have been unsubscribed.'));
-      }
-    } catch (err) {
-      setNotice(errorText(err, t('Unsubscribing failed.')));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <>
-      <Button size="small" startIcon={<Unsubscribe />} disabled={busy} onClick={(e) => { e.stopPropagation(); void unsubscribe(); }} sx={{ flexShrink: 0 }}>
+      <Button
+        size="small"
+        startIcon={<Unsubscribe />}
+        disabled={busy}
+        onClick={(e) => {
+          e.stopPropagation();
+          setBusy(true);
+          void unsubscribeFrom(email).then((done) => done && setNotice(done)).finally(() => setBusy(false));
+        }}
+        sx={{ flexShrink: 0 }}
+      >
         {t('Unsubscribe')}
       </Button>
       <Snackbar open={Boolean(notice)} autoHideDuration={6000} onClose={() => setNotice('')} message={notice} />
@@ -178,7 +187,14 @@ export function UnsubscribeButton({ email }: { email: EmailFull }) {
 }
 
 /** The "more actions" menu of one message. */
-export function MessageMenu({ email, accountId, ownEmail, inInbox }: { email: EmailFull; accountId: string; ownEmail: string; inInbox: boolean }) {
+export function MessageMenu({ email, accountId, ownEmail, inInbox, withUnsubscribe = false }: {
+  email: EmailFull;
+  accountId: string;
+  ownEmail: string;
+  inInbox: boolean;
+  /** Offers "Unsubscribe" here, for phones that have no room for its button. */
+  withUnsubscribe?: boolean;
+}) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [original, setOriginal] = useState(false);
   const [blocked, setBlocked] = useState<string[] | null>(null);
@@ -212,6 +228,12 @@ export function MessageMenu({ email, accountId, ownEmail, inInbox }: { email: Em
         </IconButton>
       </Tooltip>
       <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} onClick={(e) => e.stopPropagation()}>
+        {withUnsubscribe && email.unsubscribe && (
+          <MenuItem onClick={() => { setAnchor(null); void unsubscribeFrom(email).then((done) => done && setNotice(done)); }}>
+            <ListItemIcon><Unsubscribe fontSize="small" /></ListItemIcon>
+            {t('Unsubscribe')}
+          </MenuItem>
+        )}
         {email.blobId && (
           <MenuItem component="a" href={downloadUrl(accountId, email.blobId, fileName)} download={fileName} onClick={() => setAnchor(null)}>
             <ListItemIcon><Download fontSize="small" /></ListItemIcon>

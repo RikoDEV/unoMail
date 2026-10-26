@@ -96,7 +96,14 @@ test.describe('sender details, warnings and navigation', () => {
 
     const details = page.getByRole('table', { name: 'Message details' });
     await expect(details).toHaveCount(0);
+    // Hovering the sender shows a card about them; the details sit behind the arrow by the recipients.
     await message.getByTestId('sender-name').hover();
+    const card = page.getByRole('dialog', { name: 'About Ann Example' });
+    await expect(card).toContainText('ann@remote.test');
+    await expect(card.getByRole('button', { name: 'Send email' })).toBeVisible();
+    await page.mouse.move(0, 0);
+    await expect(card).toHaveCount(0);
+    await message.getByRole('button', { name: 'Show details' }).click();
     await expect(details).toBeVisible();
     const line = (label: string) => details.getByRole('row').filter({ has: page.getByRole('rowheader', { name: `${label}:`, exact: true }) });
     await expect(line('from')).toContainText('Ann Example <ann@remote.test>');
@@ -113,13 +120,12 @@ test.describe('sender details, warnings and navigation', () => {
     await details.click();
     await expect(warning).toBeVisible();
     // The keyboard reaches the same details.
-    await page.mouse.move(0, 0);
+    await page.keyboard.press('Escape');
     await expect(details).toHaveCount(0);
-    await message.getByTestId('sender-name').focus();
-    await page.keyboard.press('Shift+Tab');
-    await page.keyboard.press('Tab');
-    await expect(message.getByTestId('sender-name')).toBeFocused();
+    await message.getByRole('button', { name: 'Show details' }).focus();
+    await page.keyboard.press('Enter');
     await expect(details).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // Failed checks are named one by one, and malware comes first.
     await page.goto('/mail');
@@ -139,10 +145,11 @@ test.describe('sender details, warnings and navigation', () => {
     await expect(page.getByTestId('message')).toBeVisible();
     await expect(page.getByTestId('sender-warning')).toHaveCount(0);
     await expect(page.getByTestId('message').getByRole('alert')).toHaveCount(0);
-    await page.getByTestId('message').getByTestId('sender-name').hover();
+    await page.getByTestId('message').getByRole('button', { name: 'Show details' }).click();
     await expect(line('signed-by')).toContainText('remote.test');
     await expect(line('sender')).toContainText('Sender verified');
     await expect(line('security')).toContainText('Standard encryption (TLS)');
+    await page.keyboard.press('Escape');
 
     // What arrived without being checked at all says so, without alarm.
     await smtpDeliver('bea@remote.test', HANK, `From: bea@remote.test\nTo: ${HANK}\nSubject: Unchecked delivery\n\nHi\n`);
@@ -151,7 +158,7 @@ test.describe('sender details, warnings and navigation', () => {
     await row(page, 'Unchecked delivery').click();
     await expect(page.getByTestId('message')).toBeVisible();
     await expect(page.getByTestId('sender-warning')).toHaveCount(0);
-    await page.getByTestId('message').getByTestId('sender-name').hover();
+    await page.getByTestId('message').getByRole('button', { name: 'Show details' }).click();
     await expect(line('sender')).toContainText('Not checked');
   });
 
@@ -173,7 +180,7 @@ test.describe('sender details, warnings and navigation', () => {
     const message = page.getByTestId('message').last();
     await expect(message.getByText('Remember the milk.').or(message.locator('iframe'))).toBeVisible();
     await expect(page.getByTestId('sender-warning')).toHaveCount(0);
-    await message.getByTestId('sender-name').hover();
+    await message.getByRole('button', { name: 'Show details' }).click();
     const details = page.getByRole('table', { name: 'Message details' });
     await expect(details).toContainText('Sent from within this mail server');
     await expect(details).toContainText('From a signed-in user of this server');

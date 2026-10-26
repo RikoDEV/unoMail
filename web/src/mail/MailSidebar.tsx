@@ -29,7 +29,7 @@ import type { Account } from '../lib/api';
 import { t } from '../i18n';
 import type { SidebarLink } from '../lib/plugins';
 import { FeatureGate, itemIcon, PluginSlot, usePluginPages } from '../plugins/Slot';
-import { Copyright } from '../ui/shell';
+import { Copyright, Logo } from '../ui/shell';
 import { folderName, type Mailbox } from './jmapClient';
 
 const ICONS: Record<string, ReactElement> = { inbox: <Inbox />, drafts: <Drafts />, sent: <SendIcon />, archive: <Archive />, junk: <Report />, trash: <Delete />, snoozed: <Snooze /> };
@@ -90,10 +90,18 @@ export function MailSidebar({
         }),
       }}
     >
-      <Fab variant={mini ? 'circular' : 'extended'} color="primary" aria-label={t('Compose')} onClick={onCompose} sx={{ m: mini ? 0 : 1, mb: 2, flexShrink: 0, alignSelf: mini ? 'center' : 'flex-start' }}>
-        <Edit />
-        {!mini && t('Compose')}
-      </Fab>
+      {/* Phones have their own compose button floating over the list, so the logo heads the menu there. */}
+      {compact ? (
+        <Typography variant="h6" color="primary" noWrap sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1.25, px: 1.5, mb: 2, flexShrink: 0 }}>
+          <Logo size={32} />
+          unoMail
+        </Typography>
+      ) : (
+        <Fab variant={mini ? 'circular' : 'extended'} color="primary" aria-label={t('Compose')} onClick={onCompose} sx={{ m: mini ? 0 : 1, mb: 2, flexShrink: 0, alignSelf: mini ? 'center' : 'flex-start' }}>
+          <Edit />
+          {!mini && t('Compose')}
+        </Fab>
+      )}
       <List dense disablePadding aria-label={t('Folder list')}>
         {scheduledCount > 0 && (
           tip(t('Scheduled'), <ListItemButton selected={label === '$scheduled'} {...linkTo(`/mail/label:${encodeURIComponent('$scheduled')}`)} sx={{ mb: 0.25 }} {...named(t('Scheduled'))}>

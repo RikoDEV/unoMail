@@ -84,6 +84,8 @@ export default function MailPage() {
   const [thread, setThread] = useState<EmailFull[] | null>(null);
   const [draft, setDraft] = useState<{ key: number; draft: Draft; emailId?: string } | null>(null);
   const [notice, setNotice] = useState('');
+  /** An Undo for the notice it was shown with; dropped once another notice replaces that one. */
+  const [noticeUndo, setNoticeUndo] = useState<{ notice: string; run: () => Promise<void> } | null>(null);
   // A message just sent that can still be called back.
   const [undoable, setUndoable] = useState<SentInfo | null>(null);
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -392,9 +394,31 @@ export default function MailPage() {
   const open = useCallback((email: EmailSummary) => navigate(`/mail/${slug}/${email.threadId}`), [navigate, slug]);
   const closeThread = useCallback(() => navigate(`/mail/${slug}`), [navigate, slug]);
 
+  /** Undoes a move: each message goes back to the folder it was moved from, given as folder id → message ids. */
+  const moveBack = useCallback(
+    async (origins: Record<string, string[]>) => {
+      try {
+        let wasQueued = false;
+        for (const [mailboxId, ids] of Object.entries(origins)) {
+          if (await performOrQueue({ type: 'move', ids, mailboxId })) wasQueued = true;
+        }
+        if (wasQueued) {
+          setOffline(true);
+          setPending(pendingCount());
+        }
+        setNotice(t('Move undone'));
+        void refreshMailboxes();
+        await load(0);
+      } catch (err) {
+        setNotice(errorText(err, t('The message could not be moved')));
+      }
+    },
+    [refreshMailboxes, load],
+  );
+
   /** Applies an action to a whole conversation, updating the list optimistically. */
   const act = useCallback(
-    async (target: EmailSummary | undefined, action: 'archive' | 'trash' | 'junk' | 'inbox' | 'unread' | 'read' | 'star') => {
+    async (target: EmailSummary | undefined, action: 'archive' | 'unarchive' | 'trash' | 'junk' | 'inbox' | 'unread' | 'read' | 'star') => {
       if (!target) return;
       const ids = thread && thread[0]?.threadId === target.threadId ? thread.map((e) => e.id) : [target.id];
       const remove = () => setEmails((current) => current.filter((e) => e.threadId !== target.threadId));
@@ -417,15 +441,25 @@ export default function MailPage() {
           // An open conversation would be marked as read again at once.
           if (!seen && threadId === target.threadId) closeThread();
         } else {
-          const destination = byRole(action);
+          const destination = byRole(action === 'unarchive' ? 'inbox' : action);
           if (!destination) return;
+          // Where each message was, so that the move can be undone.
+          const origins: Record<string, string[]> = {};
+          for (const email of thread && thread[0]?.threadId === target.threadId ? thread : [target]) {
+            const from = Object.keys(email.mailboxIds)[0];
+            if (from) (origins[from] ??= []).push(email.id);
+          }
           remove();
           if (threadId === target.threadId) closeThread();
           // Deleting from the trash removes the conversation for good.
           const wasQueued =
             action === 'trash' && mailbox?.role === 'trash' ? await performOrQueue({ type: 'destroy', ids }) : await performOrQueue({ type: 'move', ids, mailboxId: destination.id });
           if (wasQueued) queued();
-          else setNotice(action === 'archive' ? t('Conversation archived') : action === 'junk' ? t('Reported as spam') : action === 'inbox' ? t('Marked as not spam and moved to the inbox') : t('Conversation deleted'));
+          else {
+            const doneNotice = action === 'archive' ? t('Conversation archived') : action === 'unarchive' ? t('Conversation moved to the inbox') : action === 'junk' ? t('Reported as spam') : action === 'inbox' ? t('Marked as not spam and moved to the inbox') : t('Conversation deleted');
+            setNotice(doneNotice);
+            if (!(action === 'trash' && mailbox?.role === 'trash')) setNoticeUndo({ notice: doneNotice, run: () => moveBack(origins) });
+          }
         }
         void refreshMailboxes();
       } catch (err) {
@@ -433,7 +467,7 @@ export default function MailPage() {
         void load(0);
       }
     },
-    [thread, byRole, threadId, closeThread, mailbox?.role, refreshMailboxes, load],
+    [thread, byRole, threadId, closeThread, mailbox?.role, refreshMailboxes, load, moveBack],
   );
 
   /** Adds or removes a label on every message of the open conversation. */
@@ -487,6 +521,19 @@ export default function MailPage() {
     return () => window.removeEventListener('unomail:mailto', onMailto);
   }, [compose]);
 
+  // "Find emails from" on a sender's card.
+  useEffect(() => {
+    const onSearch = (event: Event) => {
+      const query = String((event as CustomEvent<string>).detail ?? '');
+      if (!query) return;
+      setSearch(query);
+      setServerSearch(query);
+      closeThread();
+    };
+    window.addEventListener('unomail:search', onSearch);
+    return () => window.removeEventListener('unomail:search', onSearch);
+  }, [closeThread]);
+
   /** Every message of a conversation that lives in the folder it is listed in. */
   const conversationIds = useCallback(async (email: EmailSummary): Promise<string[]> => {
     const source = Object.keys(email.mailboxIds)[0];
@@ -518,7 +565,7 @@ export default function MailPage() {
       } else if (action === 'label') {
         wasQueued = await performOrQueue({ type: 'keyword', ids, keyword: argument!, value: true });
       } else {
-        const destination = action === 'move' ? argument : byRole(action)?.id;
+        const destination = action === 'move' ? argument : byRole(action === 'unarchive' ? 'inbox' : action)?.id;
         if (!destination) return;
         // Deleting from the trash removes the conversations for good.
         wasQueued = action === 'trash' && mailbox?.role === 'trash' ? await performOrQueue({ type: 'destroy', ids }) : await performOrQueue({ type: 'move', ids, mailboxId: destination });
@@ -529,6 +576,7 @@ export default function MailPage() {
       }
       const done = {
         archive: () => t('{{count}} conversations archived', { count }),
+        unarchive: () => t('{{count}} conversations moved to the inbox', { count }),
         trash: () => t('{{count}} conversations deleted', { count }),
         junk: () => t('{{count}} conversations reported as spam', { count }),
         inbox: () => t('{{count}} conversations marked as not spam', { count }),
@@ -537,7 +585,14 @@ export default function MailPage() {
         move: () => t('{{count}} conversations moved', { count }),
         label: () => t('{{count}} conversations labelled “{{label}}”', { count, label: argument }),
       }[action];
-      setNotice(done());
+      const doneNotice = done();
+      setNotice(doneNotice);
+      // Moves can be undone while the folder they came from is known; deleting from the trash is final.
+      const source = mailbox?.id;
+      const final = action === 'trash' && mailbox?.role === 'trash';
+      if (source && !final && ['move', 'archive', 'unarchive', 'trash', 'junk', 'inbox'].includes(action)) {
+        setNoticeUndo({ notice: doneNotice, run: () => moveBack({ [source]: ids }) });
+      }
       setSelected(new Set());
       setAllInFolder(false);
       void refreshMailboxes();
@@ -603,14 +658,16 @@ export default function MailPage() {
           setOffline(true);
           setPending(pendingCount());
         }
-        setNotice(t('Moved to {{value}}', { value: folderName(destination) }));
+        const movedNotice = t('Moved to {{value}}', { value: folderName(destination) });
+        setNotice(movedNotice);
+        if (source) setNoticeUndo({ notice: movedNotice, run: () => moveBack({ [source]: ids }) });
         void refreshMailboxes();
       } catch (err) {
         setNotice(errorText(err, t('The message could not be moved')));
         void load(0);
       }
     },
-    [threadId, navigate, slug, refreshMailboxes, load, conversationIds],
+    [threadId, navigate, slug, refreshMailboxes, load, conversationIds, moveBack],
   );
 
   async function importInto(file: File | undefined) {
@@ -644,6 +701,11 @@ export default function MailPage() {
   const ownMailboxes = mailboxes.filter((m) => !m.shareOwner);
   const sharedMailboxes = mailboxes.filter((m) => m.shareOwner);
   const current = threadId ? emails.find((e) => e.threadId === threadId) : visible[cursor];
+  /** Whether a conversation sits in the folder with this role, wherever it is being listed. */
+  const isIn = (email: EmailSummary | undefined, role: string) => {
+    const id = byRole(role)?.id;
+    return Boolean(email && id && email.mailboxIds[id]);
+  };
 
   // Keyboard shortcuts (Gmail style). Ignored while typing.
   useEffect(() => {
@@ -675,7 +737,7 @@ export default function MailPage() {
           if (threadId) closeThread();
           break;
         case 'e':
-          void act(current, 'archive');
+          void act(current, isIn(current, 'archive') ? 'unarchive' : 'archive');
           break;
         case '#':
           void act(current, 'trash');
@@ -805,7 +867,7 @@ export default function MailPage() {
     if (count > 1) {
       if (pick.kind === 'move') void bulk('move', pick.mailbox.id);
       else if (pick.kind === 'label') void bulk('label', pick.name);
-      else if (pick.kind === 'archive' || pick.kind === 'trash' || pick.kind === 'junk' || pick.kind === 'inbox' || pick.kind === 'read' || pick.kind === 'unread') void bulk(pick.kind);
+      else if (pick.kind === 'archive' || pick.kind === 'unarchive' || pick.kind === 'trash' || pick.kind === 'junk' || pick.kind === 'inbox' || pick.kind === 'read' || pick.kind === 'unread') void bulk(pick.kind);
       return;
     }
     try {
@@ -894,7 +956,7 @@ export default function MailPage() {
 
   const wrapNav = (nav: ReactElement) =>
     compact ? (
-      <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} ModalProps={{ keepMounted: true }} slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}>
+      <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} ModalProps={{ keepMounted: true }} slotProps={{ ...SWIPE.slotProps, paper: { sx: { bgcolor: 'background.default' } } }}>
         {nav}
       </SwipeableDrawer>
     ) : (
@@ -923,7 +985,7 @@ export default function MailPage() {
             // Enter searches at once, without waiting for the pause in typing.
             setServerSearch(search.trim());
           }}
-          sx={{ display: 'flex', alignItems: 'center', pl: 2, pr: 0.5, borderRadius: 999, maxWidth: 720, bgcolor: 'm3.surfaceContainerHigh', transition: (theme) => theme.transitions.create(['background-color', 'box-shadow']), '&:focus-within': { bgcolor: 'background.paper', boxShadow: 2 } }}
+          sx={{ display: 'flex', alignItems: 'center', pl: 2, pr: 0.5, borderRadius: 999, maxWidth: 720, bgcolor: 'm3.surfaceContainerHighest', transition: (theme) => theme.transitions.create(['background-color', 'box-shadow']), '&:focus-within': { bgcolor: 'background.paper', boxShadow: 2 } }}
         >
           <Search color="action" />
           <InputBase inputRef={searchInput} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Search mail')} inputProps={{ 'aria-label': t('Search mail') }} sx={{ ml: 1.5, flex: 1, height: 48 }} />
@@ -977,10 +1039,13 @@ export default function MailPage() {
         <Paper elevation={0} sx={{ width: { xs: '100%', md: threadId ? 400 : '100%' }, flexShrink: { md: threadId ? 0 : 1 }, flex: threadId ? undefined : 1, display: { xs: threadId ? 'none' : 'flex', md: 'flex' }, flexDirection: 'column', bgcolor: 'transparent', mx: { xs: 1, md: 0 }, mr: { md: 1 }, overflow: 'hidden', minWidth: 0 }}>
           <ListToolbar
             heading={serverSearch ? t('Results for "{{serverSearch}}"', { serverSearch }) : label ? t('Label: {{label}}', { label }) : allMail ? t('All mail') : (mailbox ? folderName(mailbox) : '')}
+            // On phones the folder is named above the list, except where the category tabs already say where you are.
+            showHeading={compact && !(categorised && !serverSearch)}
             visible={visible}
             total={total}
             selected={selected}
             allInFolder={allInFolder}
+            inArchive={mailbox?.role === 'archive'}
             inJunk={mailbox?.role === 'junk'}
             folders={mailboxes.filter((m) => m.id !== mailbox?.id && (!m.shareOwner || m.myRights?.mayAddItems))}
             labels={labels}
@@ -1035,6 +1100,7 @@ export default function MailPage() {
                       last={item.index === visible.length - 1}
                       labelColors={labelColors}
                       canArchive={mailbox?.role !== 'archive' && Boolean(byRole('archive'))}
+                      inArchive={mailbox?.role === 'archive'}
                       inTrash={mailbox?.role === 'trash'}
                       handlers={rowHandlers}
                     />
@@ -1058,9 +1124,10 @@ export default function MailPage() {
               inboxId={byRole('inbox')?.id ?? ''}
               onBack={closeThread}
               onArchive={() => void act(current, 'archive')}
+              onUnarchive={isIn(current, 'archive') ? () => void act(current, 'unarchive') : undefined}
               onDelete={() => void act(current, 'trash')}
               onJunk={() => void act(current, 'junk')}
-              onNotSpam={mailbox?.role === 'junk' ? () => void act(current, 'inbox') : undefined}
+              onNotSpam={isIn(current, 'junk') ? () => void act(current, 'inbox') : undefined}
               onMarkUnread={() => void act(current, 'unread')}
               onSnooze={async (until) => {
                 const ids = (thread ?? []).filter((e) => !e.keywords.$draft && !e.keywords.$scheduled).map((e) => e.id);
@@ -1140,6 +1207,7 @@ export default function MailPage() {
         labels={labels}
         labelColor={labelColor}
         canArchive={mailbox?.role !== 'archive' && Boolean(byRole('archive'))}
+        inArchive={mailbox?.role === 'archive'}
         inTrash={mailbox?.role === 'trash'}
         inJunk={mailbox?.role === 'junk'}
         onPick={(pick, target) => void rowMenuPick(pick, target)}
@@ -1197,7 +1265,19 @@ export default function MailPage() {
         />
       )}
       {preview && <AttachmentPreview file={preview} onClose={() => setPreview(null)} />}
-      <Snackbar open={Boolean(notice)} autoHideDuration={4000} onClose={() => setNotice('')} message={notice} />
+      <Snackbar
+        open={Boolean(notice)}
+        autoHideDuration={4000}
+        onClose={() => { setNotice(''); setNoticeUndo(null); }}
+        message={notice}
+        action={
+          noticeUndo?.notice === notice && (
+            <Button color="secondary" size="small" onClick={() => { const undo = noticeUndo; setNotice(''); setNoticeUndo(null); void undo?.run(); }}>
+              {t('Undo')}
+            </Button>
+          )
+        }
+      />
       <Snackbar
         open={Boolean(undoable)}
         autoHideDuration={(undoable?.undoSeconds ?? 0) * 1000}

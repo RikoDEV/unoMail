@@ -360,8 +360,10 @@ test.describe('web mail extras', () => {
     await expect(conversation(page).getByText('Decrypted', { exact: true })).toBeVisible();
     const attachment = conversation(page).getByRole('link', { name: /secret\.txt/ });
     await expect(attachment).toBeVisible();
-    const file = page.waitForEvent('download');
+    // Text opens in the preview, which offers the download.
     await attachment.click();
+    const file = page.waitForEvent('download');
+    await page.getByRole('dialog', { name: /^secret\.txt/ }).getByRole('link', { name: 'Download' }).click();
     expect(fs.readFileSync(await (await file).path(), 'utf8')).toBe('attached secret');
   });
 

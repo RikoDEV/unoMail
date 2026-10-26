@@ -13,6 +13,7 @@
   "{{count}} contacts imported_one": "{{count}} contact imported",
   "{{count}} members_one": "{{count}} member",
   "{{count}} offline changes synchronised_one": "{{count}} offline change synchronised",
+  "{{count}} conversations moved to the inbox_one": "{{count}} conversation moved to the inbox",
   "{{count}} conversations archived_one": "{{count}} conversation archived",
   "{{count}} conversations deleted_one": "{{count}} conversation deleted",
   "{{count}} conversations reported as spam_one": "{{count}} conversation reported as spam",

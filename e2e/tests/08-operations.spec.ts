@@ -169,25 +169,24 @@ test.describe('previews and capacity', () => {
     await page.getByTestId('email-row').filter({ hasText: 'Files to look at' }).click();
     const conversation = page.getByRole('region', { name: 'Conversation' });
 
-    // Every attachment is still a download; only the kinds a browser can show get a preview.
-    await expect(conversation.getByRole('link', { name: /archive\.zip/ })).toBeVisible();
-    await expect(conversation.getByRole('button', { name: 'Preview archive.zip' })).toHaveCount(0);
+    // An attachment a browser can show opens in a preview; anything else is a plain download.
+    await expect(conversation.getByRole('link', { name: /archive\.zip/ })).toHaveAttribute('download', 'archive.zip');
 
-    await conversation.getByRole('button', { name: 'Preview notes.txt' }).click();
+    await conversation.getByRole('link', { name: /notes\.txt/ }).click();
     let dialog = page.getByRole('dialog', { name: /^notes\.txt/ });
     await expect(dialog.getByTestId('text-preview')).toHaveText('First line\nZażółć gęślą jaźń\n<script>alert(1)</script>\n');
     await expect(dialog.getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'notes.txt');
     await dialog.getByRole('button', { name: 'Close' }).click();
 
     // HTML is shown as its source, never rendered or executed.
-    await conversation.getByRole('button', { name: 'Preview page.html' }).click();
+    await conversation.getByRole('link', { name: /page\.html/ }).click();
     dialog = page.getByRole('dialog', { name: /^page\.html/ });
     await expect(dialog.getByTestId('text-preview')).toContainText('<h1 id="evil">Rendered?</h1>');
     await expect(page.locator('#evil')).toHaveCount(0);
     expect(await page.title()).not.toBe('pwned');
     await dialog.getByRole('button', { name: 'Close' }).click();
 
-    await conversation.getByRole('button', { name: 'Preview report.pdf' }).click();
+    await conversation.getByRole('link', { name: /report\.pdf/ }).click();
     dialog = page.getByRole('dialog', { name: /^report\.pdf/ });
     await expect(dialog.getByTestId('pdf-pages')).toHaveAttribute('data-pages-rendered', '1', { timeout: 30_000 });
     const canvas = dialog.getByRole('img', { name: 'Page 1' });

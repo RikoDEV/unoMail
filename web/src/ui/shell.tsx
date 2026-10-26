@@ -335,7 +335,7 @@ export function SideNavPage({ title, navLabel, heading, placement, items, linkCo
       />
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {compact ? (
-          <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
+          <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ ...SWIPE.slotProps, paper: { sx: { bgcolor: 'background.default', pt: 1 } } }}>
             {nav}
           </SwipeableDrawer>
         ) : (

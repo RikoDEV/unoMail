@@ -1,9 +1,18 @@
+import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
+import ContentCopy from '@mui/icons-material/ContentCopy';
 import GppBad from '@mui/icons-material/GppBad';
+import HowToReg from '@mui/icons-material/HowToReg';
+import MailOutlined from '@mui/icons-material/MailOutlined';
+import PersonAddAlt from '@mui/icons-material/PersonAddAlt';
+import Search from '@mui/icons-material/Search';
 import Verified from '@mui/icons-material/Verified';
-import { Alert, AlertTitle, Avatar, Badge, Box, Chip, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, AlertTitle, Avatar, Badge, Box, Button, Chip, ClickAwayListener, IconButton, Popover, Snackbar, Stack, Tooltip, Typography } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
 import { senderNameWarning } from './risk';
 import { useEffect, useState, type ReactNode } from 'react';
-import { get } from '../lib/api';
+import { errorText, get, post } from '../lib/api';
+import { useFeature } from '../lib/plugins';
+import type { Contact } from './extra';
 import { type EmailFull, formatAddress } from './jmapClient';
 
 import { t, uiLocale } from '../i18n';
@@ -57,7 +66,7 @@ export function useAvatarInfo(accountId: string, email: Pick<EmailFull, 'id' | '
  * The sender's picture: the brand logo its domain publishes (BIMI), else a Gravatar, else the
  * initial. Pictures come through the server, never straight from their hosts.
  */
-export function SenderAvatar({ accountId, email, info }: { accountId: string; email: EmailFull; info: AvatarInfo | null }) {
+export function SenderAvatar({ accountId, email, info, size = 36 }: { accountId: string; email: EmailFull; info: AvatarInfo | null; size?: number }) {
   const sender = email.from?.[0];
   const initial = (sender?.name || sender?.email || '?')[0].toUpperCase();
   const picture = info && info.source !== 'none' ? `/jmap/avatar/${accountId}/${email.id}` : undefined;
@@ -68,7 +77,7 @@ export function SenderAvatar({ accountId, email, info }: { accountId: string; em
       alt=""
       // Logos are drawn for a square with their own background; photos fill the circle.
       variant={brand ? 'rounded' : 'circular'}
-      sx={{ bgcolor: picture ? 'background.paper' : 'secondary.main', width: 36, height: 36 }}
+      sx={{ bgcolor: picture ? 'background.paper' : 'secondary.main', width: size, height: size, fontSize: size > 36 ? size * 0.45 : undefined }}
       data-avatar-source={info?.source ?? 'initial'}
       slotProps={{
         img: { loading: 'lazy', referrerPolicy: 'no-referrer' }
@@ -145,21 +154,149 @@ function SenderDetails({ email, info }: { email: EmailFull; info: AvatarInfo | n
   );
 }
 
-/** Wraps the sender's name: hovering (or focusing) it shows the message details. */
-export function SenderHover({ email, info, children }: { email: EmailFull; info: AvatarInfo | null; children: ReactNode }) {
+/** The small arrow beside the recipients that opens the message details. */
+export function DetailsButton({ email, info }: { email: EmailFull; info: AvatarInfo | null }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   return (
-    <Tooltip
-      title={<SenderDetails email={email} info={info} />}
-      placement="bottom-start"
-      enterDelay={350}
-      enterNextDelay={350}
-      leaveDelay={150}
-      slotProps={{ tooltip: { sx: { bgcolor: 'background.paper', color: 'text.primary', boxShadow: 6, border: 1, borderColor: 'divider', maxWidth: 560, p: 1.5, fontWeight: 400 } } }}
-    >
-      <Box component="span" tabIndex={0} sx={{ borderRadius: 0.5, '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' } }} data-testid="sender-name">
-        {children}
-      </Box>
-    </Tooltip>
+    <>
+      <IconButton size="small" aria-label={t('Show details')} aria-expanded={Boolean(anchor)} onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }} sx={{ p: 0, ml: 0.25 }}>
+        <ArrowDropDown fontSize="small" />
+      </IconButton>
+      <Popover
+        open={Boolean(anchor)}
+        anchorEl={anchor}
+        onClose={() => setAnchor(null)}
+        onClick={(e) => e.stopPropagation()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        slotProps={{ paper: { sx: { p: 1.5, maxWidth: 'min(560px, calc(100vw - 32px))' } } }}
+      >
+        <SenderDetails email={email} info={info} />
+      </Popover>
+    </>
+  );
+}
+
+/** Whether an address is in the user's address book (null while asking). */
+function useInContacts(address: string, enabled: boolean) {
+  const [known, setKnown] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    get<Contact[]>(`/api/me/contacts?q=${encodeURIComponent(address)}`)
+      .then((list) => !cancelled && setKnown(list.some((c) => c.email.toLowerCase() === address.toLowerCase())))
+      .catch(() => !cancelled && setKnown(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [address, enabled]);
+  return [known, setKnown] as const;
+}
+
+/** The card about the sender: who it is, and what can be done with the address. */
+function SenderCardBody({ accountId, email, info, onDone, onNotice }: { accountId: string; email: EmailFull; info: AvatarInfo | null; onDone: () => void; onNotice: (text: string) => void }) {
+  const sender = email.from![0];
+  const contactsOn = useFeature('contacts');
+  const [inContacts, setInContacts] = useInContacts(sender.email, contactsOn);
+  const act = (run: () => void) => () => {
+    onDone();
+    run();
+  };
+  async function addContact() {
+    try {
+      await post('/api/me/contacts', { name: sender.name ?? '', email: sender.email, phone: '', organization: '', notes: '', pgp_key: '' });
+      setInContacts(true);
+      onNotice(t('{{email}} added to contacts', { email: sender.email }));
+    } catch (err) {
+      onNotice(errorText(err, t('The contact could not be saved')));
+    }
+  }
+  return (
+    <Box onClick={(e) => e.stopPropagation()} sx={{ width: 320, maxWidth: 'calc(100vw - 32px)' }} role="dialog" aria-label={t('About {{sender}}', { sender: sender.name || sender.email })}>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+        <SenderAvatar accountId={accountId} email={email} info={info} size={64} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography noWrap sx={{ fontSize: 18 }}>{sender.name || sender.email}</Typography>
+          {sender.name && <Typography noWrap variant="body2" sx={{ color: 'text.secondary' }}>{sender.email}</Typography>}
+        </Box>
+        {contactsOn && inContacts === false && (
+          <Tooltip title={t('Add to contacts')}>
+            <IconButton aria-label={t('Add to contacts')} onClick={() => void addContact()} sx={{ alignSelf: 'flex-start' }}><PersonAddAlt /></IconButton>
+          </Tooltip>
+        )}
+        {contactsOn && inContacts && (
+          <Tooltip title={t('In your contacts')}>
+            <IconButton aria-label={t('In your contacts')} component={RouterLink} to="/contacts" sx={{ alignSelf: 'flex-start' }}><HowToReg /></IconButton>
+          </Tooltip>
+        )}
+      </Stack>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 2 }}>
+        <Button
+          variant="contained"
+          disableElevation
+          startIcon={<MailOutlined />}
+          onClick={act(() => window.dispatchEvent(new CustomEvent('unomail:mailto', { detail: `mailto:${sender.email}` })))}
+          sx={{ flex: 1, borderRadius: 5 }}
+        >
+          {t('Send email')}
+        </Button>
+        <Tooltip title={t('Find emails from {{sender}}', { sender: sender.email })}>
+          <IconButton aria-label={t('Find emails from {{sender}}', { sender: sender.email })} onClick={act(() => window.dispatchEvent(new CustomEvent('unomail:search', { detail: `from:${sender.email}` })))} sx={{ border: 1, borderColor: 'divider' }}>
+            <Search fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={t('Copy address')}>
+          <IconButton
+            aria-label={t('Copy address')}
+            onClick={() => void navigator.clipboard.writeText(sender.email).then(() => onNotice(t('Address copied')), () => onNotice(t('The address could not be copied')))}
+            sx={{ border: 1, borderColor: 'divider' }}
+          >
+            <ContentCopy fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    </Box>
+  );
+}
+
+/**
+ * Wraps the sender's picture or name: hovering, focusing or clicking it shows the card about the
+ * sender. Only on an open message; a folded one opens on a click instead.
+ */
+export function SenderCard({ accountId, email, info, enabled, testId, children }: { accountId: string; email: EmailFull; info: AvatarInfo | null; enabled: boolean; testId?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [notice, setNotice] = useState('');
+  const sender = email.from?.[0];
+  if (!enabled || !sender) return <Box component="span" data-testid={testId}>{children}</Box>;
+  return (
+    <>
+      <ClickAwayListener touchEvent={false} onClickAway={() => setOpen(false)}>
+        <Box component="span">
+          <Tooltip
+            open={open}
+            onOpen={() => setOpen(true)}
+            onClose={() => setOpen(false)}
+            title={<SenderCardBody accountId={accountId} email={email} info={info} onDone={() => setOpen(false)} onNotice={setNotice} />}
+            placement="bottom-start"
+            enterDelay={350}
+            enterNextDelay={350}
+            leaveDelay={200}
+            disableTouchListener
+            slotProps={{ tooltip: { sx: { bgcolor: 'm3.surfaceContainerHigh', color: 'text.primary', boxShadow: 6, borderRadius: '12px', maxWidth: 'none', p: 2, fontWeight: 400, fontSize: 14 } } }}
+          >
+            <Box
+              component="span"
+              tabIndex={0}
+              onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+              sx={{ cursor: 'pointer', borderRadius: 0.5, '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main' } }}
+              data-testid={testId}
+            >
+              {children}
+            </Box>
+          </Tooltip>
+        </Box>
+      </ClickAwayListener>
+      <Snackbar open={Boolean(notice)} autoHideDuration={4000} onClose={() => setNotice('')} message={notice} />
+    </>
   );
 }
 

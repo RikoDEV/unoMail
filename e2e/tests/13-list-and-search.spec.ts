@@ -122,7 +122,7 @@ test.describe('message list, reader and search', () => {
     const latest = messages.last();
     const reply = latest.frameLocator('iframe[title="Message body"]').getByText('Yes, at noon.');
     await expect(reply).toBeVisible();
-    // (The name last: hovering it opens the sender details, which then cover the lines below.)
+    // (The name last: hovering it opens the card about the sender, which then covers the lines below.)
     for (const part of [latest.locator('.MuiAvatar-root'), latest.getByTestId('sender-block').getByText(/^to /), latest.getByTestId('sender-name')]) {
       await part.click();
       await expect(reply).toBeVisible();

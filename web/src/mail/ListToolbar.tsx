@@ -1,6 +1,7 @@
 // The bar above the message list: select, act on the selection, refresh, and the count.
 
 import Archive from '@mui/icons-material/Archive';
+import Unarchive from '@mui/icons-material/Unarchive';
 import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
 import Delete from '@mui/icons-material/Delete';
 import DriveFileMove from '@mui/icons-material/DriveFileMove';
@@ -16,15 +17,18 @@ import { useState } from 'react';
 import { t } from '../i18n';
 import { type EmailSummary, folderName, type Mailbox } from './jmapClient';
 
-export type BulkAction = 'archive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'move' | 'label';
+export type BulkAction = 'archive' | 'unarchive' | 'trash' | 'junk' | 'inbox' | 'read' | 'unread' | 'move' | 'label';
 
-export function ListToolbar({ heading, visible, total, selected, allInFolder, inJunk, folders, labels, labelColor, onSelect, onBulk, onRefresh }: {
+export function ListToolbar({ heading, showHeading, visible, total, selected, allInFolder, inArchive, inJunk, folders, labels, labelColor, onSelect, onBulk, onRefresh }: {
   /** What the list shows, for screen readers. */
   heading: string;
+  /** Shows the heading above the toolbar too (phones, where the sidebar is hidden). */
+  showHeading?: boolean;
   visible: EmailSummary[];
   total: number;
   selected: Set<string>;
   allInFolder: boolean;
+  inArchive: boolean;
   inJunk: boolean;
   /** Where the selection can be moved. */
   folders: Mailbox[];
@@ -39,8 +43,13 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
   const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
   return (
     <>
+      {showHeading && heading && (
+        <Typography component="h1" variant="h6" noWrap sx={{ px: 2, pt: 1.5 }}>{heading}</Typography>
+      )}
       <Stack direction="row" sx={{ alignItems: 'center', pl: 0.5, pr: 2, py: 0.5, minHeight: 48 }}>
-        <Typography component="h1" sx={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>{heading}</Typography>
+        {!(showHeading && heading) && (
+          <Typography component="h1" sx={{ position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>{heading}</Typography>
+        )}
         <Checkbox
           size="small"
           slotProps={{ input: { 'aria-label': t('Select all conversations') } }}
@@ -55,7 +64,11 @@ export function ListToolbar({ heading, visible, total, selected, allInFolder, in
         </IconButton>
         {selected.size > 0 ? (
           <Stack direction="row" role="toolbar" aria-label={t('Actions for the selection')} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
-            <Tooltip title={t('Archive')}><IconButton aria-label={t('Archive selected')} onClick={() => onBulk('archive')}><Archive /></IconButton></Tooltip>
+            {inArchive ? (
+              <Tooltip title={t('Move to inbox')}><IconButton aria-label={t('Move selected to inbox')} onClick={() => onBulk('unarchive')}><Unarchive /></IconButton></Tooltip>
+            ) : (
+              <Tooltip title={t('Archive')}><IconButton aria-label={t('Archive selected')} onClick={() => onBulk('archive')}><Archive /></IconButton></Tooltip>
+            )}
             {inJunk ? (
               <Tooltip title={t('Not spam')}><IconButton aria-label={t('Mark selected as not spam')} onClick={() => onBulk('inbox')}><ReportOff /></IconButton></Tooltip>
             ) : (

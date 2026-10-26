@@ -427,7 +427,7 @@ export default function CalendarPage() {
 
   const wrapNav = (nav: ReactElement) =>
     compact ? (
-      <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}>
+      <SwipeableDrawer open={drawerOpen} onOpen={() => setDrawerOpen(true)} onClose={() => setDrawerOpen(false)} {...SWIPE} slotProps={{ ...SWIPE.slotProps, paper: { sx: { bgcolor: 'background.default' } } }}>
         {nav}
       </SwipeableDrawer>
     ) : (
