@@ -121,7 +121,10 @@ export function ListToolbar({ heading, showHeading, visible, total, selected, al
         <MenuItem dense onClick={() => fromSelectionMenu(otherSeen.action)}><ListItemIcon>{otherSeen.icon}</ListItemIcon><ListItemText>{otherSeen.title}</ListItemText></MenuItem>
       </Menu>
       <Menu anchorEl={moreMenu} open={Boolean(moreMenu)} onClose={() => setMoreMenu(null)}>
-        <MenuItem dense disabled={visible.length === 0} onClick={() => { setMoreMenu(null); onBulk('read', undefined, true); }}>{t('Mark all as read')}</MenuItem>
+        <MenuItem dense disabled={visible.length === 0} onClick={() => { setMoreMenu(null); onBulk('read', undefined, true); }}>
+          <ListItemIcon><MarkEmailRead fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('Mark all as read')}</ListItemText>
+        </MenuItem>
       </Menu>
       <Menu anchorEl={bulkMenu?.anchor} open={Boolean(bulkMenu)} onClose={() => setBulkMenu(null)} slotProps={{ paper: { sx: { maxHeight: 360, minWidth: 200 } } }}>
         {bulkMenu?.kind === 'move' &&
