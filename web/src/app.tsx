@@ -332,6 +332,12 @@ export function App() {
     const built = buildTheme(skin, seed, mode === 'dark' || (mode === 'system' && prefersDark));
     return RTL ? createTheme(built, { direction: 'rtl' }) : built;
   }, [skin, seed, mode, prefersDark]);
+  // The installed app's title bar (and the mobile browser's toolbar) takes the accent colour: its
+  // deep tone in dark mode, where the accent itself is pale.
+  useEffect(() => {
+    const accent = theme.palette.mode === 'dark' ? theme.palette.m3.primaryContainer : theme.palette.primary.main;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', accent);
+  }, [theme]);
   const auth = useMemo(
     () => ({ account, accounts, refreshAccounts, switchAccount, login, completeLogin, logout }),
     [account, accounts, refreshAccounts, switchAccount, login, completeLogin, logout],
