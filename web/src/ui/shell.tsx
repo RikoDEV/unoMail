@@ -128,6 +128,9 @@ function AccountMenu() {
             value={mode}
             onChange={(_, value) => value && setMode(value)}
             aria-label={t('Colour mode')}
+            // The icon above its name leaves a whole button's width for the word, which is long in
+            // some languages ("Системная", "Întunecat").
+            sx={{ '& .MuiToggleButton-root': { flexDirection: 'column', gap: 0.25, py: 0.75, px: 0.5, fontSize: 12, lineHeight: 1.3, whiteSpace: 'nowrap', minWidth: 0 } }}
           >
             <ToggleButton value="light"><LightMode sx={{ fontSize: 18 }} />{t('Light')}</ToggleButton>
             <ToggleButton value="system"><SettingsBrightness sx={{ fontSize: 18 }} />{t('System')}</ToggleButton>
