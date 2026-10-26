@@ -14,6 +14,8 @@
   "{{count}} members_one": "{{count}} member",
   "{{count}} offline changes synchronised_one": "{{count}} offline change synchronised",
   "{{count}} conversations moved to the inbox_one": "{{count}} conversation moved to the inbox",
+  "{{count}} conversations starred_one": "{{count}} conversation starred",
+  "{{count}} conversations unstarred_one": "{{count}} conversation unstarred",
   "{{count}} conversations archived_one": "{{count}} conversation archived",
   "{{count}} conversations deleted_one": "{{count}} conversation deleted",
   "{{count}} conversations reported as spam_one": "{{count}} conversation reported as spam",

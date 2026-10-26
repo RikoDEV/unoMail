@@ -8,9 +8,8 @@ import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
 import Reply from '@mui/icons-material/Reply';
 import WarningAmber from '@mui/icons-material/WarningAmber';
 import ReplyAll from '@mui/icons-material/ReplyAll';
-import Snooze from '@mui/icons-material/Snooze';
 import {
-  Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogContent, DialogTitle, IconButton, ListItemText, Menu, MenuItem, Paper, Stack, TextField, Tooltip,
+  Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, IconButton, ListItemText, Menu, MenuItem, Paper, Stack, TextField, Tooltip,
   Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -25,7 +24,6 @@ import { AiAssistButtons, AiAssistResults, AiModelsProvider, useAiAssist } from 
 import { SummaryCards } from './SummaryCards';
 import { FeatureGate, PluginSlot } from '../plugins/Slot';
 import { SmartReplyButton, SmartReplySuggestions, useSmartReplies } from './SmartReplies';
-import { snoozePresets } from './timePresets';
 import { adaptForDark, type Rgb } from './darkColors';
 
 /** The page behind a message in the dark theme (see buildFrameDocument). */
@@ -33,6 +31,7 @@ const DARK_PAGE: Rgb = [29, 27, 32];
 import { guardedDownload, useRiskConfirm } from './RiskConfirm';
 import { attachmentRisk } from './risk';
 import { ActionButton, type FolderAction, folderActions, type Place } from './actions';
+import { SnoozeButton } from './SnoozeButton';
 import { AttachmentPreview, type PreviewFile, previewKind } from './Preview';
 import { listDate } from './EmailRow';
 import { MessageMenu, UnsubscribeButton } from './MessageTools';
@@ -41,7 +40,6 @@ import { type Decrypted, decryptArmored, fetchKeys, isUnlocked, localPrivateKey,
 import { buildFrameDocument, sanitizeEmail, sanitizeEmailHtml, textToHtml } from './sanitize';
 
 import { t, uiLocale } from '../i18n';
-import { DialogButtons } from '../admin/common';
 export type ReaderAction = 'reply' | 'replyAll' | 'forward';
 
 /** Bodies of messages decrypted in this session, so replies can quote them. */
@@ -550,8 +548,6 @@ function ReceiptRequest({ emails, ownEmail }: { emails: EmailFull[]; ownEmail: s
 /** Conversation view: every message of a thread, the latest one expanded. */
 export function Reader({ emails, accountId, ownEmail, inboxId, onBack, place, onFolderAction, onMarkUnread, onSnooze, onCancelScheduled, onAction, labels, onToggleLabel }: ReaderProps) {
   const [labelAnchor, setLabelAnchor] = useState<HTMLElement | null>(null);
-  const [snoozeAnchor, setSnoozeAnchor] = useState<HTMLElement | null>(null);
-  const [snoozeAt, setSnoozeAt] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const last = emails?.[emails.length - 1];
@@ -574,23 +570,7 @@ export function Reader({ emails, accountId, ownEmail, inboxId, onBack, place, on
           <ActionButton key={action} action={action} place={place} variant="hint" onRun={onFolderAction} />
         ))}
         <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark as unread')} onClick={onMarkUnread}><MarkEmailUnread /></IconButton></Tooltip>
-        <Tooltip title={t('Snooze')}><IconButton aria-label={t('Snooze')} onClick={(e) => setSnoozeAnchor(e.currentTarget)}><Snooze /></IconButton></Tooltip>
-        <Menu anchorEl={snoozeAnchor} open={Boolean(snoozeAnchor)} onClose={() => setSnoozeAnchor(null)}>
-          <MenuItem disabled sx={{ opacity: '1 !important' }}><Typography variant="caption" sx={{ color: 'text.secondary' }}>{t('Snooze until')}</Typography></MenuItem>
-          {snoozePresets(new Date()).map((preset) => (
-            <MenuItem key={preset.label} onClick={() => { setSnoozeAnchor(null); onSnooze(preset.at); }}>
-              <ListItemText primary={preset.label} secondary={preset.at.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} />
-            </MenuItem>
-          ))}
-          <MenuItem onClick={() => { setSnoozeAnchor(null); setSnoozeAt(''); }}>{t('Pick a date and time…')}</MenuItem>
-        </Menu>
-        <Dialog open={snoozeAt !== null} onClose={() => setSnoozeAt(null)}>
-          <DialogTitle>{t('Snooze until')}</DialogTitle>
-          <DialogContent>
-            <TextField type="datetime-local" label={t('Bring back at')} value={snoozeAt ?? ''} onChange={(e) => setSnoozeAt(e.target.value)} sx={{ mt: 1 }} slotProps={{ inputLabel: { shrink: true } }} />
-          </DialogContent>
-          <DialogButtons onCancel={() => setSnoozeAt(null)} onConfirm={() => { const at = new Date(snoozeAt ?? ''); setSnoozeAt(null); onSnooze(at); }} disabled={!snoozeAt || new Date(snoozeAt).getTime() <= Date.now()} label={t('Snooze')} />
-        </Dialog>
+        <SnoozeButton onSnooze={onSnooze} />
         <Tooltip title={t('Labels')}><IconButton aria-label={t('Labels')} onClick={(e) => setLabelAnchor(e.currentTarget)}><Label /></IconButton></Tooltip>
         <Menu anchorEl={labelAnchor} open={Boolean(labelAnchor)} onClose={() => setLabelAnchor(null)} slotProps={{ paper: { sx: { minWidth: 240 } } }}>
           {[...new Set([...labels, ...applied])].sort().map((label) => (

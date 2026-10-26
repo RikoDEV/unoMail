@@ -6,14 +6,18 @@ import LabelIcon from '@mui/icons-material/Label';
 import MarkEmailRead from '@mui/icons-material/MarkEmailRead';
 import MarkEmailUnread from '@mui/icons-material/MarkEmailUnread';
 import MoreVert from '@mui/icons-material/MoreVert';
+import Star from '@mui/icons-material/Star';
+import StarBorder from '@mui/icons-material/StarBorder';
 import Refresh from '@mui/icons-material/Refresh';
-import { Box, Checkbox, IconButton, ListItemIcon, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
+import { Box, Checkbox, Divider, IconButton, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material';
 import { useState } from 'react';
 import { t } from '../i18n';
 import { ActionButton, type FolderAction, folderActions, type Place } from './actions';
 import { type EmailSummary, folderName, type Mailbox } from './jmapClient';
+import { SnoozeButton } from './SnoozeButton';
 
-export type BulkAction = FolderAction | 'read' | 'unread' | 'move' | 'label';
+/** What can be done to a selection. `snooze` takes the time as an ISO string; `move` and `label` take the folder id and label name. */
+export type BulkAction = FolderAction | 'read' | 'unread' | 'star' | 'unstar' | 'snooze' | 'move' | 'label';
 
 export function ListToolbar({ heading, showHeading, visible, total, selected, allInFolder, place, folders, labels, labelColor, onSelect, onBulk, onRefresh }: {
   /** What the list shows, for screen readers. */
@@ -37,6 +41,18 @@ export function ListToolbar({ heading, showHeading, visible, total, selected, al
   const [bulkMenu, setBulkMenu] = useState<{ anchor: HTMLElement; kind: 'move' | 'label' } | null>(null);
   const [selectMenu, setSelectMenu] = useState<HTMLElement | null>(null);
   const [moreMenu, setMoreMenu] = useState<HTMLElement | null>(null);
+  const [selectionMenu, setSelectionMenu] = useState<HTMLElement | null>(null);
+  // As in Gmail: "Mark as read" while any of the selection is unread, else "Mark as unread"; the
+  // other one is in the selection's menu.
+  const anyUnread = visible.some((e) => selected.has(e.id) && !e.keywords.$seen);
+  const seenAction = anyUnread
+    ? { action: 'read' as const, label: t('Mark selected as read'), title: t('Mark as read'), icon: <MarkEmailRead /> }
+    : { action: 'unread' as const, label: t('Mark selected as unread'), title: t('Mark as unread'), icon: <MarkEmailUnread /> };
+  const otherSeen = anyUnread ? { action: 'unread' as const, title: t('Mark as unread'), icon: <MarkEmailUnread fontSize="small" /> } : { action: 'read' as const, title: t('Mark as read'), icon: <MarkEmailRead fontSize="small" /> };
+  const fromSelectionMenu = (action: BulkAction) => {
+    setSelectionMenu(null);
+    onBulk(action);
+  };
   return (
     <>
       {showHeading && heading && (
@@ -63,10 +79,13 @@ export function ListToolbar({ heading, showHeading, visible, total, selected, al
             {folderActions(place).map((action) => (
               <ActionButton key={action} action={action} place={place} variant="selection" onRun={onBulk} />
             ))}
-            <Tooltip title={t('Mark as read')}><IconButton aria-label={t('Mark selected as read')} onClick={() => onBulk('read')}><MarkEmailRead /></IconButton></Tooltip>
-            <Tooltip title={t('Mark as unread')}><IconButton aria-label={t('Mark selected as unread')} onClick={() => onBulk('unread')}><MarkEmailUnread /></IconButton></Tooltip>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1 }} />
+            <Tooltip title={seenAction.title}><IconButton aria-label={seenAction.label} onClick={() => onBulk(seenAction.action)}>{seenAction.icon}</IconButton></Tooltip>
+            {!place.trash && <SnoozeButton label={t('Snooze selected')} onSnooze={(until) => onBulk('snooze', until.toISOString())} />}
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 1 }} />
             <Tooltip title={t('Move to')}><IconButton aria-label={t('Move selected to a folder')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'move' })}><DriveFileMove /></IconButton></Tooltip>
             <Tooltip title={t('Label')}><IconButton aria-label={t('Label selected')} onClick={(e) => setBulkMenu({ anchor: e.currentTarget, kind: 'label' })}><LabelIcon /></IconButton></Tooltip>
+            <Tooltip title={t('More')}><IconButton aria-label={t('More actions for the selection')} aria-haspopup="menu" onClick={(e) => setSelectionMenu(e.currentTarget)}><MoreVert /></IconButton></Tooltip>
             <Typography variant="body2" noWrap sx={{ color: 'text.secondary', ml: 1 }}>
               {t('{{count}} selected', { count: allInFolder ? total : selected.size })}
             </Typography>
@@ -95,6 +114,11 @@ export function ListToolbar({ heading, showHeading, visible, total, selected, al
         ] as const).map(([name, pick]) => (
           <MenuItem key={name} dense onClick={() => { onSelect(new Set(visible.filter(pick).map((e) => e.id))); setSelectMenu(null); }}>{name}</MenuItem>
         ))}
+      </Menu>
+      <Menu anchorEl={selectionMenu} open={Boolean(selectionMenu)} onClose={() => setSelectionMenu(null)}>
+        <MenuItem dense onClick={() => fromSelectionMenu('star')}><ListItemIcon><StarBorder fontSize="small" /></ListItemIcon><ListItemText>{t('Add star')}</ListItemText></MenuItem>
+        <MenuItem dense onClick={() => fromSelectionMenu('unstar')}><ListItemIcon><Star fontSize="small" /></ListItemIcon><ListItemText>{t('Remove star')}</ListItemText></MenuItem>
+        <MenuItem dense onClick={() => fromSelectionMenu(otherSeen.action)}><ListItemIcon>{otherSeen.icon}</ListItemIcon><ListItemText>{otherSeen.title}</ListItemText></MenuItem>
       </Menu>
       <Menu anchorEl={moreMenu} open={Boolean(moreMenu)} onClose={() => setMoreMenu(null)}>
         <MenuItem dense disabled={visible.length === 0} onClick={() => { setMoreMenu(null); onBulk('read', undefined, true); }}>{t('Mark all as read')}</MenuItem>

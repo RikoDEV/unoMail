@@ -43,7 +43,7 @@ import { EmptyState, type EmptyKind } from './EmptyState';
 import { CategoryTabs } from './CategoryTabs';
 import { type LabelDialogState, MailSidebar } from './MailSidebar';
 import { EmailRow, type RowAction, type RowHandlers } from './EmailRow';
-import { type Destination, destinationOf, doneText, type Origins, originsOf, type Place, placeOf, rolesOf } from './actions';
+import { type Destination, destinationOf, doneText, isFolderAction, type Origins, originsOf, type Place, placeOf, rolesOf } from './actions';
 import { RowMenu, type RowMenuPick, type RowMenuTarget } from './RowMenu';
 import { AttachmentPreview, type PreviewFile } from './Preview';
 import { parseMailto } from './mailto';
@@ -65,6 +65,9 @@ function decodeLabel(value: string): string {
     return value;
   }
 }
+
+/** How times are written in notices. */
+const NOTICE_TIME = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' } as const;
 
 /** Row menu choices that apply to every selected conversation when the row is part of the selection. */
 const BULK_KINDS = new Set<string>(['archive', 'unarchive', 'junk', 'notSpam', 'trash', 'read', 'unread']);
@@ -586,20 +589,27 @@ export default function MailPage() {
     try {
       const { ids, origins } = await selectionOrigins(all);
       if (ids.length === 0) return;
-      if (action === 'read' || action === 'unread' || action === 'label') {
-        const keyword = action === 'label' ? argument! : '$seen';
-        if (await performOrQueue({ type: 'keyword', ids, keyword, value: action !== 'unread' })) savedOffline();
-        notify(
-          action === 'label'
-            ? t('{{count}} conversations labelled “{{label}}”', { count, label: argument })
-            : action === 'read'
-              ? t('{{count}} conversations marked as read', { count })
-              : t('{{count}} conversations marked as unread', { count }),
-        );
-      } else {
-        const to = action === 'move' ? (argument ? { mailboxId: argument } : null) : destinationOf(action, selectionPlace(all), roles);
+      const keyword = {
+        read: { keyword: '$seen', value: true, done: () => t('{{count}} conversations marked as read', { count }) },
+        unread: { keyword: '$seen', value: false, done: () => t('{{count}} conversations marked as unread', { count }) },
+        star: { keyword: '$flagged', value: true, done: () => t('{{count}} conversations starred', { count }) },
+        unstar: { keyword: '$flagged', value: false, done: () => t('{{count}} conversations unstarred', { count }) },
+        label: { keyword: argument!, value: true, done: () => t('{{count}} conversations labelled “{{label}}”', { count, label: argument }) },
+      }[action as string];
+      if (keyword) {
+        if (await performOrQueue({ type: 'keyword', ids, keyword: keyword.keyword, value: keyword.value })) savedOffline();
+        notify(keyword.done());
+      } else if (action === 'snooze') {
+        const until = new Date(argument!);
+        await snooze(ids, until);
+        notify(t('Snoozed until {{value}}', { value: until.toLocaleString(uiLocale(), NOTICE_TIME) }));
+        void refreshMailboxes();
+      } else if (action === 'move') {
+        if (argument) await relocate(ids, { mailboxId: argument }, t('{{count}} conversations moved', { count }), origins);
+      } else if (isFolderAction(action)) {
+        const to = destinationOf(action, selectionPlace(all), roles);
         if (!to) return;
-        await relocate(ids, to, action === 'move' ? t('{{count}} conversations moved', { count }) : doneText(action, count), origins);
+        await relocate(ids, to, doneText(action, count), origins);
       }
       setSelected(new Set());
       setAllInFolder(false);
@@ -882,7 +892,7 @@ export default function MailPage() {
           await snooze(ids, pick.until);
           setEmails((current) => current.filter((e) => e.threadId !== email.threadId));
           if (threadId === email.threadId) closeThread();
-          notify(t('Snoozed until {{value}}', { value: pick.until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+          notify(t('Snoozed until {{value}}', { value: pick.until.toLocaleString(uiLocale(), NOTICE_TIME) }));
           void refreshMailboxes();
           return;
         }
@@ -1109,7 +1119,7 @@ export default function MailPage() {
                 const ids = (thread ?? []).filter((e) => !e.keywords.$draft && !e.keywords.$scheduled).map((e) => e.id);
                 try {
                   await snooze(ids, until);
-                  notify(t('Snoozed until {{value}}', { value: until.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+                  notify(t('Snoozed until {{value}}', { value: until.toLocaleString(uiLocale(), NOTICE_TIME) }));
                   closeThread();
                   void refreshMailboxes();
                   void load(0);
@@ -1161,7 +1171,7 @@ export default function MailPage() {
               setPending(pendingCount());
               notify(t('You are offline. The message will be sent when the connection returns'));
             } else if (info?.scheduledAt) {
-              notify(t('Scheduled for {{value}}', { value: info.scheduledAt.toLocaleString(uiLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }));
+              notify(t('Scheduled for {{value}}', { value: info.scheduledAt.toLocaleString(uiLocale(), NOTICE_TIME) }));
               void listScheduled().then((list) => setScheduledCount(list.length), () => {});
             } else if (info?.submissionId && info.undoSeconds) setUndoable(info);
             else if (wasSent) notify(t('Message sent'));

@@ -16,6 +16,12 @@ import type { Mailbox } from './jmapClient';
 
 export type FolderAction = 'archive' | 'unarchive' | 'junk' | 'notSpam' | 'trash';
 
+const FOLDER_ACTIONS: readonly string[] = ['archive', 'unarchive', 'junk', 'notSpam', 'trash'] satisfies FolderAction[];
+
+export function isFolderAction(action: string): action is FolderAction {
+  return FOLDER_ACTIONS.includes(action);
+}
+
 /** Ids of the special folders, by role. */
 export interface Roles {
   inbox?: string;

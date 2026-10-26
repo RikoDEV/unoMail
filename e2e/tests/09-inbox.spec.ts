@@ -60,6 +60,15 @@ test.describe('inbox tools', () => {
     await expect(row(page, 'Third stays unread')).toHaveAttribute('data-unread', 'true');
     await expect(toolbar).toHaveCount(0);
 
+    // A selection already read offers "unread" instead; starring is in the selection's menu.
+    await page.getByLabel('Select First to select').check();
+    await expect(toolbar.getByRole('button', { name: 'Mark selected as unread' })).toBeVisible();
+    await expect(toolbar.getByRole('button', { name: 'Mark selected as read' })).toHaveCount(0);
+    await toolbar.getByRole('button', { name: 'More actions for the selection' }).click();
+    await page.getByRole('menuitem', { name: 'Add star' }).click();
+    await expect(page.getByText('1 conversation starred')).toBeVisible();
+    await expect(row(page, 'First to select').getByRole('button', { name: 'Remove star' })).toBeVisible();
+
     // Label through the selection toolbar, with a coloured label created in the sidebar.
     await page.getByRole('navigation', { name: 'Folders' }).getByText('New label').click();
     const dialog = page.getByRole('dialog');
