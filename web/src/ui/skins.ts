@@ -213,7 +213,8 @@ export function buildTheme(skin: Skin, seed: string, userPrefersDark: boolean): 
   const options: ThemeOptions = {
     palette: {
       mode: dark ? 'dark' : 'light',
-      primary: { main: skin.primary ?? c.primary, contrastText: skin.primary ? undefined : c.onPrimary },
+      // A skin's own accent gets the readable text colour MUI works out for it.
+      primary: skin.primary ? { main: skin.primary } : { main: c.primary, contrastText: c.onPrimary },
       secondary: skin.secondary ? { main: skin.secondary } : { main: c.secondary, contrastText: c.onSecondary },
       error: { main: skin.error ?? c.error },
       // Pages sit on the surface container; the panes and cards on them are the surface.
