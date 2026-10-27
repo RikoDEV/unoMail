@@ -2356,5 +2356,13 @@
   "Ask from score": "Demander à partir du score",
   "Only mail the other tests already score at least this much is shown to the model": "Seul le courrier que les autres tests notent au moins autant est montré au modèle",
   "Points for a phishing verdict": "Points pour un verdict d’hameçonnage",
-  "Added when the model judges a message phishing": "Ajoutés quand le modèle juge un message comme de l’hameçonnage"
+  "Added when the model judges a message phishing": "Ajoutés quand le modèle juge un message comme de l’hameçonnage",
+  "Limits for this mailbox": "Limites de cette boîte aux lettres",
+  "These override the server policy for this mailbox only.": "Elles remplacent la politique du serveur pour cette boîte aux lettres uniquement.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "S'applique à chaque boîte aux lettres, sauf si elle a ses propres limites. La politique de création ne désactive pas les adresses actives existantes.",
+  "How many masked addresses each mailbox may have.": "Nombre d'adresses masquées que chaque boîte aux lettres peut avoir.",
+  "No new masked addresses can be created on these domains.": "Aucune nouvelle adresse masquée ne peut être créée sur ces domaines.",
+  "Mailbox": "Boîte aux lettres",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Recherchez une boîte aux lettres pour modifier ses limites et gérer ses adresses masquées.",
+  "Masked addresses of this mailbox": "Adresses masquées de cette boîte aux lettres"
 }

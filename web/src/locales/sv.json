@@ -2308,5 +2308,13 @@
   "Ask from score": "Fråga från poäng",
   "Only mail the other tests already score at least this much is shown to the model": "Endast e-post som de andra testerna ger minst så här mycket visas för modellen",
   "Points for a phishing verdict": "Poäng för ett nätfiskeutlåtande",
-  "Added when the model judges a message phishing": "Läggs till när modellen bedömer ett meddelande som nätfiske"
+  "Added when the model judges a message phishing": "Läggs till när modellen bedömer ett meddelande som nätfiske",
+  "Limits for this mailbox": "Gränser för den här postlådan",
+  "These override the server policy for this mailbox only.": "De ersätter serverpolicyn endast för den här postlådan.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Gäller alla postlådor om inte en postlåda har egna gränser. Policyn för skapande inaktiverar inte befintliga aktiva adresser.",
+  "How many masked addresses each mailbox may have.": "Hur många maskerade adresser varje postlåda får ha.",
+  "No new masked addresses can be created on these domains.": "Inga nya maskerade adresser kan skapas på dessa domäner.",
+  "Mailbox": "Postlåda",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Sök upp en postlåda för att ändra dess gränser och hantera dess maskerade adresser.",
+  "Masked addresses of this mailbox": "Maskerade adresser för den här postlådan"
 }

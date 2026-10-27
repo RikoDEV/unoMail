@@ -2356,5 +2356,13 @@
   "Ask from score": "Întreabă de la scorul",
   "Only mail the other tests already score at least this much is shown to the model": "Modelului i se arată doar mesajele pe care celelalte teste le punctează cel puțin atât",
   "Points for a phishing verdict": "Puncte pentru un verdict de phishing",
-  "Added when the model judges a message phishing": "Adăugate când modelul consideră un mesaj phishing"
+  "Added when the model judges a message phishing": "Adăugate când modelul consideră un mesaj phishing",
+  "Limits for this mailbox": "Limitele acestei căsuțe",
+  "These override the server policy for this mailbox only.": "Acestea înlocuiesc politica serverului doar pentru această căsuță.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Se aplică fiecărei căsuțe, cu excepția celor care au limite proprii. Politica de creare nu dezactivează adresele active existente.",
+  "How many masked addresses each mailbox may have.": "Câte adrese mascate poate avea fiecare căsuță.",
+  "No new masked addresses can be created on these domains.": "Pe aceste domenii nu se pot crea adrese mascate noi.",
+  "Mailbox": "Căsuță",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Căutați o căsuță pentru a-i modifica limitele și a-i gestiona adresele mascate.",
+  "Masked addresses of this mailbox": "Adresele mascate ale acestei căsuțe"
 }

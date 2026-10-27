@@ -2308,5 +2308,13 @@
   "Ask from score": "Danışma eşiği",
   "Only mail the other tests already score at least this much is shown to the model": "Modele yalnızca diğer testlerin en az bu kadar puanladığı postalar gösterilir",
   "Points for a phishing verdict": "Kimlik avı kararı için puan",
-  "Added when the model judges a message phishing": "Model bir iletiyi kimlik avı olarak değerlendirdiğinde eklenir"
+  "Added when the model judges a message phishing": "Model bir iletiyi kimlik avı olarak değerlendirdiğinde eklenir",
+  "Limits for this mailbox": "Bu posta kutusunun sınırları",
+  "These override the server policy for this mailbox only.": "Bunlar sunucu ilkesini yalnızca bu posta kutusu için geçersiz kılar.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Kendi sınırları olmayan her posta kutusu için geçerlidir. Oluşturma ilkesi mevcut etkin adresleri devre dışı bırakmaz.",
+  "How many masked addresses each mailbox may have.": "Her posta kutusunun kaç maskeli adresi olabileceği.",
+  "No new masked addresses can be created on these domains.": "Bu alan adlarında yeni maskeli adres oluşturulamaz.",
+  "Mailbox": "Posta kutusu",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Sınırlarını değiştirmek ve maskeli adreslerini yönetmek için bir posta kutusu arayın.",
+  "Masked addresses of this mailbox": "Bu posta kutusunun maskeli adresleri"
 }

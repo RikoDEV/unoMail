@@ -2308,5 +2308,13 @@
   "Ask from score": "Fragen ab Punktzahl",
   "Only mail the other tests already score at least this much is shown to the model": "Nur Post, die die anderen Tests mindestens so hoch bewerten, wird dem Modell gezeigt",
   "Points for a phishing verdict": "Punkte für ein Phishing-Urteil",
-  "Added when the model judges a message phishing": "Hinzugefügt, wenn das Modell eine Nachricht als Phishing einstuft"
+  "Added when the model judges a message phishing": "Hinzugefügt, wenn das Modell eine Nachricht als Phishing einstuft",
+  "Limits for this mailbox": "Limits für dieses Postfach",
+  "These override the server policy for this mailbox only.": "Diese ersetzen die Serverrichtlinie nur für dieses Postfach.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Gilt für jedes Postfach, sofern es keine eigenen Limits hat. Die Erstellungsrichtlinie deaktiviert keine bestehenden aktiven Adressen.",
+  "How many masked addresses each mailbox may have.": "Wie viele maskierte Adressen jedes Postfach haben darf.",
+  "No new masked addresses can be created on these domains.": "Auf diesen Domains können keine neuen maskierten Adressen erstellt werden.",
+  "Mailbox": "Postfach",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Suchen Sie ein Postfach, um seine Limits zu ändern und seine maskierten Adressen zu verwalten.",
+  "Masked addresses of this mailbox": "Maskierte Adressen dieses Postfachs"
 }

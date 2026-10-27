@@ -2404,5 +2404,13 @@
   "Ask from score": "Питати від балу",
   "Only mail the other tests already score at least this much is shown to the model": "Моделі показуються лише листи, які інші перевірки оцінюють щонайменше так",
   "Points for a phishing verdict": "Бали за вердикт «фішинг»",
-  "Added when the model judges a message phishing": "Додаються, коли модель вважає лист фішингом"
+  "Added when the model judges a message phishing": "Додаються, коли модель вважає лист фішингом",
+  "Limits for this mailbox": "Обмеження цієї скриньки",
+  "These override the server policy for this mailbox only.": "Вони замінюють політику сервера лише для цієї скриньки.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Застосовується до кожної скриньки, якщо вона не має власних обмежень. Політика створення не вимикає наявні активні адреси.",
+  "How many masked addresses each mailbox may have.": "Скільки маскованих адрес може мати кожна скринька.",
+  "No new masked addresses can be created on these domains.": "У цих доменах не можна створювати нові масковані адреси.",
+  "Mailbox": "Поштова скринька",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Знайдіть поштову скриньку, щоб змінити її обмеження та керувати її маскованими адресами.",
+  "Masked addresses of this mailbox": "Масковані адреси цієї скриньки"
 }

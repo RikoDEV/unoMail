@@ -2500,5 +2500,13 @@
   "Ask from score": "الاستشارة ابتداءً من درجة",
   "Only mail the other tests already score at least this much is shown to the model": "لا يُعرض على النموذج إلا البريد الذي تمنحه الاختبارات الأخرى هذه الدرجة على الأقل",
   "Points for a phishing verdict": "نقاط حكم التصيّد",
-  "Added when the model judges a message phishing": "تُضاف عندما يحكم النموذج بأن الرسالة تصيّد"
+  "Added when the model judges a message phishing": "تُضاف عندما يحكم النموذج بأن الرسالة تصيّد",
+  "Limits for this mailbox": "حدود صندوق البريد هذا",
+  "These override the server policy for this mailbox only.": "تتجاوز سياسة الخادم لصندوق البريد هذا فقط.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "تنطبق على كل صندوق بريد ما لم تكن له حدود خاصة. لا تعطّل سياسة الإنشاء العناوين النشطة الحالية.",
+  "How many masked addresses each mailbox may have.": "عدد العناوين المقنّعة المسموح بها لكل صندوق بريد.",
+  "No new masked addresses can be created on these domains.": "لا يمكن إنشاء عناوين مقنّعة جديدة على هذه النطاقات.",
+  "Mailbox": "صندوق البريد",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "ابحث عن صندوق بريد لتغيير حدوده وإدارة عناوينه المقنّعة.",
+  "Masked addresses of this mailbox": "العناوين المقنّعة لصندوق البريد هذا"
 }

@@ -2356,5 +2356,13 @@
   "Ask from score": "Chiedi da punteggio",
   "Only mail the other tests already score at least this much is shown to the model": "Al modello viene mostrata solo la posta che gli altri test valutano almeno così",
   "Points for a phishing verdict": "Punti per un verdetto di phishing",
-  "Added when the model judges a message phishing": "Aggiunti quando il modello giudica un messaggio phishing"
+  "Added when the model judges a message phishing": "Aggiunti quando il modello giudica un messaggio phishing",
+  "Limits for this mailbox": "Limiti di questa casella",
+  "These override the server policy for this mailbox only.": "Sostituiscono la policy del server solo per questa casella.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Si applica a ogni casella, a meno che non abbia limiti propri. La policy di creazione non disattiva gli indirizzi attivi esistenti.",
+  "How many masked addresses each mailbox may have.": "Quanti indirizzi mascherati può avere ogni casella.",
+  "No new masked addresses can be created on these domains.": "Su questi domini non è possibile creare nuovi indirizzi mascherati.",
+  "Mailbox": "Casella",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Cerca una casella per modificarne i limiti e gestirne gli indirizzi mascherati.",
+  "Masked addresses of this mailbox": "Indirizzi mascherati di questa casella"
 }

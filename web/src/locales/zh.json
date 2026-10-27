@@ -2260,5 +2260,13 @@
   "Ask from score": "询问起始分数",
   "Only mail the other tests already score at least this much is shown to the model": "只有其他测试评分至少达到此值的邮件才会交给模型",
   "Points for a phishing verdict": "钓鱼判定的分数",
-  "Added when the model judges a message phishing": "模型判定邮件为钓鱼时加上"
+  "Added when the model judges a message phishing": "模型判定邮件为钓鱼时加上",
+  "Limits for this mailbox": "此邮箱的限额",
+  "These override the server policy for this mailbox only.": "仅对此邮箱覆盖服务器策略。",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "适用于所有未设置自身限额的邮箱。创建策略不会停用现有的有效地址。",
+  "How many masked addresses each mailbox may have.": "每个邮箱可拥有的隐藏地址数量。",
+  "No new masked addresses can be created on these domains.": "无法在这些域名上创建新的隐藏地址。",
+  "Mailbox": "邮箱",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "查找邮箱以更改其限额并管理其隐藏地址。",
+  "Masked addresses of this mailbox": "此邮箱的隐藏地址"
 }

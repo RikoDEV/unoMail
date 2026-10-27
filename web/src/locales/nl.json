@@ -2308,5 +2308,13 @@
   "Ask from score": "Raadplegen vanaf score",
   "Only mail the other tests already score at least this much is shown to the model": "Alleen mail die de andere tests minstens zo hoog scoren, wordt aan het model getoond",
   "Points for a phishing verdict": "Punten voor een phishingoordeel",
-  "Added when the model judges a message phishing": "Toegevoegd wanneer het model een bericht als phishing beoordeelt"
+  "Added when the model judges a message phishing": "Toegevoegd wanneer het model een bericht als phishing beoordeelt",
+  "Limits for this mailbox": "Limieten voor deze mailbox",
+  "These override the server policy for this mailbox only.": "Deze vervangen het serverbeleid alleen voor deze mailbox.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Geldt voor elke mailbox, tenzij een mailbox eigen limieten heeft. Het aanmaakbeleid schakelt bestaande actieve adressen niet uit.",
+  "How many masked addresses each mailbox may have.": "Hoeveel gemaskeerde adressen elke mailbox mag hebben.",
+  "No new masked addresses can be created on these domains.": "Op deze domeinen kunnen geen nieuwe gemaskeerde adressen worden aangemaakt.",
+  "Mailbox": "Mailbox",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Zoek een mailbox op om de limieten te wijzigen en de gemaskeerde adressen te beheren.",
+  "Masked addresses of this mailbox": "Gemaskeerde adressen van deze mailbox"
 }

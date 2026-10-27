@@ -2404,5 +2404,13 @@
   "Ask from score": "Pýtať sa od skóre",
   "Only mail the other tests already score at least this much is shown to the model": "Modelu sa ukáže len pošta, ktorú ostatné testy hodnotia aspoň takto",
   "Points for a phishing verdict": "Body za verdikt phishing",
-  "Added when the model judges a message phishing": "Pridajú sa, keď model označí správu za phishing"
+  "Added when the model judges a message phishing": "Pridajú sa, keď model označí správu za phishing",
+  "Limits for this mailbox": "Limity tejto schránky",
+  "These override the server policy for this mailbox only.": "Nahrádzajú zásady servera iba pre túto schránku.",
+  "Applies to every mailbox unless a mailbox has its own limits. Creation policy does not disable existing active addresses.": "Platí pre každú schránku, ak nemá vlastné limity. Zásady vytvárania nevypínajú existujúce aktívne adresy.",
+  "How many masked addresses each mailbox may have.": "Koľko maskovaných adries môže mať každá schránka.",
+  "No new masked addresses can be created on these domains.": "V týchto doménach nemožno vytvárať nové maskované adresy.",
+  "Mailbox": "Schránka",
+  "Look up a mailbox to change its limits and manage its masked addresses.": "Vyhľadajte schránku, aby ste zmenili jej limity a spravovali jej maskované adresy.",
+  "Masked addresses of this mailbox": "Maskované adresy tejto schránky"
 }
