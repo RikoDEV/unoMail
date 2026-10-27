@@ -2412,5 +2412,15 @@
   "No new masked addresses can be created on these domains.": "У цих доменах не можна створювати нові масковані адреси.",
   "Mailbox": "Поштова скринька",
   "Look up a mailbox to change its limits and manage its masked addresses.": "Знайдіть поштову скриньку, щоб змінити її обмеження та керувати її маскованими адресами.",
-  "Masked addresses of this mailbox": "Масковані адреси цієї скриньки"
+  "Masked addresses of this mailbox": "Масковані адреси цієї скриньки",
+  "QR code for Thunderbird": "QR-код для Thunderbird",
+  "Set up Thunderbird with a QR code": "Налаштувати Thunderbird за QR-кодом",
+  "In Thunderbird for Android, choose Import settings, then Scan QR code. The account is added with its incoming and outgoing servers.": "У Thunderbird для Android виберіть «Імпорт налаштувань», потім «Сканувати QR-код». Обліковий запис додасться разом із серверами вхідної та вихідної пошти.",
+  "The code contains the password. Do not share it or keep a picture of it.": "Код містить пароль. Не передавайте його і не зберігайте його зображення.",
+  "Thunderbird on your phone": "Thunderbird на телефоні",
+  "Show QR code": "Показати QR-код",
+  "A setup QR code is not available for this account: it cannot use both IMAP and SMTP, or its address is not plain ASCII.": "Для цього облікового запису QR-код налаштування недоступний: він не може використовувати водночас IMAP і SMTP або його адреса не в чистому ASCII.",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. With 2-step verification on, create an app password with mail access above and show its QR code.": "Налаштуйте Thunderbird для Android, відсканувавши код замість введення даних сервера. Коли увімкнено двоетапну перевірку, створіть вище пароль застосунку з доступом до пошти й покажіть його QR-код.",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. The code carries your password; an app password with mail access works too.": "Налаштуйте Thunderbird для Android, відсканувавши код замість введення даних сервера. Код містить ваш пароль; підійде й пароль застосунку з доступом до пошти.",
+  "Show": "Показати"
 }

@@ -58,6 +58,8 @@ const OPERATIONS: &[(&str, &str, &str, &str, &str)] = &[
     ("get", "/api/me/app-passwords", "auth", "App passwords of the account", "user"),
     ("post", "/api/me/app-passwords", "auth", "Create an app password (password required)", "user"),
     ("delete", "/api/me/app-passwords/{id}", "auth", "Revoke an app password", "user"),
+    ("get", "/api/me/client-setup", "auth", "Connection details for a mail program setup QR code", "user"),
+    ("post", "/api/me/client-setup", "auth", "Check the account password before it goes into a setup QR code (refused with 2-step verification)", "user"),
     ("get", "/api/me/pgp/encryption", "auth", "Whether incoming mail is stored encrypted to the account's OpenPGP key", "user"),
     ("put", "/api/me/pgp/encryption", "auth", "Start or stop storing incoming mail encrypted", "user"),
     ("get", "/api/me/smime", "auth", "The account's S/MIME certificate and correspondents' certificates", "user"),

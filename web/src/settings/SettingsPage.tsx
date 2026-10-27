@@ -22,7 +22,7 @@ import { InboxCard } from './Inbox';
 import { EncryptionCard, SmimeCard } from './Encryption';
 import { IdentitiesCard, TemplatesCard } from './Identities';
 import { SideNavPage, useTitle } from '../ui/shell';
-import { AppPasswordsCard, TwoStepCard } from './Security';
+import { AppPasswordsCard, ThunderbirdCard, TwoStepCard } from './Security';
 import { SmartReplySettings, SummaryCardsSettings } from './SummaryCards';
 import { MaskedAddresses } from './MaskedEmail';
 import { useFeature } from '../lib/plugins';
@@ -248,7 +248,7 @@ export default function SettingsPage() {
     { id: 'templates', label: t('Templates'), icon: <Article />, content: <TemplatesCard /> },
     { id: 'filters', label: t('Filters'), icon: <FilterAlt />, content: <FiltersCard /> },
     { id: 'vacation', label: t('Out of office'), icon: <BeachAccess />, content: <VacationCard /> },
-    { id: 'security', label: t('Security'), icon: <Security />, content: <>{passwordCard}<TwoStepCard /><AppPasswordsCard /><EncryptionCard /><SmimeCard />{sessionsCard}</> },
+    { id: 'security', label: t('Security'), icon: <Security />, content: <>{passwordCard}<TwoStepCard /><AppPasswordsCard /><ThunderbirdCard /><EncryptionCard /><SmimeCard />{sessionsCard}</> },
   ];
   // Plug-ins may hide some of them and add their own.
   const hidden = new Set([...(showMasked ? [] : ['masked-addresses']), ...(showTemplates ? [] : ['templates'])]);

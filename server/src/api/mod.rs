@@ -423,6 +423,7 @@ pub fn router(state: AppState) -> Router {
         .route("/me/passkeys/register", post(signin::passkey_finish))
         .route("/me/passkeys/{id}", delete(signin::passkey_delete).patch(signin::passkey_rename))
         .route("/me/app-passwords", get(signin::app_passwords).post(signin::app_password_create))
+        .route("/me/client-setup", get(signin::client_setup).post(signin::client_setup_password))
         .route("/me/app-passwords/{id}", delete(signin::app_password_delete))
         .route("/me/pgp/encryption", get(storage::encryption).put(storage::encryption_set))
         .route("/accounts/{id}/two-factor", get(signin::admin_status).delete(signin::admin_reset))

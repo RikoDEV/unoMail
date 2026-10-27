@@ -2268,5 +2268,15 @@
   "No new masked addresses can be created on these domains.": "无法在这些域名上创建新的隐藏地址。",
   "Mailbox": "邮箱",
   "Look up a mailbox to change its limits and manage its masked addresses.": "查找邮箱以更改其限额并管理其隐藏地址。",
-  "Masked addresses of this mailbox": "此邮箱的隐藏地址"
+  "Masked addresses of this mailbox": "此邮箱的隐藏地址",
+  "QR code for Thunderbird": "Thunderbird 二维码",
+  "Set up Thunderbird with a QR code": "用二维码设置 Thunderbird",
+  "In Thunderbird for Android, choose Import settings, then Scan QR code. The account is added with its incoming and outgoing servers.": "在 Android 版 Thunderbird 中选择“导入设置”，然后选择“扫描二维码”。账户会连同收件和发件服务器一起添加。",
+  "The code contains the password. Do not share it or keep a picture of it.": "二维码中包含密码。请勿分享，也不要保存它的图片。",
+  "Thunderbird on your phone": "手机上的 Thunderbird",
+  "Show QR code": "显示二维码",
+  "A setup QR code is not available for this account: it cannot use both IMAP and SMTP, or its address is not plain ASCII.": "此账户无法使用设置二维码：它不能同时使用 IMAP 和 SMTP，或其地址不是纯 ASCII。",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. With 2-step verification on, create an app password with mail access above and show its QR code.": "扫描二维码即可设置 Android 版 Thunderbird，无需手动输入服务器信息。开启两步验证时，请在上方创建一个具有邮件权限的应用专用密码，并显示其二维码。",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. The code carries your password; an app password with mail access works too.": "扫描二维码即可设置 Android 版 Thunderbird，无需手动输入服务器信息。二维码中包含你的密码；具有邮件权限的应用专用密码也可以使用。",
+  "Show": "显示"
 }

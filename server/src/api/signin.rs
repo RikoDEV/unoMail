@@ -544,6 +544,38 @@ pub async fn app_password_create(State(state): State<AppState>, session: Session
     Ok(Json(json!({ "id": id, "name": name, "password": password, "scopes": scopes })))
 }
 
+/// What a mail program needs to connect, for the setup QR code the browser draws (Thunderbird's
+/// "Export for Mobile" format). The ports are the public ones autoconfig announces.
+pub async fn client_setup(State(state): State<AppState>, session: Session) -> JsonResult<Value> {
+    let factors = twofactor::factors(&state.db, session.account.id).await?;
+    Ok(Json(json!({
+        "email": session.account.email,
+        "display_name": session.account.display_name,
+        "hostname": state.cfg.hostname,
+        "imap_port": 993,
+        "smtp_port": 465,
+        "imap_enabled": session.account.imap_enabled,
+        "smtp_enabled": session.account.smtp_enabled,
+        "two_factor": factors.enabled(),
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct ClientSetupPassword {
+    password: String,
+}
+
+/// Checks the account password before it goes into a setup QR code. With 2-step verification
+/// on, mail programs cannot use it: they need an app password instead.
+pub async fn client_setup_password(State(state): State<AppState>, session: Session, Json(input): Json<ClientSetupPassword>) -> JsonResult<Value> {
+    if twofactor::factors(&state.db, session.account.id).await?.enabled() {
+        return Err(ApiError::Conflict("with 2-step verification on, use an app password".into()));
+    }
+    confirm_password(&state, &session, &input.password).await?;
+    session.audit(&state, "client_setup.qr_code", "account password", "").await;
+    Ok(Json(json!({ "ok": true })))
+}
+
 pub async fn app_password_delete(State(state): State<AppState>, session: Session, Path(id): Path<i64>) -> JsonResult<Value> {
     let name: Option<String> = sqlx::query_scalar("DELETE FROM app_passwords WHERE id = ? AND account_id = ? RETURNING name").bind(id).bind(session.account.id).fetch_optional(&state.db).await?;
     let name = name.ok_or(ApiError::NotFound)?;

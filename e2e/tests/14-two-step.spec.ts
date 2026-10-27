@@ -49,6 +49,15 @@ test.describe('2-step verification and app passwords', () => {
   test('an authenticator app is set up, asked for at sign-in, and reset by the administrator', async ({ page, browser }) => {
     await login(page, JACK, USER_PASSWORD);
     await security(page);
+    // Without 2-step verification, the setup QR code for Thunderbird carries the account password.
+    await page.getByRole('button', { name: 'Show QR code' }).click();
+    const prompt = page.getByRole('dialog', { name: 'Show QR code' });
+    await prompt.getByLabel('Your password').fill(USER_PASSWORD);
+    await prompt.getByRole('button', { name: 'Show', exact: true }).click();
+    const qr = page.getByRole('dialog', { name: 'Set up Thunderbird with a QR code' });
+    await expect(qr.getByTestId('thunderbird-qr')).toBeVisible();
+    await qr.getByRole('button', { name: 'Done' }).click();
+
     await page.getByRole('button', { name: 'Set up' }).click();
     const setup = page.getByRole('dialog', { name: 'Set up an authenticator app' });
     await expect(setup.getByRole('img', { name: 'QR code for the authenticator app' })).toBeVisible();
@@ -75,6 +84,12 @@ test.describe('2-step verification and app passwords', () => {
     await create.getByLabel('Your password').fill(USER_PASSWORD);
     await create.getByRole('button', { name: 'Create' }).click();
     await expect(page.getByTestId('new-app-password')).toHaveText(/^[a-z]{4}( [a-z]{4}){5}$/);
+    // With 2-step verification on, only an app password goes into the setup QR code.
+    await expect(page.getByRole('button', { name: 'Show QR code' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'QR code for Thunderbird' }).click();
+    const appQr = page.getByRole('dialog', { name: 'Set up Thunderbird with a QR code' });
+    await expect(appQr.getByTestId('thunderbird-qr')).toBeVisible();
+    await appQr.getByRole('button', { name: 'Done' }).click();
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByRole('table', { name: 'App passwords' })).toContainText('Phone');
 

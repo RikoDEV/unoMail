@@ -2,6 +2,7 @@ import Delete from '@mui/icons-material/Delete';
 import Edit from '@mui/icons-material/Edit';
 import Key from '@mui/icons-material/Key';
 import PhonelinkLock from '@mui/icons-material/PhonelinkLock';
+import QrCode2 from '@mui/icons-material/QrCode2';
 import {
   Alert, Box, Button, Card, CardContent, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, FormGroup, IconButton, Stack, Table, TableBody, TableCell,
   TableHead, TableRow, TextField, Tooltip, Typography,
@@ -12,6 +13,7 @@ import { createPasskey, keepOnlyAcceptedPasskeys, passkeysAvailable, type Creati
 
 import { t } from '../i18n';
 import { DialogButtons } from '../admin/common';
+import { type ClientSetup, fitsQrFormat, thunderbirdPayload } from './thunderbirdQr';
 interface Overview {
   enabled: boolean;
   totp: boolean;
@@ -336,7 +338,9 @@ export function AppPasswordsCard() {
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<string[]>(['mail', 'dav']);
   const [password, setPassword] = useState('');
-  const [created, setCreated] = useState<{ name: string; password: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; password: string; scopes: string[] } | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const { setup, usable } = useClientSetup();
 
   const load = useCallback(() => get<AppPassword[]>('/api/me/app-passwords').then(setList).catch((err) => setError(errorText(err, t('Could not load')))), []);
   useEffect(() => {
@@ -346,9 +350,10 @@ export function AppPasswordsCard() {
   async function create() {
     setError('');
     try {
-      const result = await post<{ name: string; password: string }>('/api/me/app-passwords', { name, scopes, password });
+      const result = await post<{ name: string; password: string; scopes: string[] }>('/api/me/app-passwords', { name, scopes, password });
       setCreating(false);
       setCreated(result);
+      setShowQr(false);
       setName('');
       setPassword('');
       await load();
@@ -427,11 +432,85 @@ export function AppPasswordsCard() {
             </Typography>
           </DialogContent>
           <DialogActions>
+            {setup && usable && created.scopes.includes('mail') && <Button startIcon={<QrCode2 />} onClick={() => setShowQr(true)}>{t('QR code for Thunderbird')}</Button>}
             <Button onClick={() => void navigator.clipboard?.writeText(created.password)}>{t('Copy')}</Button>
             <Button variant="contained" onClick={() => setCreated(null)}>{t('Done')}</Button>
           </DialogActions>
         </Dialog>
       )}
+      {created && showQr && setup && <ThunderbirdQrDialog setup={setup} password={created.password} onClose={() => setShowQr(false)} />}
+    </Card>
+  );
+}
+
+/** A setup QR code for Thunderbird for Android; it carries the password, so it is shown only on request. */
+function ThunderbirdQrDialog({ setup, password, onClose }: { setup: ClientSetup; password: string; onClose: () => void }) {
+  const [qr, setQr] = useState('');
+  useEffect(() => {
+    void import('qrcode').then(({ default: QRCode }) => QRCode.toDataURL(thunderbirdPayload(setup, password), { margin: 2, width: 280, errorCorrectionLevel: 'M' })).then(setQr);
+  }, [setup, password]);
+  return (
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>{t('Set up Thunderbird with a QR code')}</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ alignItems: 'center' }}>
+          <Typography variant="body2">{t('In Thunderbird for Android, choose Import settings, then Scan QR code. The account is added with its incoming and outgoing servers.')}</Typography>
+          {qr ? <Box component="img" src={qr} alt={t('QR code for Thunderbird')} data-testid="thunderbird-qr" sx={{ width: 280, maxWidth: '100%', height: 'auto', aspectRatio: '1', borderRadius: 1, bgcolor: '#fff' }} /> : <Box sx={{ width: 280, height: 280 }} />}
+          <Alert severity="warning" sx={{ alignSelf: 'stretch' }}>{t('The code contains the password. Do not share it or keep a picture of it.')}</Alert>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="contained" onClick={onClose}>{t('Done')}</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Connection details for setup QR codes, or why there can be none. */
+function useClientSetup() {
+  const [setup, setSetup] = useState<(ClientSetup & { imap_enabled: boolean; smtp_enabled: boolean; two_factor: boolean }) | null>(null);
+  useEffect(() => {
+    void get<NonNullable<typeof setup>>('/api/me/client-setup').then(setSetup).catch(() => setSetup(null));
+  }, []);
+  const usable = Boolean(setup && setup.imap_enabled && setup.smtp_enabled && fitsQrFormat(setup));
+  return { setup, usable };
+}
+
+/** Thunderbird for Android set up by scanning a code, with the account password or an app password. */
+export function ThunderbirdCard() {
+  const { setup, usable } = useClientSetup();
+  const [asking, setAsking] = useState(false);
+  const [password, setPassword] = useState<string | null>(null);
+  if (!setup) return null;
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+          <Typography variant="h6" sx={{ flex: 1 }}>{t('Thunderbird on your phone')}</Typography>
+          {usable && !setup.two_factor && <Button variant="outlined" startIcon={<QrCode2 />} onClick={() => setAsking(true)}>{t('Show QR code')}</Button>}
+        </Stack>
+        <Typography variant="body2" sx={{ color: 'text.secondary', maxWidth: 720 }}>
+          {!usable
+            ? t('A setup QR code is not available for this account: it cannot use both IMAP and SMTP, or its address is not plain ASCII.')
+            : setup.two_factor
+              ? t('Set up Thunderbird for Android by scanning a code instead of typing the server details. With 2-step verification on, create an app password with mail access above and show its QR code.')
+              : t('Set up Thunderbird for Android by scanning a code instead of typing the server details. The code carries your password; an app password with mail access works too.')}
+        </Typography>
+      </CardContent>
+      {asking && (
+        <PasswordPrompt
+          title={t('Show QR code')}
+          action={t('Show')}
+          color="primary"
+          onConfirm={async (entered) => {
+            await post('/api/me/client-setup', { password: entered });
+            setAsking(false);
+            setPassword(entered);
+          }}
+          onClose={() => setAsking(false)}
+        />
+      )}
+      {password !== null && <ThunderbirdQrDialog setup={setup} password={password} onClose={() => setPassword(null)} />}
     </Card>
   );
 }

@@ -2364,5 +2364,15 @@
   "No new masked addresses can be created on these domains.": "Aucune nouvelle adresse masquée ne peut être créée sur ces domaines.",
   "Mailbox": "Boîte aux lettres",
   "Look up a mailbox to change its limits and manage its masked addresses.": "Recherchez une boîte aux lettres pour modifier ses limites et gérer ses adresses masquées.",
-  "Masked addresses of this mailbox": "Adresses masquées de cette boîte aux lettres"
+  "Masked addresses of this mailbox": "Adresses masquées de cette boîte aux lettres",
+  "QR code for Thunderbird": "Code QR pour Thunderbird",
+  "Set up Thunderbird with a QR code": "Configurer Thunderbird avec un code QR",
+  "In Thunderbird for Android, choose Import settings, then Scan QR code. The account is added with its incoming and outgoing servers.": "Dans Thunderbird pour Android, choisissez Importer les paramètres, puis Scanner le code QR. Le compte est ajouté avec ses serveurs entrant et sortant.",
+  "The code contains the password. Do not share it or keep a picture of it.": "Le code contient le mot de passe. Ne le partagez pas et n’en gardez pas de photo.",
+  "Thunderbird on your phone": "Thunderbird sur votre téléphone",
+  "Show QR code": "Afficher le code QR",
+  "A setup QR code is not available for this account: it cannot use both IMAP and SMTP, or its address is not plain ASCII.": "Aucun code QR de configuration n’est disponible pour ce compte : il ne peut pas utiliser à la fois IMAP et SMTP, ou son adresse n’est pas en ASCII simple.",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. With 2-step verification on, create an app password with mail access above and show its QR code.": "Configurez Thunderbird pour Android en scannant un code au lieu de saisir les informations du serveur. Avec la validation en deux étapes activée, créez ci-dessus un mot de passe d’application avec accès au courrier et affichez son code QR.",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. The code carries your password; an app password with mail access works too.": "Configurez Thunderbird pour Android en scannant un code au lieu de saisir les informations du serveur. Le code contient votre mot de passe ; un mot de passe d’application avec accès au courrier fonctionne aussi.",
+  "Show": "Afficher"
 }

@@ -14,6 +14,15 @@
 User name: the full e-mail address. Password: the account password, or an
 [app password](#two-step-sign-in) when two-step sign-in is on.
 
+### Thunderbird for Android by QR code
+
+**Settings → Security → Thunderbird on your phone** shows a QR code in Thunderbird's
+[export format](https://github.com/thunderbird/thunderbird-android/blob/main/feature/migration/qrcode/qr-code-format.md).
+In Thunderbird for Android choose **Import settings → Scan QR code**: the account is added with
+IMAP (993, TLS) and SMTP (465, TLS). The code carries the account password, after it is
+confirmed, or, with two-step sign-in on, a new app password with mail access (from the dialog
+that shows it). The code is drawn in the browser and never stored; anyone who sees it can sign in.
+
 ## Signing in
 
 ### Passkeys

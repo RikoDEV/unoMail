@@ -2364,5 +2364,15 @@
   "No new masked addresses can be created on these domains.": "Pe aceste domenii nu se pot crea adrese mascate noi.",
   "Mailbox": "Căsuță",
   "Look up a mailbox to change its limits and manage its masked addresses.": "Căutați o căsuță pentru a-i modifica limitele și a-i gestiona adresele mascate.",
-  "Masked addresses of this mailbox": "Adresele mascate ale acestei căsuțe"
+  "Masked addresses of this mailbox": "Adresele mascate ale acestei căsuțe",
+  "QR code for Thunderbird": "Cod QR pentru Thunderbird",
+  "Set up Thunderbird with a QR code": "Configurați Thunderbird cu un cod QR",
+  "In Thunderbird for Android, choose Import settings, then Scan QR code. The account is added with its incoming and outgoing servers.": "În Thunderbird pentru Android, alegeți Importă setările, apoi Scanează codul QR. Contul este adăugat cu serverele de intrare și de ieșire.",
+  "The code contains the password. Do not share it or keep a picture of it.": "Codul conține parola. Nu îl partajați și nu păstrați o imagine a lui.",
+  "Thunderbird on your phone": "Thunderbird pe telefon",
+  "Show QR code": "Afișează codul QR",
+  "A setup QR code is not available for this account: it cannot use both IMAP and SMTP, or its address is not plain ASCII.": "Pentru acest cont nu este disponibil un cod QR de configurare: nu poate folosi și IMAP, și SMTP, sau adresa nu este ASCII simplu.",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. With 2-step verification on, create an app password with mail access above and show its QR code.": "Configurați Thunderbird pentru Android scanând un cod în loc să tastați datele serverului. Cu verificarea în doi pași activă, creați mai sus o parolă de aplicație cu acces la e-mail și afișați codul ei QR.",
+  "Set up Thunderbird for Android by scanning a code instead of typing the server details. The code carries your password; an app password with mail access works too.": "Configurați Thunderbird pentru Android scanând un cod în loc să tastați datele serverului. Codul conține parola dvs.; funcționează și o parolă de aplicație cu acces la e-mail.",
+  "Show": "Afișează"
 }

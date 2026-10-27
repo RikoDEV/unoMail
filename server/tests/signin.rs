@@ -450,3 +450,25 @@ async fn passkey_sign_ins_are_limited_per_network() {
     api.peer = "[2001:db8:77:2::1]:40000".parse().unwrap();
     assert_eq!(api.get("/api/auth/passkey").await.status, StatusCode::OK, "other networks are not affected");
 }
+
+#[tokio::test]
+async fn setup_qr_codes_carry_the_account_password_only_without_two_step_sign_in() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+    let bob = Api::logged_in(&env, "bob@example.org").await;
+
+    let setup = bob.get("/api/me/client-setup").await.body;
+    assert_eq!(setup["email"], "bob@example.org");
+    assert_eq!(setup["hostname"], env.app.cfg.hostname.as_str());
+    assert_eq!((setup["imap_port"].as_i64(), setup["smtp_port"].as_i64()), (Some(993), Some(465)));
+    assert_eq!(setup["two_factor"], false);
+    assert_eq!(bob.post("/api/me/client-setup", json!({ "password": "wrong" })).await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(bob.post("/api/me/client-setup", json!({ "password": PASSWORD })).await.status, StatusCode::OK);
+
+    // With an authenticator app on, programs need an app password, so the account password is refused.
+    let secret = bob.post("/api/me/two-factor/totp", json!({})).await.body["secret"].as_str().unwrap().to_owned();
+    bob.put("/api/me/two-factor/totp", json!({ "code": code(&secret, 0), "password": PASSWORD })).await;
+    assert_eq!(bob.get("/api/me/client-setup").await.body["two_factor"], true);
+    assert_eq!(bob.post("/api/me/client-setup", json!({ "password": PASSWORD })).await.status, StatusCode::CONFLICT);
+}
