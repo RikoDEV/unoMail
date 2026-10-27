@@ -51,7 +51,6 @@ ENV UNOMAIL_DATA_DIR=/data/unomail \
     UNOMAIL_RSPAMD_CONTROLLER_URL=http://127.0.0.1:11334 \
     UNOMAIL_RSPAMD_SOCKET=/run/rspamd/worker.sock \
     UNOMAIL_RSPAMD_CONTROLLER_SOCKET=/run/rspamd/controller.sock \
-    UNOMAIL_DNSBL_ZONES=zen.spamhaus.org \
     CLAMAV_ENABLED=true \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_KEEP_ENV=1

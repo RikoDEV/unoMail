@@ -220,8 +220,8 @@ sign-on), sender identities and dependencies (`cargo audit`, `pnpm audit --prod`
 - Never set `UNOMAIL_ALLOW_PRIVATE_DESTINATIONS` outside tests.
 - Make sure port 25 sees the real client addresses (no NAT or userland proxy in front, or a
   warning appears in the log); list real relays only in `UNOMAIL_TRUSTED_NETWORKS`.
-- Keep *Refuse executable attachments* on, and the bundled rspamd and clamd (or milters) running; `UNOMAIL_RSPAMD_FAIL_OPEN` and
-  `UNOMAIL_MILTER_FAIL_OPEN` stay false.
+- Keep *Refuse executable attachments* on, and the bundled rspamd and clamd (or milters) running; *Accept mail when the filter is down* (Server settings) and
+  `UNOMAIL_MILTER_FAIL_OPEN` stay off.
 - Expose only the mail and web ports; LMTP stays off unless a front server needs it, and then
   only on a private network.
 - Back up `secret.key`, `blob.key` and `vapid.key` separately from the data backups.

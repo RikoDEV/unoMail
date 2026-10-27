@@ -1,8 +1,7 @@
 # Example deployment. Set the hostname to the public name of the mail server (its MX target).
 services:
   unomail:
-    build: .
-    image: unomail:latest
+    image: ghcr.io/rikodev/unomail:latest
     restart: unless-stopped
     hostname: mail.example.com
     environment:
@@ -31,21 +30,12 @@ services:
       # UNOMAIL_SIEVE_PORT: "4190"                      # ManageSieve; publish 4190 below to use it
       # UNOMAIL_LMTP_PORT: "0"
 
-      # --- Inbound mail and spam (runtime) ---
-      # UNOMAIL_MAX_MESSAGE_SIZE: "52428800"            # bytes
-      # UNOMAIL_MAX_RECIPIENTS: "100"
-      # UNOMAIL_SMTP_REQUIRE_TLS: "false"
-      # UNOMAIL_GREYLIST: "true"
-      # UNOMAIL_GREYLIST_DELAY: "60"                    # seconds
-      # UNOMAIL_DNSBL_ZONES: zen.spamhaus.org           # comma-separated; empty checks none. Spamhaus
-      #                                                 # refuses public resolvers (8.8.8.8, 1.1.1.1):
-      #                                                 # point `dns:` at a resolver of your own
+      # --- Inbound mail and spam ---
+      # Size limits, greylisting, blocklists and the AbuseIPDB threshold: Administration > Server settings
       # UNOMAIL_ABUSEIPDB_KEY: ""
-      # UNOMAIL_ABUSEIPDB_THRESHOLD: "90"
       # UNOMAIL_ABUSEIPDB_REPORT: "false"               # also report password guessers (needs the key)
       # UNOMAIL_TRUSTED_NETWORKS: ""                    # CIDRs of relays trusted like the server
       # UNOMAIL_ARC_TRUSTED_SEALERS: ""                 # default: Google, Microsoft, Yahoo, Apple, Fastmail, Zoho, Proton
-      # UNOMAIL_RSPAMD_FAIL_OPEN: "false"               # accept mail unscanned when Rspamd is down
       # UNOMAIL_RSPAMD_PASSWORD: ""                     # Rspamd controller password, if set
       # UNOMAIL_MILTERS: ""                             # host:port,... run in order
       # UNOMAIL_MILTER_FAIL_OPEN: "false"
@@ -53,13 +43,9 @@ services:
       # --- Antivirus ---
       # CLAMAV_ENABLED: "true"                          # false on small hosts: the signature database needs well over 1 GB of memory
       # UNOMAIL_CLAMAV_ADDR: ""                         # external clamd host:port instead of the bundled one
-      # UNOMAIL_VIRUS_ACTION: reject                    # reject or quarantine (runtime)
 
-      # --- Outbound mail (runtime) ---
-      # UNOMAIL_OUTBOUND_RELAY: ""                      # smarthost host:port when port 25 is blocked
-      # UNOMAIL_OUTBOUND_REQUIRE_TLS: "false"
-      # UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR: "300"
-      # UNOMAIL_OUTBOUND_MAX_RECIPIENTS_PER_HOUR: "1000"
+      # --- Outbound mail ---
+      # Relay, required TLS and hourly limits: Administration > Server settings
       # UNOMAIL_QUEUE_MAX_AGE: "432000"                 # give up on delivery after, seconds
       # UNOMAIL_ALLOW_PRIVATE_DESTINATIONS: "false"     # tests and closed networks only
 

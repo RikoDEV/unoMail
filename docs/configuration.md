@@ -52,23 +52,31 @@ be changed at runtime, see [Runtime settings](#runtime-settings).
 | `UNOMAIL_ACME_CA_FILE` | – | Extra root CA for a private ACME server |
 | `UNOMAIL_ACME_DNS_WAIT` | `20` | Seconds to wait for DNS-01 propagation |
 
+## Settings in the admin panel
+
+Message size and recipient limits, greylisting, DNS blocklists, the AbuseIPDB threshold,
+required TLS, the Rspamd fail-open switch, the virus action, the outbound relay and the hourly
+sending limits are changed in **Administration → Server settings**. They are no longer read
+from the environment. When one of their old variables (`UNOMAIL_MAX_MESSAGE_SIZE`,
+`UNOMAIL_MAX_RECIPIENTS`, `UNOMAIL_SMTP_REQUIRE_TLS`, `UNOMAIL_GREYLIST`,
+`UNOMAIL_GREYLIST_DELAY`, `UNOMAIL_DNSBL_ZONES`, `UNOMAIL_ABUSEIPDB_THRESHOLD`,
+`UNOMAIL_RSPAMD_FAIL_OPEN`, `UNOMAIL_VIRUS_ACTION`, `UNOMAIL_OUTBOUND_RELAY`,
+`UNOMAIL_OUTBOUND_REQUIRE_TLS`, `UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR`,
+`UNOMAIL_OUTBOUND_MAX_RECIPIENTS_PER_HOUR`) is still set, the server saves its value in Server
+settings once, unless that setting was already changed there, and logs a warning. Remove the
+variable afterwards.
+
 ## Inbound mail
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `UNOMAIL_MAX_MESSAGE_SIZE` | `52428800` | Bytes |
-| `UNOMAIL_MAX_RECIPIENTS` | `100` | Per message |
-| `UNOMAIL_SMTP_REQUIRE_TLS` | `false` | Require STARTTLS on port 25 |
-| `UNOMAIL_GREYLIST` | `true` | Greylist unknown senders |
-| `UNOMAIL_GREYLIST_DELAY` | `60` | Seconds |
-| `UNOMAIL_DNSBL_ZONES` | `zen.spamhaus.org` | Comma-separated; empty disables |
 | `UNOMAIL_ARC_TRUSTED_SEALERS` | major providers | Domains whose ARC seal can override DMARC |
 | `UNOMAIL_ABUSEIPDB_KEY` | – | Enables AbuseIPDB lookups |
-| `UNOMAIL_ABUSEIPDB_THRESHOLD` | `90` | Score at which connections are refused |
-| `UNOMAIL_ABUSEIPDB_REPORT` | `false` | Report brute force and spam sources |
+| `UNOMAIL_ABUSEIPDB_REPORT` | `false` | Report brute force, spam, phishing, protocol garbage and web vulnerability scanning sources |
 
 > [!NOTE]
-> Spamhaus refuses queries through public resolvers. Give the container its own resolver.
+> Spamhaus refuses queries through public resolvers. Give the container its own resolver, or
+> change the blocklists in **Administration → Server settings**.
 
 ## Filtering
 
@@ -79,21 +87,15 @@ be changed at runtime, see [Runtime settings](#runtime-settings).
 | `UNOMAIL_RSPAMD_SOCKET` | image: set | Unix socket for the worker |
 | `UNOMAIL_RSPAMD_CONTROLLER_SOCKET` | image: set | Unix socket for the controller |
 | `UNOMAIL_RSPAMD_PASSWORD` | – | Controller password |
-| `UNOMAIL_RSPAMD_FAIL_OPEN` | `false` | Accept unscanned mail when Rspamd is down |
 | `UNOMAIL_MILTERS` | – | `host:port,...`, run in order |
 | `UNOMAIL_MILTER_FAIL_OPEN` | `false` | Accept mail when a milter is down |
 | `UNOMAIL_CLAMAV_ADDR` | image: local | clamd `host:port` |
-| `UNOMAIL_VIRUS_ACTION` | `reject` | `reject` or `quarantine` |
 | `CLAMAV_ENABLED` | `true` | Image only. Needs more than 1 GB RAM. |
 
 ## Outbound mail
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `UNOMAIL_OUTBOUND_RELAY` | – | Smarthost `host:port` |
-| `UNOMAIL_OUTBOUND_REQUIRE_TLS` | `false` | Never send without verified TLS |
-| `UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR` | `300` | Per account; exceeding blocks the account |
-| `UNOMAIL_OUTBOUND_MAX_RECIPIENTS_PER_HOUR` | `1000` | Per account |
 | `UNOMAIL_QUEUE_MAX_AGE` | `432000` | Seconds before undeliverable mail bounces |
 
 ## Storage and backups

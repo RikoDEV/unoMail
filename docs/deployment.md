@@ -6,7 +6,7 @@ See the [quick start](../README.md#quick-start) to run the container.
 
 | Requirement | Notes |
 | --- | --- |
-| Outbound port 25 | Often blocked by providers. Otherwise set `UNOMAIL_OUTBOUND_RELAY`. |
+| Outbound port 25 | Often blocked by providers. Otherwise set a relay in **Server settings**. |
 | Static IP with PTR | The reverse DNS must name `UNOMAIL_HOSTNAME`. Set it at your hosting provider. |
 | Inbound ports | 25, 80, 143, 443, 465, 587, 993, 995 (4190 for ManageSieve) |
 | Memory | Over 1 GB for ClamAV, or set `CLAMAV_ENABLED=false` |
@@ -48,7 +48,7 @@ Check the dashboard, the domain's DNS page, and `docker compose logs unomail`. S
 | --- | --- |
 | Outbound mail stays queued | Port 25 is blocked. Test with `nc -vz gmail-smtp-in.l.google.com 25`, then use a relay. |
 | Mail lands in spam | Check SPF, DKIM, DMARC, the PTR record and blocklists. New IP addresses need time to build reputation. |
-| DNSBL queries refused | The resolver is public. Add a `dns:` entry, or set `UNOMAIL_DNSBL_ZONES=""`. |
+| DNSBL queries refused | The resolver is public. Add a `dns:` entry, or clear the blocklists in **Server settings**. |
 | No certificate | Port 80 must be reachable and the hostname must resolve to the server. Otherwise use DNS-01. |
 | Inbound mail delayed | Greylisting. Add trusted relays to `UNOMAIL_TRUSTED_NETWORKS`. |
 | All clients have one private IP | Docker's userland proxy. Use host networking. |

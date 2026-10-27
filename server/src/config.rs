@@ -13,6 +13,14 @@ pub enum BackupTarget {
     S3(crate::s3::S3Config),
 }
 
+/// A server setting found in an environment variable that the admin panel now owns.
+#[derive(Debug, Clone)]
+pub struct LegacySetting {
+    pub env: &'static str,
+    pub key: &'static str,
+    pub value: serde_json::Value,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub data_dir: PathBuf,
@@ -125,6 +133,9 @@ pub struct Config {
 
     pub acme_directory: String,
     pub session_ttl_secs: i64,
+    /// Server settings still given by their old environment variables, which are no longer
+    /// read: they are saved once as overrides at startup (see `settings::load`).
+    pub legacy_settings: Vec<LegacySetting>,
 }
 
 impl Config {
@@ -159,6 +170,51 @@ fn parse_bool(name: &str, default: bool) -> anyhow::Result<bool> {
         Some("0" | "false" | "no" | "off") => Ok(false),
         Some(v) => bail!("invalid {name}={v:?}: expected a boolean"),
     }
+}
+
+/// The server settings that were once environment variables and are now changed in the admin
+/// panel only. Values still set are kept for a one-time import.
+fn legacy_settings() -> anyhow::Result<Vec<LegacySetting>> {
+    use serde_json::json;
+    let mut found = Vec::new();
+    let mut add = |env: &'static str, key: &'static str, value: serde_json::Value| found.push(LegacySetting { env, key, value });
+    for (env, key) in [
+        ("UNOMAIL_MAX_MESSAGE_SIZE", "max_message_size"),
+        ("UNOMAIL_MAX_RECIPIENTS", "max_recipients"),
+        ("UNOMAIL_GREYLIST_DELAY", "greylist_delay_secs"),
+        ("UNOMAIL_ABUSEIPDB_THRESHOLD", "abuseipdb_threshold"),
+        ("UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR", "outbound_max_messages_per_hour"),
+        ("UNOMAIL_OUTBOUND_MAX_RECIPIENTS_PER_HOUR", "outbound_max_recipients_per_hour"),
+    ] {
+        if var(env).is_some() {
+            add(env, key, json!(parse::<i64>(env, 0)?));
+        }
+    }
+    for (env, key) in [
+        ("UNOMAIL_GREYLIST", "greylist_enabled"),
+        ("UNOMAIL_SMTP_REQUIRE_TLS", "smtp_require_tls"),
+        ("UNOMAIL_OUTBOUND_REQUIRE_TLS", "outbound_require_tls"),
+        ("UNOMAIL_RSPAMD_FAIL_OPEN", "rspamd_fail_open"),
+    ] {
+        if var(env).is_some() {
+            add(env, key, json!(parse_bool(env, false)?));
+        }
+    }
+    // Set but empty turned the blocklists off.
+    if std::env::var_os("UNOMAIL_DNSBL_ZONES").is_some() {
+        add("UNOMAIL_DNSBL_ZONES", "dnsbl_zones", json!(parse_list("UNOMAIL_DNSBL_ZONES")));
+    }
+    match var("UNOMAIL_VIRUS_ACTION").as_deref() {
+        None => {}
+        Some("reject") => add("UNOMAIL_VIRUS_ACTION", "virus_quarantine", json!(false)),
+        Some("quarantine") => add("UNOMAIL_VIRUS_ACTION", "virus_quarantine", json!(true)),
+        Some(other) => bail!("invalid UNOMAIL_VIRUS_ACTION={other:?}: expected reject or quarantine"),
+    }
+    if let Some(relay) = var("UNOMAIL_OUTBOUND_RELAY") {
+        add("UNOMAIL_OUTBOUND_RELAY", "default_route_enabled", json!(true));
+        add("UNOMAIL_OUTBOUND_RELAY", "default_route", json!(relay));
+    }
+    Ok(found)
 }
 
 fn parse_list(name: &str) -> Vec<String> {
@@ -208,23 +264,18 @@ impl Config {
             trusted_networks,
             admin_email: var("UNOMAIL_ADMIN_EMAIL"),
             admin_password: var("UNOMAIL_ADMIN_PASSWORD"),
-            max_message_size: parse("UNOMAIL_MAX_MESSAGE_SIZE", 50 * 1024 * 1024)?,
-            max_recipients: parse("UNOMAIL_MAX_RECIPIENTS", 100)?,
-            greylist_enabled: parse_bool("UNOMAIL_GREYLIST", true)?,
-            greylist_delay_secs: parse("UNOMAIL_GREYLIST_DELAY", 60)?,
-            // Spamhaus unless the variable is set; set but empty turns the blocklists off.
-            dnsbl_zones: if std::env::var_os("UNOMAIL_DNSBL_ZONES").is_some() { parse_list("UNOMAIL_DNSBL_ZONES") } else { vec!["zen.spamhaus.org".into()] },
+            max_message_size: 50 * 1024 * 1024,
+            max_recipients: 100,
+            greylist_enabled: true,
+            greylist_delay_secs: 60,
+            dnsbl_zones: vec!["zen.spamhaus.org".into()],
             rspamd_url: var("UNOMAIL_RSPAMD_URL"),
             rspamd_socket: var("UNOMAIL_RSPAMD_SOCKET").map(PathBuf::from),
             rspamd_controller_socket: var("UNOMAIL_RSPAMD_CONTROLLER_SOCKET").map(PathBuf::from),
             rspamd_password: var("UNOMAIL_RSPAMD_PASSWORD"),
-            rspamd_fail_open: parse_bool("UNOMAIL_RSPAMD_FAIL_OPEN", false)?,
+            rspamd_fail_open: false,
             clamav_addr: var("UNOMAIL_CLAMAV_ADDR"),
-            virus_quarantine: match var("UNOMAIL_VIRUS_ACTION").as_deref() {
-                None | Some("reject") => false,
-                Some("quarantine") => true,
-                Some(other) => bail!("invalid UNOMAIL_VIRUS_ACTION={other:?}: expected reject or quarantine"),
-            },
+            virus_quarantine: false,
             gravatar_url: match var("UNOMAIL_GRAVATAR").as_deref() {
                 None | Some("1" | "true" | "yes" | "on") => Some("https://www.gravatar.com/avatar".into()),
                 Some("0" | "false" | "no" | "off") => None,
@@ -251,24 +302,25 @@ impl Config {
             },
             backup_keep: parse("UNOMAIL_BACKUP_KEEP", 7usize)?.max(1),
             rspamd_controller_url: var("UNOMAIL_RSPAMD_CONTROLLER_URL"),
-            smtp_require_tls: parse_bool("UNOMAIL_SMTP_REQUIRE_TLS", false)?,
+            smtp_require_tls: false,
             acme_ca_file: var("UNOMAIL_ACME_CA_FILE").map(PathBuf::from),
             acme_dns_wait_secs: parse("UNOMAIL_ACME_DNS_WAIT", 20)?,
             abuseipdb_key: var("UNOMAIL_ABUSEIPDB_KEY"),
             abuseipdb_url: var("UNOMAIL_ABUSEIPDB_URL").unwrap_or_else(|| "https://api.abuseipdb.com".into()),
-            abuseipdb_threshold: parse("UNOMAIL_ABUSEIPDB_THRESHOLD", 90)?,
+            abuseipdb_threshold: 90,
             abuseipdb_report: parse_bool("UNOMAIL_ABUSEIPDB_REPORT", false)?,
-            outbound_relay: var("UNOMAIL_OUTBOUND_RELAY"),
+            outbound_relay: None,
             allow_private_destinations: parse("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
             identity_relay_allow_private: parse("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
             packages_allow_local: parse("UNOMAIL_PACKAGES_ALLOW_LOCAL", false)?,
-            outbound_require_tls: parse_bool("UNOMAIL_OUTBOUND_REQUIRE_TLS", false)?,
+            outbound_require_tls: false,
             queue_max_age_secs: parse("UNOMAIL_QUEUE_MAX_AGE", 5 * 24 * 3600)?,
-            outbound_max_messages_per_hour: parse("UNOMAIL_OUTBOUND_MAX_MESSAGES_PER_HOUR", 300)?,
-            outbound_max_recipients_per_hour: parse("UNOMAIL_OUTBOUND_MAX_RECIPIENTS_PER_HOUR", 1000)?,
+            outbound_max_messages_per_hour: 300,
+            outbound_max_recipients_per_hour: 1000,
             acme_directory: var("UNOMAIL_ACME_DIRECTORY")
                 .unwrap_or_else(|| "https://acme-v02.api.letsencrypt.org/directory".into()),
             session_ttl_secs: parse("UNOMAIL_SESSION_TTL", 12 * 3600)?,
+            legacy_settings: legacy_settings()?,
         };
         cfg.validate()?;
         Ok(cfg)
@@ -277,12 +329,6 @@ impl Config {
     fn validate(&self) -> anyhow::Result<()> {
         if !crate::util::is_valid_domain(&self.hostname) && self.hostname != "localhost" {
             bail!("UNOMAIL_HOSTNAME {:?} is not a valid hostname", self.hostname);
-        }
-        if self.max_message_size < 1024 {
-            bail!("UNOMAIL_MAX_MESSAGE_SIZE is too small");
-        }
-        if self.abuseipdb_threshold > 100 {
-            bail!("UNOMAIL_ABUSEIPDB_THRESHOLD must be between 0 and 100");
         }
         Ok(())
     }
@@ -353,6 +399,7 @@ impl Config {
             outbound_max_recipients_per_hour: 1000,
             acme_directory: "https://acme.invalid/directory".into(),
             session_ttl_secs: 3600,
+            legacy_settings: Vec::new(),
         }
     }
 }

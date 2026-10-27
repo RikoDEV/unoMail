@@ -76,7 +76,7 @@ and built-in spam and virus filtering. Written in Rust and React.
    in [`docker-compose.yml`](docker-compose.yml), then start it:
 
    ```sh
-   docker compose up -d --build
+   docker compose up -d
    docker compose logs unomail | grep -A3 "initial administrator"
    ```
 

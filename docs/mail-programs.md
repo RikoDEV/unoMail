@@ -39,7 +39,7 @@ IMAP4rev1 and IMAP4rev2. Extensions: `IDLE`, `MOVE`, `UIDPLUS`, `CONDSTORE`, `QR
 
 Extensions: `DSN`, `CHUNKING`, `SIZE`, `8BITMIME`, `SMTPUTF8`, `PIPELINING`, `REQUIRETLS`.
 
-- Outbound STARTTLS is opportunistic unless DANE, MTA-STS or `UNOMAIL_OUTBOUND_REQUIRE_TLS` requires it.
+- Outbound STARTTLS is opportunistic unless DANE, MTA-STS or the *Require verified TLS for outgoing mail* server setting requires it.
 - `REQUIRETLS` messages bounce if no verified TLS path exists.
 - `TLS-Required: No` delivers even when the receiver's TLS policy fails.
 - Mail forwarded through an alias is ARC-sealed.

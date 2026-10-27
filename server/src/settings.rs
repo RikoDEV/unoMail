@@ -1,7 +1,8 @@
 //! Server settings that administrators can change at runtime from the admin panel.
 //!
-//! Defaults come from the environment (`Config`); overrides are stored in the database and
-//! applied without a restart.
+//! Defaults are built in (`Config` holds them, so tests can change them); overrides are stored
+//! in the database and applied without a restart. These settings are not read from the
+//! environment: values left in their old variables are imported once (see [`load`]).
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -442,11 +443,14 @@ pub async fn save_overrides(db: &SqlitePool, overrides: &Map<String, Value>) -> 
     crate::db::set_setting(db, SETTING_KEY, &Value::Object(overrides.clone()).to_string()).await
 }
 
-/// Effective settings at startup: environment defaults plus stored overrides. Overrides that
-/// no longer validate (for example after an upgrade) are ignored rather than fatal.
+/// Effective settings at startup: defaults plus stored overrides. Overrides that no longer
+/// validate (for example after an upgrade) are ignored rather than fatal.
 pub async fn load(db: &SqlitePool, cfg: &Config) -> sqlx::Result<Runtime> {
     let defaults = Runtime::from_config(cfg);
-    let overrides = load_overrides(db).await?;
+    let mut overrides = load_overrides(db).await?;
+    if import_legacy(cfg, &mut overrides) {
+        save_overrides(db, &overrides).await?;
+    }
     if overrides.is_empty() {
         return Ok(defaults);
     }
@@ -454,6 +458,22 @@ pub async fn load(db: &SqlitePool, cfg: &Config) -> sqlx::Result<Runtime> {
         tracing::warn!(reason, "stored server settings are invalid, using defaults");
         defaults
     }))
+}
+
+/// Copies settings still given by their old environment variables into `overrides`, unless
+/// the admin panel already set them. Returns whether anything was added.
+fn import_legacy(cfg: &Config, overrides: &mut Map<String, Value>) -> bool {
+    let mut added = false;
+    for setting in &cfg.legacy_settings {
+        if overrides.contains_key(setting.key) {
+            tracing::warn!(variable = setting.env, "environment variable no longer read; the value in Server settings applies. Remove it");
+        } else {
+            tracing::warn!(variable = setting.env, "environment variable no longer read; its value was saved in Server settings. Remove it");
+            overrides.insert(setting.key.to_owned(), setting.value.clone());
+            added = true;
+        }
+    }
+    added
 }
 
 #[cfg(test)]
@@ -464,6 +484,21 @@ mod tests {
 
     fn defaults() -> Runtime {
         Runtime::from_config(&Config::for_tests(std::path::PathBuf::from(".")))
+    }
+
+    #[test]
+    fn old_environment_values_are_imported_once_without_replacing_panel_changes() {
+        let mut cfg = Config::for_tests(std::env::temp_dir());
+        cfg.legacy_settings = vec![
+            crate::config::LegacySetting { env: "UNOMAIL_GREYLIST", key: "greylist_enabled", value: json!(false) },
+            crate::config::LegacySetting { env: "UNOMAIL_MAX_RECIPIENTS", key: "max_recipients", value: json!(5) },
+        ];
+        let mut overrides = Map::new();
+        overrides.insert("max_recipients".into(), json!(50));
+        assert!(import_legacy(&cfg, &mut overrides));
+        assert_eq!(overrides["greylist_enabled"], json!(false));
+        assert_eq!(overrides["max_recipients"], json!(50), "the admin panel's value wins");
+        assert!(!import_legacy(&cfg, &mut overrides), "nothing new the second time");
     }
 
     #[test]
