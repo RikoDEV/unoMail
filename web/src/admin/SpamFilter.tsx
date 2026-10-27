@@ -114,11 +114,11 @@ function Rules({ overview, onSaved }: { overview: Overview; onSaved: () => Promi
           <TableBody>
             {visibleRules.map((rule) => (
               <TableRow key={rule.symbol} hover>
-                <TableCell>
+                <TableCell sx={{ minWidth: 240 }}>
                   <Typography variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
                     {rule.symbol}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
                     {rule.description}
                   </Typography>
                 </TableCell>

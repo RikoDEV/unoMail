@@ -260,7 +260,7 @@ export function DailyStatsChart() {
         </Typography>
         {showTable && (
           <Box sx={{ overflowX: 'auto', mt: 1 }}>
-            <Table size="small" aria-label={t('{{title}}, data', { title: t('Daily stats') })}>
+            <Table size="small" sx={{ '& thead th': { whiteSpace: 'nowrap' } }} aria-label={t('{{title}}, data', { title: t('Daily stats') })}>
               <TableHead>
                 <TableRow>
                   <TableCell>{t('Day')}</TableCell>

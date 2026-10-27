@@ -415,7 +415,7 @@ export function FiltersCard() {
           </Stack>
           <FormControlLabel control={<Switch checked={active} onChange={(e) => { setActive(e.target.checked); setSaved(''); }} />} label={t('Filters enabled')} />
           <Box>
-            <Tabs value={view} onChange={(_, next: 'rules' | 'script') => setView(next)} aria-label={t('Filter editor')} sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Tabs value={view} onChange={(_, next: 'rules' | 'script') => setView(next)} variant="scrollable" scrollButtons="auto" aria-label={t('Filter editor')} sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
               <Tab value="rules" label={t('Rules')} sx={{ textTransform: 'none' }} />
               <Tab value="script" label={t('Sieve script')} sx={{ textTransform: 'none' }} />
             </Tabs>

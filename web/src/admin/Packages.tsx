@@ -215,7 +215,7 @@ export function Packages() {
             <TableBody>
               {data!.map((pkg) => (
                 <TableRow key={pkg.id}>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 260 }}>
                     <Typography sx={{ fontWeight: 600 }}>{pkg.manifest.name}</Typography>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>{pkg.manifest.description}</Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary', overflowWrap: 'anywhere' }} component="div">

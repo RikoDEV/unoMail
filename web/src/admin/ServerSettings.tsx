@@ -367,7 +367,7 @@ export function ServerSettings() {
                   const parsed = draft !== undefined ? parse(field, draft) : {};
                   return (
                     <TableRow key={field.key}>
-                      <TableCell sx={{ width: '42%' }}>
+                      <TableCell sx={{ width: '42%', minWidth: 220 }}>
                         <Typography>{field.label}</Typography>
                         <Typography variant="caption" sx={{ color: 'text.secondary' }}>{field.help}</Typography>
                       </TableCell>
@@ -382,7 +382,7 @@ export function ServerSettings() {
                             select
                             value={String(value ?? '')}
                             onChange={(e) => void save(field.key, e.target.value)}
-                            sx={{ width: 340 }}
+                            sx={{ width: '100%', maxWidth: 340 }}
                             slotProps={{ select: { inputProps: { 'aria-label': field.label } } }}
                           >
                             {(field.optionsFrom === 'models' ? modelOptions : field.options!).map((option) => (
@@ -392,7 +392,7 @@ export function ServerSettings() {
                             ))}
                           </TextField>
                         ) : (
-                          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start', width: '100%' }}>
                             <TextField
                               value={draft ?? toText(field, value)}
                               onChange={(e) => setDrafts((d) => ({ ...d, [field.key]: e.target.value }))}
@@ -401,7 +401,7 @@ export function ServerSettings() {
                               type={field.kind === 'secret' ? 'password' : 'text'}
                               autoComplete={field.kind === 'secret' ? 'new-password' : 'off'}
                               placeholder={field.kind === 'secret' && data.secrets_set?.[field.key] ? '••••••••' : undefined}
-                              sx={{ width: field.kind === 'list' || field.kind === 'text' || field.kind === 'secret' ? 340 : 160 }}
+                              sx={{ flex: 1, minWidth: 0, maxWidth: field.kind === 'list' || field.kind === 'text' || field.kind === 'secret' ? 340 : 160 }}
                               slotProps={{ htmlInput: { 'aria-label': field.label } }}
                             />
                             <Button disabled={draft === undefined || Boolean(parsed.error)} onClick={() => void save(field.key, parsed.value)}>

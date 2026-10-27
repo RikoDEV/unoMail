@@ -180,7 +180,7 @@ function ListDetail({ id, onBack }: { id: number; onBack: () => void }) {
                     <TableRow key={item.token}>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTime(item.received_at)}</TableCell>
                       <TableCell>{item.sender}</TableCell>
-                      <TableCell>{item.subject || t('(no subject)')}<Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>{item.reason}</Typography></TableCell>
+                      <TableCell sx={{ minWidth: 220 }}>{item.subject || t('(no subject)')}<Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>{item.reason}</Typography></TableCell>
                       <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                         <Button size="small" onClick={() => void run(() => post(`/api/lists/${id}/held/${item.token}`, { action: 'approve' }), t('Sent to the list')).then(() => held.reload())}>{t('Approve')}</Button>
                         <Button size="small" color="error" onClick={() => void run(() => post(`/api/lists/${id}/held/${item.token}`, { action: 'discard' }), t('Discarded')).then(() => held.reload())}>{t('Discard')}</Button>

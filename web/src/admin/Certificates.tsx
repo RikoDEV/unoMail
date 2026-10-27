@@ -176,7 +176,7 @@ export function Certificates() {
         </Alert>
       ))}
 
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
         <Tab value="acme" label={t("Automated (Let's Encrypt)")} />
         <Tab value="custom" label={t('Custom certificate')} />
       </Tabs>

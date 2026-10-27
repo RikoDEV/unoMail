@@ -181,7 +181,8 @@ export function ScrollTable({ children, ...props }: TableProps) {
   });
   return (
     <TableContainer sx={{ maxWidth: '100%', overflowX: 'auto' }}>
-      <Table {...props}>{parts}</Table>
+      {/* Headings stay on one line; the table scrolls sideways instead. */}
+      <Table {...props} sx={[{ '& thead th': { whiteSpace: 'nowrap' } }, ...(Array.isArray(props.sx) ? props.sx : [props.sx])]}>{parts}</Table>
     </TableContainer>
   );
 }

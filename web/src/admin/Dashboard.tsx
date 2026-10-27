@@ -2,7 +2,7 @@ import { Alert, Box, Card, CardContent, Chip, Stack, TableBody, TableCell, Table
 import { useEffect, useState } from 'react';
 import { formatBytes, get } from '../lib/api';
 import { formatTime } from '../lib/api';
-import { PageHeader, StatusChip, useLoad, ScrollTable } from './common';
+import { PageHeader, rowWithDetail, StatusChip, useCompactTable, useLoad, ScrollTable } from './common';
 import { RemoteAddress } from './RemoteAddress';
 import { DailyStatsChart } from './DailyStatsChart';
 import { UpdateNotice, useUpdateCheck, VersionChip } from './UpdateCheck';
@@ -42,6 +42,7 @@ const replyColor = (code: number) => (code >= 500 ? 'error' : code >= 400 ? 'war
 
 /** Mail flow, who connected and what they were told, side by side on wide screens. */
 function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; activity: Activity | null }) {
+  const compact = useCompactTable();
   const countries = Object.fromEntries((activity?.remote_ips ?? []).map((entry) => [entry.ip, entry.country]));
   return (
     // Columns follow the room the section has (the admin menu takes part of the window):
@@ -125,22 +126,27 @@ function ActivityTables({ flow, activity }: { flow: DashboardData['last_24h']; a
                 <TableRow>
                   <TableCell>{t('Time')}</TableCell>
                   <TableCell>{t('Status')}</TableCell>
-                  <TableCell>{t('Message')}</TableCell>
+                  {!compact && <TableCell>{t('Message')}</TableCell>}
                   <TableCell>{t('Sent to')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {activity.replies.map((reply, index) => (
-                  <TableRow key={`${reply.ts}-${index}`}>
+                {activity.replies.map((reply, index) => rowWithDetail(
+                  `${reply.ts}-${index}`,
+                  compact,
+                  <>
                     <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(reply.ts * 1000).toLocaleTimeString(uiLocale())}</TableCell>
                     <TableCell>
                       <Chip size="small" label={reply.code} color={replyColor(reply.code)} />
                     </TableCell>
-                    <TableCell sx={{ overflowWrap: 'anywhere' }}>{reply.text}</TableCell>
+                    {!compact && <TableCell sx={{ minWidth: 220, overflowWrap: 'anywhere' }}>{reply.text}</TableCell>}
                     <TableCell>
                       <RemoteAddress address={reply.ip} country={countries[reply.ip]} />
                     </TableCell>
-                  </TableRow>
+                  </>,
+                  t('Message'),
+                  reply.text,
+                  3,
                 ))}
               </TableBody>
             </ScrollTable>

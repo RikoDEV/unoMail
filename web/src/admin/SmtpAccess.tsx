@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { del, formatTime, get, post, put } from '../lib/api';
-import { DialogButtons, PageHeader, routeBy, ScrollTable, useAction, useFormAction, useLoad, usePaged } from './common';
+import { DialogButtons, PageHeader, routeBy, rowWithDetail, ScrollTable, useAction, useCompactTable, useFormAction, useLoad, usePaged } from './common';
 import { RemoteAddress } from './RemoteAddress';
 
 import { t } from '../i18n';
@@ -137,6 +137,7 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
   const { data, error, reload } = useLoad(() => get<Rule[]>(`/api/smtp-access/rules?source=${source}`), [source]);
   const { run, feedback } = useAction();
   const [editing, setEditing] = useState<RuleForm | null>(null);
+  const compact = useCompactTable();
   const rules = data ?? [];
   const { visible: visibleRules, pager } = usePaged(rules, t('Rules per page:'));
   return (
@@ -169,13 +170,17 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
                 <TableCell align="right">{t('Priority')}</TableCell>
                 <TableCell align="right">{t('Hits')}</TableCell>
                 <TableCell>{t('Last seen')}</TableCell>
-                <TableCell>{t('Description')}</TableCell>
+                {!compact && <TableCell>{t('Description')}</TableCell>}
                 <TableCell />
               </TableRow>
             </TableHead>
             <TableBody>
-              {visibleRules.map((rule) => (
-                <TableRow key={rule.id} hover>
+              {visibleRules.map((rule) => {
+                const until = rule.expires_at ? t('Until {{expires_at}}', { expires_at: formatTime(rule.expires_at) }) : '';
+                return rowWithDetail(
+                  rule.id,
+                  compact,
+                  <>
                   <TableCell>
                     <RemoteAddress address={rule.network} rdns={rule.rdns} country={rule.country} />
                   </TableCell>
@@ -185,14 +190,12 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
                   <TableCell align="right">{rule.priority}</TableCell>
                   <TableCell align="right">{rule.hits}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{lastSeen(rule.last_seen)}</TableCell>
-                  <TableCell sx={{ overflowWrap: 'anywhere' }}>
-                    {rule.description}
-                    {rule.expires_at && (
-                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                        {t('Until {{expires_at}}', { expires_at: formatTime(rule.expires_at) })}
-                      </Typography>
-                    )}
-                  </TableCell>
+                  {!compact && (
+                    <TableCell sx={{ minWidth: 200, overflowWrap: 'anywhere' }}>
+                      {rule.description}
+                      {until && <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>{until}</Typography>}
+                    </TableCell>
+                  )}
                   <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
                     <Tooltip title={source === 'auto' ? t('Edit and keep permanently') : t('Edit')}>
                       <IconButton size="small" aria-label={t('Edit rule {{network}}', { network: rule.network })} onClick={() => setEditing({ id: rule.id, list: rule.list, network: rule.network, priority: String(rule.priority), description: rule.description })}>
@@ -205,8 +208,12 @@ function RulesTable({ source }: { source: 'user' | 'auto' }) {
                       </IconButton>
                     </Tooltip>
                   </TableCell>
-                </TableRow>
-              ))}
+                  </>,
+                  t('Description'),
+                  [rule.description, until].filter(Boolean).join(' · '),
+                  6,
+                );
+              })}
             </TableBody>
           </ScrollTable>
           {pager}
@@ -357,7 +364,7 @@ export function SmtpAccess() {
   return (
     <>
       <PageHeader title={t('SMTP blacklist and whitelist')} />
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 2 }}>
         <Tab value="user" label={t('User defined')} />
         <Tab value="auto" label={t('Automatically generated')} />
         <Tab value="karma" label={t('Karma records')} />

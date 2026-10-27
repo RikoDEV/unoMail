@@ -214,7 +214,7 @@ export function Logs() {
         )}
         <FormControlLabel control={<Switch checked={live} onChange={(e) => setLive(e.target.checked)} />} label={live && active.connected ? t('Live tail (connected)') : t('Live tail')} />
       </PageHeader>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 1 }}>
+      <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" scrollButtons="auto" sx={{ mb: 1 }}>
         <Tab value="delivery" label={t('Mail delivery')} />
         {isSuper && <Tab value="audit" label={t('Security audit')} />}
         {isSuper && <Tab value="smtp" label={t('SMTP replies')} />}

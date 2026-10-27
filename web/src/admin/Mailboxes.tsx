@@ -307,8 +307,8 @@ export function Mailboxes() {
             <TableCell>{t('Address')}</TableCell>
             <TableCell>{t('Name')}</TableCell>
             <TableCell>{t('Role')}</TableCell>
-            <TableCell sx={{ width: 220 }}>{t('Storage')}</TableCell>
-            <TableCell sx={{ width: 200 }}>
+            <TableCell sx={{ width: 220, minWidth: 180 }}>{t('Storage')}</TableCell>
+            <TableCell sx={{ width: 200, minWidth: 180 }}>
               <Tooltip title={t('Mail sent over the last hour against the hourly sending limits; going over them blocks the mailbox from sending')}>
                 <span>{t('Sending')}</span>
               </Tooltip>
@@ -320,7 +320,7 @@ export function Mailboxes() {
         <TableBody>
           {(data?.items ?? []).map((box) => (
             <TableRow key={box.id} hover sx={{ opacity: box.enabled ? 1 : 0.55 }}>
-              <TableCell>
+              <TableCell sx={{ minWidth: 240 }}>
                 {box.email}
                 {box.system && (
                   <Tooltip title={t('Kept by the server for every domain: it receives DMARC and TLS reports and mail to postmaster. Set a password to read it.')}>
@@ -331,8 +331,8 @@ export function Mailboxes() {
                 {box.outbound_blocked && <Chip size="small" color="error" label={t('sending blocked')} sx={{ ml: 1 }} />}
                 {!box.enabled && <Chip size="small" color="warning" variant="outlined" label={t('disabled')} sx={{ ml: 1 }} />}
               </TableCell>
-              <TableCell>{box.display_name}</TableCell>
-              <TableCell>{box.role.replace('_', ' ')}</TableCell>
+              <TableCell sx={{ minWidth: 140 }}>{box.display_name}</TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{box.role.replace('_', ' ')}</TableCell>
               <TableCell data-sort={box.used_bytes}>
                 <Typography variant="caption">
                   {t('{{used}} of {{quota}}', { used: formatBytes(box.used_bytes), quota: box.quota_bytes ? formatBytes(box.quota_bytes) : t('unlimited') })}
@@ -347,7 +347,7 @@ export function Mailboxes() {
                   </>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>
                 {[box.imap_enabled && 'IMAP', box.pop3_enabled && 'POP3', box.smtp_enabled && 'SMTP'].filter(Boolean).join(' · ')}
               </TableCell>
               <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
