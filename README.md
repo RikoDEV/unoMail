@@ -49,6 +49,7 @@ and built-in spam and virus filtering. Written in Rust and React.
   and previews for images, text and PDF attachments
 - OpenPGP and S/MIME, offline mode, Web Push notifications, several accounts at once
 - Passkeys, TOTP two-step sign-in, app passwords and OpenID Connect single sign-on
+- Thunderbird for Android set up by scanning a QR code, with the account password or an app password
 - 20 interface languages, themes with images and per-part styles, sandboxed plug-ins for the web client and the server; usable on small screens
 
 **Administration**
@@ -59,10 +60,12 @@ and built-in spam and virus filtering. Written in Rust and React.
 - TLS (RFC 8460) and DMARC aggregate reports, received and sent; feedback-loop complaints and
   optional authentication failure reports (ARF)
 - Mailing lists with moderation, webhooks, LDAP lookups, milters, skins and plug-ins
+- Server settings (limits, greylisting, blocklists, required TLS, relay) changed at runtime in the admin panel
 - AI model management for OpenAI-compatible providers, Anthropic, Gemini and local Ollama
 
 **Protection and operations**
 - Rspamd, ClamAV, greylisting, DNS blocklists, karma-based auto-blocking, and a personal Bayes filter for each user
+- AbuseIPDB lookups, and optional reports of password guessers, spam, phishing, protocol abuse and web vulnerability scanners
 - A built-in filter for deceptive links, sender reputation (network, provider, domain),
   penalised countries and networks, and spam traps
 - SMTP blacklist with user-defined, automatic and karma rules
@@ -76,7 +79,7 @@ and built-in spam and virus filtering. Written in Rust and React.
    in [`docker-compose.yml`](docker-compose.yml), then start it:
 
    ```sh
-   docker compose up -d
+   docker compose up -d   # pulls ghcr.io/rikodev/unomail:latest
    docker compose logs unomail | grep -A3 "initial administrator"
    ```
 
@@ -108,10 +111,10 @@ Prebuilt binaries (Linux x86_64 and ARM64) are attached to each [GitHub release]
 | Guide | Contents |
 | --- | --- |
 | [Deployment and upgrades](docs/deployment.md) | Host and DNS requirements, upgrading, troubleshooting |
-| [Configuration](docs/configuration.md) | Environment variables and runtime server settings |
+| [Configuration](docs/configuration.md) | Environment variables, and which settings moved to the admin panel |
 | [Web client](docs/web-client.md) | Everything the webmail, calendar and address book can do |
 | [Administration](docs/administration.md) | Dashboard, blacklist, spam filter, backups and restore, integrations, mailing lists, AI models, masked addresses |
-| [Mail programs](docs/mail-programs.md) | Passkeys and app passwords, IMAP/SMTP/JMAP details, CalDAV and CardDAV setup |
+| [Mail programs](docs/mail-programs.md) | Passkeys and app passwords, Thunderbird QR setup, IMAP/SMTP/JMAP details, CalDAV and CardDAV setup |
 | [Security model](docs/security-model.md) | How authentication, sessions, storage and transport are protected |
 | [Known limitations](docs/limitations.md) | What is not supported (yet) |
 | [API and command line](docs/api.md) | Masked-address API and server commands |
