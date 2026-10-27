@@ -196,6 +196,9 @@ impl Session {
         self.ok(&format!("{} POP3 server ready", self.app.cfg.hostname)).await?;
         loop {
             if self.errors >= MAX_ERRORS {
+                if self.account.is_none() {
+                    crate::security::reputation::report_abuse(&self.app, self.peer.ip(), crate::security::reputation::Abuse::ProtocolGarbage(crate::security::reputation::Service::Pop3));
+                }
                 return self.err("too many errors").await;
             }
             let line = match self.conn.read_line(MAX_LINE).await {

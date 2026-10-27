@@ -20,6 +20,9 @@ pub enum Action {
     Reject,
 }
 
+/// Content filter symbols that mean the message is phishing.
+pub const PHISHING_SYMBOLS: &[&str] = &["PHISHING", "PHISHED_OPENPHISH", "PHISHED_PHISHTANK", "PHISHED_GENERIC_SERVICE"];
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScanResult {
     pub action: Action,
@@ -83,7 +86,7 @@ pub struct ScanRequest<'a> {
 pub struct Unavailable;
 
 /// Scans a message. `Ok(None)` means no scanner is configured. An unreachable scanner is an
-/// error: callers defer the message (or accept it unscanned when `UNOMAIL_RSPAMD_FAIL_OPEN`
+/// error: callers defer the message (or accept it unscanned when the `rspamd_fail_open` setting
 /// is set) instead of silently skipping spam and virus checks.
 pub async fn scan(app: &App, req: ScanRequest<'_>) -> Result<Option<ScanResult>, Unavailable> {
     let Some(base) = app.cfg.rspamd_url.as_deref() else { return Ok(None) };

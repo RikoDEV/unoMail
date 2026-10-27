@@ -174,6 +174,8 @@ pub struct App {
     pub limiter: LoginLimiter,
     /// SMTP abuse waiting to be reported to AbuseIPDB.
     pub abuse: crate::security::reputation::AbuseQueue,
+    /// Recent requests for other software's web paths, per address.
+    pub web_probes: crate::security::web_probes::WebProbes,
     /// Passkey challenges waiting for an answer.
     pub challenges: crate::twofactor::Challenges,
     /// Single sign-on discovery, pending sign-ins and verified tokens.
@@ -275,6 +277,7 @@ impl App {
             tls,
             limiter,
             abuse,
+            web_probes: Default::default(),
             challenges: Default::default(),
             oauth: Default::default(),
             metrics,

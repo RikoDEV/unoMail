@@ -623,7 +623,15 @@ pub fn router(state: AppState) -> Router {
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .layer(middleware::from_fn(request_limits))
         .layer(middleware::from_fn_with_state(state.clone(), security_headers))
+        .layer(middleware::from_fn_with_state(state.clone(), web_probes))
         .with_state(state)
+}
+
+/// Counts requests for other software's paths (vulnerability scanners) by client address.
+async fn web_probes(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    let (parts, body) = request.into_parts();
+    crate::security::web_probes::note(&state, client_ip(&parts, &state), parts.uri.path());
+    next.run(Request::from_parts(parts, body)).await
 }
 
 /// Whether `host` is a name this server answers for.
@@ -666,6 +674,7 @@ pub fn redirect_router(state: AppState) -> Router {
         .route("/.well-known/acme-challenge/{token}", get(acme_challenge))
         .route("/health", get(system::health))
         .fallback(redirect)
+        .layer(middleware::from_fn_with_state(state.clone(), web_probes))
         .with_state(state)
 }
 

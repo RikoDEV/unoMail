@@ -329,7 +329,14 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
             Action::Reject => {
                 Metrics::inc(&app.metrics.spam_blocked);
                 if !msg.trusted_relay {
-                    let abuse = if scanner_found_virus { crate::security::reputation::Abuse::Virus } else { crate::security::reputation::Abuse::Spam };
+                    let phishing = scan.symbols.iter().any(|symbol| rspamd::PHISHING_SYMBOLS.contains(&symbol.as_str()));
+                    let abuse = if scanner_found_virus {
+                        crate::security::reputation::Abuse::Virus
+                    } else if phishing {
+                        crate::security::reputation::Abuse::Phishing
+                    } else {
+                        crate::security::reputation::Abuse::Spam
+                    };
                     crate::security::reputation::report_abuse(app, msg.ip, abuse);
                 }
                 // Tell the sender (and the log) when the reason is malware rather than spam.
@@ -373,6 +380,10 @@ pub async fn accept_inbound(app: &App, msg: Inbound<'_>) -> Outcome {
                 Metrics::inc(&app.metrics.spam_blocked);
                 tracing::info!(score = assessment.score, sender = msg.sender, "message filed as junk by the built-in filter");
                 junk = true;
+                // The model called it phishing and the sender is not verified: a clear case.
+                if verified_domain.is_none() && assessment.hits.iter().any(|hit| hit.name == crate::security::ai_check::TEST) {
+                    crate::security::reputation::report_abuse(app, msg.ip, crate::security::reputation::Abuse::Phishing);
+                }
             }
         }
         if rt.sender_reputation {

@@ -13,6 +13,7 @@ pub mod filter;
 pub mod outbound;
 pub mod reputation;
 pub mod rspamd;
+pub mod web_probes;
 
 /// Prepares a message that a user stores directly (IMAP APPEND, JMAP, mailbox import) rather
 /// than one that arrived by SMTP, which is checked on the way in.

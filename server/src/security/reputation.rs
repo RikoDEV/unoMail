@@ -226,8 +226,12 @@ pub async fn stored_status(app: &App) -> Option<Status> {
 /// AbuseIPDB accepts one report of an address per 15 minutes from each reporter.
 const REPORT_INTERVAL_SECS: i64 = 15 * 60;
 /// AbuseIPDB categories (https://www.abuseipdb.com/categories).
+const CATEGORY_PHISHING: u8 = 7;
 const CATEGORY_EMAIL_SPAM: u8 = 11;
+const CATEGORY_PORT_SCAN: u8 = 14;
 const CATEGORY_HACKING: u8 = 15;
+const CATEGORY_BAD_WEB_BOT: u8 = 19;
+const CATEGORY_WEB_APP_ATTACK: u8 = 21;
 const CATEGORY_BRUTE_FORCE: u8 = 18;
 /// Reports waiting for the next round; more are dropped until then.
 const MAX_PENDING_ABUSE: usize = 1000;
@@ -246,13 +250,31 @@ pub enum Abuse {
     DirectoryHarvest,
     /// Repeated attempts to relay to other domains through this server.
     RelayProbe,
+    /// Mail refused as phishing.
+    Phishing,
+    /// A connection dropped for too many invalid commands before any sign-in.
+    ProtocolGarbage(Service),
+    /// Requests for well-known vulnerable web paths that this server never had.
+    WebScan,
+}
+
+/// The mail service a connection was made to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Service {
+    Smtp,
+    Imap,
+    Pop3,
+    Sieve,
 }
 
 impl Abuse {
-    fn category(self) -> u8 {
+    fn categories(self) -> &'static [u8] {
         match self {
-            Abuse::RelayProbe => CATEGORY_HACKING,
-            _ => CATEGORY_EMAIL_SPAM,
+            Abuse::RelayProbe => &[CATEGORY_HACKING],
+            Abuse::Phishing => &[CATEGORY_PHISHING, CATEGORY_EMAIL_SPAM],
+            Abuse::ProtocolGarbage(_) => &[CATEGORY_PORT_SCAN, CATEGORY_HACKING],
+            Abuse::WebScan => &[CATEGORY_WEB_APP_ATTACK, CATEGORY_BAD_WEB_BOT],
+            _ => &[CATEGORY_EMAIL_SPAM],
         }
     }
 
@@ -263,6 +285,12 @@ impl Abuse {
             Abuse::Virus => "Mail carrying a virus",
             Abuse::DirectoryHarvest => "Directory harvest attack (many unknown recipients)",
             Abuse::RelayProbe => "Open relay probing (relaying to foreign domains refused)",
+            Abuse::Phishing => "Phishing mail refused",
+            Abuse::ProtocolGarbage(Service::Smtp) => "Invalid SMTP commands (connection dropped before sign-in)",
+            Abuse::ProtocolGarbage(Service::Imap) => "Invalid IMAP commands (connection dropped before sign-in)",
+            Abuse::ProtocolGarbage(Service::Pop3) => "Invalid POP3 commands (connection dropped before sign-in)",
+            Abuse::ProtocolGarbage(Service::Sieve) => "Invalid ManageSieve commands (connection dropped before sign-in)",
+            Abuse::WebScan => "Web vulnerability scanning (requests for paths like /wp-login.php or /.env)",
         }
     }
 }
@@ -349,7 +377,9 @@ pub async fn report_pending(app: &App, reported: &mut std::collections::HashMap<
         note(ip, CATEGORY_BRUTE_FORCE, format!("Password guessing ({protocol} sign-in)"));
     }
     for (ip, abuse) in app.abuse.take() {
-        note(ip, abuse.category(), abuse.describe().to_owned());
+        for &category in abuse.categories() {
+            note(ip, category, abuse.describe().to_owned());
+        }
     }
     for ip in order {
         if is_private(ip) || is_trusted_source(&app.cfg, ip) || reported.contains_key(&ip) {

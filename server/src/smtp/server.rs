@@ -226,6 +226,10 @@ impl Session {
         loop {
             if self.errors >= MAX_ERRORS {
                 self.karma(-5, "too many errors").await;
+                // Mail servers that once delivered or signed in are not reported for a bad session.
+                if self.mode != Mode::Lmtp && self.account.is_none() && self.messages == 0 && !self.whitelisted {
+                    reputation::report_abuse(&self.app, self.peer.ip(), reputation::Abuse::ProtocolGarbage(reputation::Service::Smtp));
+                }
                 return self.reply("421 4.7.0 Too many errors, closing connection").await;
             }
             let line = match self.conn.read_line(MAX_COMMAND_LINE).await {

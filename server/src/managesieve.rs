@@ -153,6 +153,9 @@ impl Session {
         self.send(&greeting).await?;
         loop {
             if self.errors >= MAX_ERRORS {
+                if self.account.is_none() {
+                    crate::security::reputation::report_abuse(&self.app, self.peer.ip(), crate::security::reputation::Abuse::ProtocolGarbage(crate::security::reputation::Service::Sieve));
+                }
                 return self.send("BYE \"too many errors\"\r\n").await;
             }
             self.conn.timeout = if self.account.is_some() { SESSION_TIMEOUT } else { LOGIN_TIMEOUT };

@@ -575,6 +575,9 @@ impl Session {
         self.line(&format!("* OK [CAPABILITY {capabilities}] {} IMAP4rev1 ready", self.app.cfg.hostname)).await?;
         loop {
             if self.errors >= MAX_ERRORS {
+                if self.account.is_none() {
+                    crate::security::reputation::report_abuse(&self.app, self.peer.ip(), crate::security::reputation::Abuse::ProtocolGarbage(crate::security::reputation::Service::Imap));
+                }
                 return self.line("* BYE too many errors").await;
             }
             self.conn.timeout = if self.account.is_some() { SESSION_TIMEOUT } else { LOGIN_TIMEOUT };
