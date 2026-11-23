@@ -1744,18 +1744,6 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "hashify"
-version = "0.2.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd1246c0e5493286aeb2dde35b1f4eb9c4ce00e628641210a5e553fc001a1f26"
-dependencies = [
- "indexmap",
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "hashify"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04a037b1848eada162d6534c206770180e6bfc0eaa97292250c3e7179d8b1f73"
@@ -2510,7 +2498,7 @@ dependencies = [
  "encodify",
  "getrandom 0.2.17",
  "getrandom 0.4.3",
- "hashify 0.3.2",
+ "hashify",
  "hickory-resolver",
  "idna",
  "mail-parser",
@@ -2541,7 +2529,7 @@ checksum = "3d4ea9311ef3ca6189aa85c5f984bd47b2f12079bcabae28917d900ab26c9ecc"
 dependencies = [
  "encodify",
  "encoding_rs",
- "hashify 0.3.2",
+ "hashify",
  "memchr",
  "simdutf8",
 ]
@@ -4917,7 +4905,7 @@ dependencies = [
  "der 0.7.10",
  "flate2",
  "futures-util",
- "hashify 0.2.9",
+ "hashify",
  "hex",
  "hickory-resolver",
  "http-body-util",
