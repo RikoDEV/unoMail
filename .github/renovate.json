@@ -4,6 +4,7 @@
   "labels": ["dependencies"],
   "minimumReleaseAge": "3 days",
   "osvVulnerabilityAlerts": true,
+  "pinDigests": true,
   "lockFileMaintenance": { "enabled": true, "schedule": ["at any time"] },
   "packageRules": [
     {

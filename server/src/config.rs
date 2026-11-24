@@ -311,7 +311,9 @@ impl Config {
             abuseipdb_report: parse_bool("UNOMAIL_ABUSEIPDB_REPORT", false)?,
             outbound_relay: None,
             allow_private_destinations: parse_bool("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
-            identity_relay_allow_private: parse_bool("UNOMAIL_ALLOW_PRIVATE_DESTINATIONS", false)?,
+            // Separate from the flag above: allowing outbound fetches to private addresses for a
+            // test must not also let users store plaintext SMTP credentials.
+            identity_relay_allow_private: parse_bool("UNOMAIL_IDENTITY_RELAY_ALLOW_PRIVATE", false)?,
             packages_allow_local: parse_bool("UNOMAIL_PACKAGES_ALLOW_LOCAL", false)?,
             outbound_require_tls: false,
             queue_max_age_secs: parse("UNOMAIL_QUEUE_MAX_AGE", 5 * 24 * 3600)?,

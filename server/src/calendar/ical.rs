@@ -1027,18 +1027,34 @@ pub fn update_todo(existing: &str, input: &TodoInput, zone: Tz) -> Result<String
 pub fn split_objects(text: &str) -> Result<Vec<String>, String> {
     let calendar = parse(text)?;
     let mut uids: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     for item in items(&calendar) {
         let uid = item.value("UID").map(str::trim).unwrap_or("").to_owned();
-        if !uid.is_empty() && !uids.contains(&uid) {
+        if !uid.is_empty() && seen.insert(uid.clone()) {
             uids.push(uid);
         }
     }
     let shell: Vec<Property> = calendar.props.iter().filter(|p| p.name != "METHOD").cloned().collect();
+    // Group the children by UID once: looking them up for every UID would be quadratic in the
+    // number of objects (an uploaded calendar or an invitation may carry many).
+    let mut timezones: Vec<(usize, Component)> = Vec::new();
+    let mut by_uid: std::collections::HashMap<String, Vec<(usize, Component)>> = std::collections::HashMap::new();
+    for (index, child) in calendar.children.iter().enumerate() {
+        if child.name == "VTIMEZONE" {
+            timezones.push((index, child.clone()));
+        } else if matches!(child.name.as_str(), "VEVENT" | "VTODO")
+            && let Some(uid) = child.value("UID").map(str::trim)
+        {
+            by_uid.entry(uid.to_owned()).or_default().push((index, child.clone()));
+        }
+    }
     Ok(uids
         .into_iter()
         .map(|uid| {
-            let children = calendar.children.iter().filter(|c| c.name == "VTIMEZONE" || ((c.name == "VEVENT" || c.name == "VTODO") && c.value("UID").map(str::trim) == Some(uid.as_str()))).cloned().collect();
-            Component { name: "VCALENDAR".into(), props: shell.clone(), children }.serialize()
+            let mut children: Vec<(usize, Component)> = timezones.clone();
+            children.extend(by_uid.get(&uid).cloned().unwrap_or_default());
+            children.sort_by_key(|(index, _)| *index);
+            Component { name: "VCALENDAR".into(), props: shell.clone(), children: children.into_iter().map(|(_, child)| child).collect() }.serialize()
         })
         .collect())
 }
@@ -1243,6 +1259,20 @@ BEGIN:VEVENT\nUID:b\nDTSTART:20261014T100000Z\nRRULE:FREQ=DAILY;COUNT=2\nEND:VEV
         assert_eq!(inspect(&objects[0]).unwrap().uid, "a");
         assert!(objects[1].matches("BEGIN:VEVENT").count() == 2 && objects[1].contains("BEGIN:VTIMEZONE") && !objects[1].contains("METHOD"));
         assert!(split_objects("BEGIN:VCALENDAR\nEND:VCALENDAR\n").unwrap().is_empty());
+    }
+
+    #[test]
+    fn split_objects_keeps_document_order_when_objects_are_interleaved() {
+        let export = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:a\nSUMMARY:a1\nEND:VEVENT\nBEGIN:VTODO\nUID:b\nSUMMARY:b1\nEND:VTODO\n\
+BEGIN:VTIMEZONE\nTZID:Europe/Warsaw\nEND:VTIMEZONE\nBEGIN:VEVENT\nUID:b\nRECURRENCE-ID:20261015T100000Z\nSUMMARY:b2\nEND:VEVENT\nBEGIN:VEVENT\nUID:a\nRECURRENCE-ID:20261016T100000Z\nSUMMARY:a2\nEND:VEVENT\nEND:VCALENDAR\n";
+        let objects = split_objects(export).unwrap();
+        assert_eq!(objects.len(), 2);
+        let position = |text: &str, needle: &str| text.find(needle).unwrap_or_else(|| panic!("{needle} missing in {text}"));
+        let (a, b) = (&objects[0], &objects[1]);
+        assert!(position(a, "SUMMARY:a1") < position(a, "BEGIN:VTIMEZONE") && position(a, "BEGIN:VTIMEZONE") < position(a, "SUMMARY:a2"));
+        assert!(!a.contains("b1") && !a.contains("b2"));
+        assert!(position(b, "SUMMARY:b1") < position(b, "BEGIN:VTIMEZONE") && position(b, "BEGIN:VTIMEZONE") < position(b, "SUMMARY:b2"));
+        assert!(!b.contains("a1") && !b.contains("a2"));
     }
 
     #[test]

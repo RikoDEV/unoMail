@@ -37,7 +37,8 @@ be changed at runtime, see [Runtime settings](#runtime-settings).
 | `UNOMAIL_COOKIE_SECURE` | `true` | `false` only for local development |
 | `UNOMAIL_TRUSTED_PROXIES` | – | CIDRs whose `X-Forwarded-For` is trusted. Behind a reverse proxy, list it here (also when it runs on the same host): otherwise every client counts as the proxy |
 | `UNOMAIL_TRUSTED_NETWORKS` | – | CIDRs of relays that skip sender checks and may read `/metrics` |
-| `UNOMAIL_ALLOW_PRIVATE_DESTINATIONS` | `false` | Allow private addresses for outbound HTTP and SMTP (testing only) |
+| `UNOMAIL_ALLOW_PRIVATE_DESTINATIONS` | `false` | Allow private addresses for outbound HTTP and SMTP (testing only). It does not affect identity relays |
+| `UNOMAIL_IDENTITY_RELAY_ALLOW_PRIVATE` | `false` | Let a sending identity use plaintext SMTP (`security: "none"`). Credentials then travel unencrypted; testing and closed networks only |
 | `UNOMAIL_PACKAGES_ALLOW_LOCAL` | `false` | Allow installing packages from local `file://` repositories (testing only) |
 
 > [!WARNING]

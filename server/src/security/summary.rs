@@ -107,7 +107,11 @@ pub fn summarize(raw: &[u8], hostname: &str) -> Summary {
         value.to_ascii_lowercase().starts_with("infected").then(|| value.split_once(char::is_whitespace).map_or("", |(_, name)| name).trim().chars().filter(|c| c.is_ascii_alphanumeric() || ".-_/".contains(*c)).take(100).collect())
     });
 
-    summary.trusted_source = headers.iter().any(|(name, _)| name.eq_ignore_ascii_case(TRUSTED_SOURCE_HEADER));
+    // The marker is written by the server alone, and only with the value `yes`; a header of
+    // that name added anywhere else (a Sieve script, an uploaded message) proves nothing.
+    summary.trusted_source = headers
+        .iter()
+        .any(|(name, value)| name.eq_ignore_ascii_case(TRUSTED_SOURCE_HEADER) && value.trim().eq_ignore_ascii_case("yes"));
 
     // The topmost Received line is the one this server wrote (if it received the message at all).
     if let Some((_, received)) = headers.iter().find(|(name, _)| name == "received") {
@@ -269,6 +273,13 @@ Authentication-Results: mail.example.com; dkim=none; spf=softfail smtp.mailfrom=
         // A relay's Received line further down is not ours.
         let relayed = message("Received: from a by relay.other.example with ESMTPS id 1; date\r\n");
         assert_eq!(summarize(&relayed, HOST).tls, None);
+        // The trusted-source marker counts only with the value the server writes; a bare or
+        // invented value (a Sieve script, an uploaded message) proves nothing.
+        assert!(summarize(&message(&trusted_source_header()), HOST).trusted_source);
+        assert!(!summarize(&message("X-Unomail-Trusted-Source: no\r\n"), HOST).trusted_source);
+        assert!(summarize(&message("X-Unomail-Trusted-Source: no\r\nX-Unomail-Trusted-Source: yes\r\n"), HOST).trusted_source,
+            "one copy the server wrote is enough");
+        assert!(!summarize(&message("X-Unomail-Trusted-Source:\r\n"), HOST).trusted_source);
     }
 
     #[test]

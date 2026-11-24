@@ -6,10 +6,87 @@
 
 use mail_parser::DateTime;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::net::IpAddr;
+use serde::de::{SeqAccess, Visitor};
+use std::{fmt, marker::PhantomData, net::IpAddr};
 
 pub mod generate;
 pub mod parse;
+
+/// Lists in a received report are read with a ceiling: a 10 MB JSON document can otherwise
+/// hold hundreds of thousands of entries, and each one costs a database query to store.
+const MAX_POLICIES: usize = 500;
+const MAX_FAILURE_DETAILS: usize = 2_000;
+
+fn read_bounded<'de, D, T>(deserializer: D, limit: usize) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    struct Bounded<T> {
+        limit: usize,
+        marker: PhantomData<T>,
+    }
+    impl<'de, T: Deserialize<'de>> Visitor<'de> for Bounded<T> {
+        type Value = Vec<T>;
+        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "a list of at most {} entries", self.limit)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut out = Vec::new();
+            while let Some(item) = seq.next_element::<T>()? {
+                if out.len() >= self.limit {
+                    return Err(serde::de::Error::custom("the report has too many entries"));
+                }
+                out.push(item);
+            }
+            Ok(out)
+        }
+    }
+    deserializer.deserialize_seq(Bounded { limit, marker: PhantomData })
+}
+
+fn bounded_policies<'de, D>(deserializer: D) -> Result<Vec<Policy>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    read_bounded(deserializer, MAX_POLICIES)
+}
+
+fn bounded_details<'de, D>(deserializer: D) -> Result<Vec<FailureDetails>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    read_bounded(deserializer, MAX_FAILURE_DETAILS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_FAILURE_DETAILS, MAX_POLICIES, TlsReport};
+    use serde_json::json;
+
+    fn report(policies: usize, details: usize) -> Vec<u8> {
+        let details = vec![json!({ "result-type": "other" }); details];
+        let policy = json!({
+            "policy": { "policy-type": "sts", "policy-string": [], "policy-domain": "example.org", "mx-host": [] },
+            "summary": { "total-successful-session-count": 1, "total-failure-session-count": 0 },
+            "failure-details": details,
+        });
+        serde_json::to_vec(&json!({
+            "organization-name": "reporter",
+            "date-range": { "start-datetime": "2026-01-01T00:00:00Z", "end-datetime": "2026-01-02T00:00:00Z" },
+            "report-id": "r",
+            "policies": vec![policy; policies],
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_report_larger_than_the_limits_is_refused_while_reading() {
+        assert!(TlsReport::parse_json(&report(MAX_POLICIES, 0)).is_ok());
+        assert!(TlsReport::parse_json(&report(MAX_POLICIES + 1, 0)).is_err());
+        assert!(TlsReport::parse_json(&report(1, MAX_FAILURE_DETAILS + 1)).is_err());
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub struct TlsReport {
@@ -30,6 +107,7 @@ pub struct TlsReport {
 
     #[serde(rename = "policies")]
     #[serde(default)]
+    #[serde(deserialize_with = "bounded_policies")]
     pub policies: Vec<Policy>,
 }
 
@@ -43,6 +121,7 @@ pub struct Policy {
 
     #[serde(rename = "failure-details")]
     #[serde(default)]
+    #[serde(deserialize_with = "bounded_details")]
     pub failure_details: Vec<FailureDetails>,
 }
 

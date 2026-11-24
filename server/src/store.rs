@@ -426,8 +426,8 @@ impl Store {
             .fetch_one(&mut *tx)
             .await?;
         sqlx::query(
-            "INSERT INTO changes (account_id, kind, object_id, thread_id, change)
-             SELECT account_id, 'email', id, thread_id, 'destroyed' FROM messages WHERE mailbox_id = ?",
+            "INSERT INTO changes (account_id, kind, object_id, thread_id, change, mailbox_id)
+             SELECT account_id, 'email', id, thread_id, 'destroyed', mailbox_id FROM messages WHERE mailbox_id = ?",
         )
         .bind(id)
         .execute(&mut *tx)
@@ -635,12 +635,27 @@ impl Store {
         thread_id: Option<i64>,
         change: &str,
     ) -> Result<(), StoreError> {
-        sqlx::query("INSERT INTO changes (account_id, kind, object_id, thread_id, change) VALUES (?, ?, ?, ?, ?)")
+        Self::record_in_mailbox(executor, account_id, kind, object_id, thread_id, change, None).await
+    }
+
+    /// [`record`], naming the mailbox an object was in. A destroyed message no longer has a row
+    /// to look its mailbox up, and a shared folder must not expose its owner's other mail.
+    async fn record_in_mailbox<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        account_id: i64,
+        kind: &str,
+        object_id: i64,
+        thread_id: Option<i64>,
+        change: &str,
+        mailbox_id: Option<i64>,
+    ) -> Result<(), StoreError> {
+        sqlx::query("INSERT INTO changes (account_id, kind, object_id, thread_id, change, mailbox_id) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(account_id)
             .bind(kind)
             .bind(object_id)
             .bind(thread_id)
             .bind(change)
+            .bind(mailbox_id)
             .execute(executor)
             .await?;
         Ok(())
@@ -650,9 +665,9 @@ impl Store {
     ///
     /// Returns `None` when the log no longer reaches back to `since` (the client must refetch).
     ///
-    /// Mailboxes shared with the account are included. Of a message that left them nothing can
-    /// be told apart from its owner's other mail, so a destroyed id may name one never seen here,
-    /// which clients ignore; one moved out of a shared mailbox shows at the next full fetch.
+    /// Mailboxes shared with the account are included. A destroyed message carries the mailbox
+    /// it was in, so a shared folder never reveals its owner's other mail; rows written before
+    /// that column existed are treated as private.
     pub async fn changes_since(&self, account_id: i64, kind: &str, since: i64, max: usize) -> Result<Option<ChangeSet>, StoreError> {
         let floor: i64 = crate::db::get_setting(&self.db, "changes.floor").await?.and_then(|v| v.parse().ok()).unwrap_or(0);
         let current = self.account_state(account_id).await?;
@@ -663,7 +678,7 @@ impl Store {
             "SELECT c.id, c.object_id, c.thread_id, c.change FROM changes c
               WHERE c.kind = ?2 AND c.id > ?3 AND (c.account_id = ?1 OR (c.account_id IN ({SHARED_OWNERS}) AND CASE
                     WHEN c.kind = 'mailbox' THEN c.object_id IN ({SHARED_MAILBOXES})
-                    WHEN c.change = 'destroyed' THEN 1
+                    WHEN c.change = 'destroyed' THEN COALESCE(c.mailbox_id, -1) IN ({SHARED_MAILBOXES})
                     ELSE (SELECT m.mailbox_id FROM messages m WHERE m.id = c.object_id) IN ({SHARED_MAILBOXES}) END))
               ORDER BY c.id"
         )))
@@ -911,7 +926,7 @@ impl Store {
             .bind(modseq)
             .execute(&mut *tx)
             .await?;
-        Self::record(&mut *tx, account_id, "email", id, Some(msg.thread_id), "destroyed").await?;
+        Self::record_in_mailbox(&mut *tx, account_id, "email", id, Some(msg.thread_id), "destroyed", Some(msg.mailbox_id)).await?;
         Self::record(&mut *tx, account_id, "mailbox", msg.mailbox_id, None, "updated").await?;
         sqlx::query("DELETE FROM messages WHERE id = ?").bind(id).execute(&mut *tx).await?;
         // Its id may be used again: nothing may stay waiting to send "this message".
@@ -1093,6 +1108,32 @@ In-Reply-To: <one@example.com>\r\n\r\nReply\r\n";
         assert_eq!(store.messages_in(inbox.id).await.unwrap().len(), 1);
         let left: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM blobs WHERE hash = ?").bind(sha256_hex(&other)).fetch_one(&store.db).await.unwrap();
         assert_eq!(left, 0, "a refused message leaves nothing on disk");
+    }
+
+    #[tokio::test]
+    async fn a_shared_folder_does_not_reveal_other_destroyed_mail() {
+        let (_dir, store, owner) = setup().await;
+        sqlx::query(
+            "INSERT INTO accounts (domain_id, local_part, email, password_hash, created_at)
+             VALUES (1, 'eve', 'eve@example.org', 'x', 0)",
+        )
+        .execute(&store.db)
+        .await
+        .unwrap();
+        let inbox = store.mailbox_by_name(owner, "INBOX").await.unwrap().unwrap();
+        let trash = store.mailbox_by_role(owner, "trash").await.unwrap().unwrap();
+        // Eve may read INBOX, nothing else.
+        sqlx::query("INSERT INTO mailbox_acl (mailbox_id, grantee_id, rights) VALUES (?, 2, 'lr')").bind(inbox.id).execute(&store.db).await.unwrap();
+        let shared = store.append(owner, inbox.id, RAW, Flags::default(), None).await.unwrap();
+        let private = store.append(owner, trash.id, b"Subject: private\r\n\r\nx", Flags::default(), None).await.unwrap();
+        let start = store.account_state(2).await.unwrap();
+
+        store.delete_message(owner, shared.id).await.unwrap();
+        store.delete_message(owner, private.id).await.unwrap();
+
+        let seen = store.changes_since(2, "email", start, 100).await.unwrap().unwrap();
+        assert_eq!(seen.destroyed, vec![shared.id], "only the shared folder's deletion is Eve's business");
+        assert!(!seen.destroyed.contains(&private.id));
     }
 
     #[tokio::test]

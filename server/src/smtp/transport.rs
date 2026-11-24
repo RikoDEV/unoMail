@@ -590,9 +590,13 @@ pub async fn ingest_mail(app: &App, raw: &[u8]) {
 /// Stores a received report: one row per policy, for domains hosted here.
 pub async fn store_received(app: &App, report: &crate::mail_report::tlsrpt::TlsReport) {
     let reporter = report.organization_name.clone().unwrap_or_default().chars().filter(|c| !c.is_control()).take(200).collect::<String>();
+    // The hosted domains are read once; a report may name hundreds of policies and only the
+    // matching ones are stored.
+    let hosted: std::collections::HashSet<String> =
+        sqlx::query_scalar::<_, String>("SELECT name FROM domains WHERE enabled = 1").fetch_all(&app.db).await.unwrap_or_default().into_iter().map(|name| name.to_ascii_lowercase()).collect();
     for policy in &report.policies {
         let domain = policy.policy.policy_domain.to_ascii_lowercase();
-        if !crate::smtp::delivery::is_local_domain(app, &domain).await.unwrap_or(false) {
+        if !hosted.contains(&domain) {
             continue;
         }
         let kind = serde_json::to_value(policy.policy.policy_type).ok().and_then(|v| v.as_str().map(str::to_owned)).unwrap_or_default();

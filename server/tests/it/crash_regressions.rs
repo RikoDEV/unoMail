@@ -217,3 +217,43 @@ async fn changes_in_a_shared_mailbox_reach_those_it_is_shared_with() {
     let changes = env.app.store.changes_since(carol.id, "email", after, 100).await.unwrap().unwrap();
     assert!(changes.created.is_empty(), "{changes:?}");
 }
+
+/// A LIST pattern is answered in one pass: it cannot be used to occupy a worker by making the
+/// matcher explore every split point of a long mailbox name.
+#[tokio::test]
+async fn a_pathological_list_pattern_does_not_hold_the_connection() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(imap::serve(env.app.clone(), listener));
+    let mut client = Client::connect_tls(addr).await;
+    client.read_line().await;
+
+    async fn until(client: &mut Client, tag: &str) -> String {
+        let mut out = String::new();
+        loop {
+            let line = client.read_line().await.expect("connection closed");
+            out.push_str(&line);
+            out.push('\n');
+            if line.starts_with(&format!("{tag} ")) {
+                return out;
+            }
+        }
+    }
+
+    client.send_raw(format!("a1 LOGIN bob@example.org \"{}\"\r\n", common::PASSWORD).as_bytes()).await;
+    assert!(until(&mut client, "a1").await.contains("a1 OK"));
+    let name = "a".repeat(200);
+    client.send_raw(format!("a2 CREATE {name}\r\n").as_bytes()).await;
+    assert!(until(&mut client, "a2").await.contains("a2 OK"));
+
+    let started = std::time::Instant::now();
+    client.send_raw(b"a3 LIST \"\" \"*a*a*a*a*a*a*a*b\"\r\n").await;
+    let reply = tokio::time::timeout(std::time::Duration::from_secs(5), until(&mut client, "a3"))
+        .await
+        .expect("LIST must answer instead of backtracking");
+    assert!(reply.contains("a3 OK"), "{reply}");
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
+}

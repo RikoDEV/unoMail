@@ -21,6 +21,9 @@ use std::net::IpAddr;
 use std::str::FromStr;
 
 impl Report {
+    /// Enforced while parsing (not after), so a crafted document cannot allocate first.
+    pub const MAX_RECORDS_PARSED: usize = 50_000;
+
     pub fn parse_rfc5322(report: &[u8], max_size: usize) -> Result<Self, Error> {
         let message = MessageParser::new()
             .parse(report)
@@ -94,6 +97,11 @@ impl Report {
                         ReportType::Zip => {
                             let mut archive = zip::ZipArchive::new(Cursor::new(report))
                                 .map_err(|err| Error::UncompressError(err.to_string()))?;
+                            // A report archive holds one (sometimes a few) XML files; a zip with
+                            // thousands of entries is not one and must not be walked.
+                            if archive.len() > 64 {
+                                return Err(Error::UncompressError("too many files in the archive".into()));
+                            }
                             for i in 0..archive.len() {
                                 match archive.by_index(i) {
                                     Ok(mut file) => {
@@ -154,6 +162,11 @@ impl Report {
                         policy_published = PolicyPublished::parse(&mut reader, &mut buf)?.into();
                     },
                     b"record" => {
+                        // Stop before building a vector the store would refuse anyway: a small
+                        // XML document can hold hundreds of thousands of empty records.
+                        if record.len() >= Self::MAX_RECORDS_PARSED {
+                            return Err(format!("the report has more than {} records", Self::MAX_RECORDS_PARSED));
+                        }
                         record.push(Record::parse(&mut reader, &mut buf)?);
                     },
                     b"extensions" => {

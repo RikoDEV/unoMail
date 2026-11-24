@@ -6,6 +6,8 @@ import { readLocal, writeLocal } from '../lib/storage';// Offline cache: the fol
 const PREFIX = 'unomail.cache.';
 const MAX_THREADS = 30;
 const MAX_LISTS = 20;
+/// A persistent copy this old is dropped: mail metadata should not stay on a device for good.
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface Stored {
   mailboxes?: unknown;
@@ -14,6 +16,8 @@ interface Stored {
   /** Insertion order, oldest first, for eviction. */
   threadOrder: string[];
   listOrder: string[];
+  /** When the copy was written; older copies are removed rather than shown. */
+  savedAt?: number;
 }
 
 let accountKey = '';
@@ -25,6 +29,22 @@ export function setPersistentCache(enabled: boolean) {
     memory.clear();
     removePersistedMail();
   }
+}
+
+function isFresh(savedAt: unknown) {
+  return typeof savedAt === 'number' && Date.now() - savedAt <= MAX_AGE_MS;
+}
+
+/** Removes cached copies that expired, including those of accounts never opened again. */
+function sweepExpired() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(PREFIX) || key.startsWith(`${PREFIX}outbox.`)) continue;
+      let savedAt: unknown;
+      try { savedAt = JSON.parse(localStorage.getItem(key) ?? 'null')?.savedAt; } catch { /* corrupt: drop */ }
+      if (!isFresh(savedAt)) localStorage.removeItem(key);
+    }
+  } catch { /* storage may be disabled */ }
 }
 
 function removePersistedMail() {
@@ -39,6 +59,8 @@ export function openCache(account: string) {
   if (!persistentCacheEnabled()) {
     // Remove old automatically-persisted mail, while leaving deliberate outbox work alone.
     removePersistedMail();
+  } else {
+    sweepExpired();
   }
   accountKey = PREFIX + account;
 }
@@ -52,7 +74,14 @@ function read(): Stored {
   if (!persistentCacheEnabled()) return memory.get(accountKey) ?? { lists: {}, threads: {}, threadOrder: [], listOrder: [] };
   try {
     const parsed = JSON.parse(localStorage.getItem(accountKey) ?? 'null');
-    if (parsed && typeof parsed === 'object' && parsed.lists && parsed.threads) return parsed as Stored;
+    if (parsed && typeof parsed === 'object' && parsed.lists && parsed.threads) {
+      // A copy without a stamp predates the expiry: it counts as expired.
+      if (!isFresh(parsed.savedAt)) {
+        localStorage.removeItem(accountKey);
+      } else {
+        return parsed as Stored;
+      }
+    }
   } catch {
     // Corrupt or unavailable storage: start empty.
   }
@@ -60,14 +89,14 @@ function read(): Stored {
 }
 
 function write(data: Stored) {
-    if (!accountKey) return;
-    if (!persistentCacheEnabled()) { memory.set(accountKey, data); return; }
+  if (!accountKey) return;
+  if (!persistentCacheEnabled()) { memory.set(accountKey, data); return; }
   try {
-    localStorage.setItem(accountKey, JSON.stringify(data));
+    localStorage.setItem(accountKey, JSON.stringify({ ...data, savedAt: Date.now() }));
   } catch {
     // Storage full or disabled: drop the bulky part and try once more, then give up silently.
     try {
-      localStorage.setItem(accountKey, JSON.stringify({ ...data, threads: {}, threadOrder: [] }));
+      localStorage.setItem(accountKey, JSON.stringify({ ...data, threads: {}, threadOrder: [], savedAt: Date.now() }));
     } catch {
       /* the cache is an optimisation only */
     }

@@ -191,3 +191,38 @@ async fn the_administrator_can_turn_the_filter_off() {
     assert_eq!(filter_state(&api).await["enabled"], false);
     assert_eq!(unomail::bayes::judge(&env.app, 1, "x@y.example", spam(1).as_bytes()).await, unomail::bayes::Verdict::Undecided);
 }
+
+#[tokio::test]
+async fn a_stored_message_cannot_forge_the_filters_reputation_keys() {
+    let env = TestEnv::start().await;
+    env.domain("example.org").await;
+    env.account("bob@example.org").await;
+    let api = Api::logged_in(&env, "bob@example.org").await;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(unomail::imap::serve(env.app.clone(), listener));
+    let mut imap = Client::connect_tls(addr).await;
+    imap.read_line().await;
+    assert!(tagged(&mut imap, "a1", &format!("LOGIN bob@example.org \"{PASSWORD}\"")).await.contains("a1 OK"));
+
+    // What an IMAP client could upload: a filter header it wrote itself, naming a victim.
+    let raw = "From: attacker@example.org\r\nTo: bob@example.org\r\nSubject: forged\r\n\
+               Message-ID: <forged@example.org>\r\nX-Unomail-Filter: score=0.0; keys=domain:victim.example\r\n\r\nbody\r\n";
+    assert!(tagged(&mut imap, "a2", &format!("APPEND INBOX {{{}+}}\r\n{}", raw.len(), raw)).await.contains("a2 OK"));
+    assert!(tagged(&mut imap, "a3", "SELECT INBOX").await.contains("a3 OK"));
+    assert!(tagged(&mut imap, "a4", "STORE 1 +FLAGS ($Junk)").await.contains("a4 OK"));
+
+    // The message did reach the filter (one spam learnt) ...
+    wait_for(&api, 1, 0).await;
+    // ... but the keys it claimed never reach the shared reputation table.
+    for _ in 0..40 {
+        let row: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sender_reputation WHERE key = ?")
+            .bind("domain:victim.example")
+            .fetch_one(&env.app.db)
+            .await
+            .unwrap();
+        assert_eq!(row, 0, "a stored message may not teach a reputation key");
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+}

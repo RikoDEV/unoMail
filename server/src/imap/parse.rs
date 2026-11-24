@@ -195,17 +195,34 @@ pub fn nstring(out: &mut Vec<u8>, data: Option<&[u8]>) {
 }
 
 /// Matches a mailbox name against a LIST pattern (`*` matches anything, `%` anything but `/`).
+///
+/// The search is memoised over (pattern position, name position), so a pattern can neither
+/// backtrack exponentially nor be used to occupy a worker for minutes.
 pub fn list_match(pattern: &str, name: &str) -> bool {
-    fn inner(p: &[u8], n: &[u8]) -> bool {
-        match p.split_first() {
-            None => n.is_empty(),
-            Some((b'*', rest)) => (0..=n.len()).any(|i| inner(rest, &n[i..])),
-            Some((b'%', rest)) => (0..=n.len()).take_while(|i| *i == 0 || n[i - 1] != b'/').any(|i| inner(rest, &n[i..])),
-            Some((c, rest)) => n.split_first().is_some_and(|(d, n_rest)| c == d && inner(rest, n_rest)),
+    fn go(p: &[u8], n: &[u8], pi: usize, ni: usize, seen: &mut [u8], width: usize) -> bool {
+        let slot = pi * width + ni;
+        match seen[slot] {
+            1 => return false,
+            2 => return true,
+            _ => {}
         }
+        let matched = match p.get(pi) {
+            None => ni == n.len(),
+            Some(b'*') => (ni..=n.len()).any(|i| go(p, n, pi + 1, i, seen, width)),
+            Some(b'%') => (ni..=n.len()).take_while(|i| *i == ni || n[i - 1] != b'/').any(|i| go(p, n, pi + 1, i, seen, width)),
+            Some(c) => n.get(ni).is_some_and(|d| d == c) && go(p, n, pi + 1, ni + 1, seen, width),
+        };
+        seen[slot] = if matched { 2 } else { 1 };
+        matched
     }
-    // Patterns are client supplied; bound the work of the backtracking matcher.
-    pattern.len() <= 200 && pattern.bytes().filter(|b| matches!(b, b'*' | b'%')).count() <= 8 && inner(pattern.as_bytes(), name.as_bytes())
+    // Patterns are client supplied; bound the work of the matcher.
+    if pattern.len() > 200 || pattern.bytes().filter(|b| matches!(b, b'*' | b'%')).count() > 8 {
+        return false;
+    }
+    let (p, n) = (pattern.as_bytes(), name.as_bytes());
+    let width = n.len() + 1;
+    let mut seen = vec![0u8; (p.len() + 1) * width];
+    go(p, n, 0, 0, &mut seen, width)
 }
 
 /// Formats UIDs as a compact sequence set, e.g. `1:3,7`. The input must be sorted.
@@ -444,5 +461,24 @@ mod tests {
         assert!(!list_match("INBOX", "INBOX2"));
         assert!(list_match("*jects", "Work/Projects"));
         assert!(!list_match(&"*a".repeat(50), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"), "pathological patterns are refused");
+        // A pattern built to explore every split point is answered in one pass, not by
+        // backtracking through every combination.
+        let started = std::time::Instant::now();
+        assert!(!list_match("*a*a*a*a*a*a*a*b", &"a".repeat(200)));
+        assert!(started.elapsed() < std::time::Duration::from_millis(100), "{:?}", started.elapsed());
+        // The memoised matcher agrees with a plain interpretation on small inputs.
+        fn naive(p: &[u8], n: &[u8]) -> bool {
+            match p.split_first() {
+                None => n.is_empty(),
+                Some((b'*', rest)) => (0..=n.len()).any(|i| naive(rest, &n[i..])),
+                Some((b'%', rest)) => (0..=n.len()).take_while(|i| *i == 0 || n[i - 1] != b'/').any(|i| naive(rest, &n[i..])),
+                Some((c, rest)) => n.split_first().is_some_and(|(d, n_rest)| c == d && naive(rest, n_rest)),
+            }
+        }
+        for pattern in ["*", "%", "a*", "*b", "a%b", "**", "*/*", "INBOX/%", "*x*y*"] {
+            for name in ["", "a", "ab", "a/b", "INBOX", "INBOX/x", "xyz"] {
+                assert_eq!(list_match(pattern, name), naive(pattern.as_bytes(), name.as_bytes()), "{pattern} {name}");
+            }
+        }
     }
 }

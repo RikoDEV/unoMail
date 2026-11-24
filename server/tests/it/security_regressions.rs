@@ -78,3 +78,18 @@ async fn idle_connections_from_a_few_networks_cannot_lock_out_mail_clients() {
     assert!(client.is_some(), "a new network must still get a connection");
     assert_eq!(live(&held), MAX_MAIL_CONNECTIONS - 1, "one connection of a full network made room");
 }
+
+#[tokio::test]
+async fn stored_mail_cannot_forge_the_filters_reputation_keys() {
+    let env = TestEnv::start().await;
+    // What an IMAP APPEND or a JMAP import could carry: a header only the server may write.
+    let raw = b"From: attacker@example.org\r\nX-Unomail-Filter: score=0.0; keys=domain:victim.example\r\nSubject: hi\r\nMessage-ID: <forged@example.org>\r\n\r\nbody\r\n";
+    let stored = unomail::security::admit_stored(&env.app, raw, false).unwrap();
+    let text = String::from_utf8_lossy(&stored).to_ascii_lowercase();
+    assert!(!text.contains("x-unomail-filter"), "the forged header must not survive storage: {text}");
+    assert!(text.contains("message-id: <forged@example.org>"), "the rest of the message is kept");
+    // And even if a client somehow made one survive, only the key shapes the scorer writes are
+    // learnt.
+    assert!(unomail::security::filter::keys_in(b"X-Unomail-Filter: keys=domain:victim.example,provider:x\r\n\r\n")
+        == ["domain:victim.example"]);
+}

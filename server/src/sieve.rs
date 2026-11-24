@@ -40,7 +40,7 @@ pub const SUPPORTED: &[&str] = &[
 pub const ADDRESS_BOOK: &str = "urn:ietf:params:sieve:addrbook:default";
 /// Headers a script may neither add nor delete (RFC 5293 section 6): the trace of the message
 /// and the server's own verdicts.
-const PROTECTED_HEADERS: &[&str] = &["received", "return-path", "delivered-to", "x-unomail-filter", "x-virus-status", "dkim-signature", "authentication-results", "arc-seal", "arc-message-signature", "arc-authentication-results"];
+const PROTECTED_HEADERS: &[&str] = &["received", "return-path", "delivered-to", "x-unomail-filter", "x-unomail-trusted-source", "x-virus-status", "dkim-signature", "authentication-results", "arc-seal", "arc-message-signature", "arc-authentication-results"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SieveError {
@@ -1421,6 +1421,9 @@ struct Runtime<'a> {
     variables: HashMap<String, String>,
     /// `${0}`..`${9}` from the most recent successful :matches or :regex test.
     captures: std::cell::RefCell<Vec<String>>,
+    /// Compiled patterns, so a message with many headers does not recompile the script's
+    /// regex for each value. Bounded; cleared when it grows past a script's worth.
+    regexes: std::cell::RefCell<HashMap<(String, bool), Option<regex::Regex>>>,
     /// Duplicate-tracking keys seen or recorded during this run.
     duplicate_keys: std::cell::RefCell<Vec<(String, i64)>>,
     included_once: Vec<String>,
@@ -1666,6 +1669,27 @@ fn compare(how: Match, cmp: Comparator, value: &str, key: &str) -> Option<Vec<St
     }
 }
 
+/// [`compare`] with the compiled pattern remembered for the rest of the run: a message can
+/// carry very many copies of one header, and compiling the same regex for each of them would
+/// turn one delivery into thousands of compilations.
+fn compare_cached(cache: &std::cell::RefCell<HashMap<(String, bool), Option<regex::Regex>>>, how: Match, cmp: Comparator, value: &str, key: &str) -> Option<Vec<String>> {
+    if !matches!(how, Match::Matches | Match::Regex) {
+        return compare(how, cmp, value, key);
+    }
+    let pattern = if how == Match::Matches { glob_to_regex(key) } else { key.to_owned() };
+    let insensitive = cmp != Comparator::Octet;
+    let regex = {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= 256 {
+            cache.clear();
+        }
+        cache.entry((pattern.clone(), insensitive)).or_insert_with(|| build_regex_with(&pattern, insensitive).ok()).clone()
+    }?;
+    let value: String = value.chars().take(8192).collect();
+    let found = regex.captures(&value)?;
+    Some(found.iter().take(10).map(|group| group.map_or(String::new(), |m| m.as_str().to_owned())).collect())
+}
+
 fn address_part(address: &str, part: Part) -> Option<String> {
     let (local, domain) = match address.rsplit_once('@') {
         Some((local, domain)) => (local, Some(domain)),
@@ -1887,7 +1911,7 @@ impl Runtime<'_> {
                 for key in keys {
                     let key = self.expand(key);
                     for value in &values {
-                        if let Some(captures) = compare(spec.how, spec.cmp, value, &key) {
+                        if let Some(captures) = compare_cached(&self.regexes, spec.how, spec.cmp, value, &key) {
                             if !captures.is_empty() {
                                 *self.captures.borrow_mut() = captures;
                             }
@@ -2335,6 +2359,7 @@ impl Script {
             outcome: Outcome::default(),
             variables: HashMap::new(),
             captures: std::cell::RefCell::new(Vec::new()),
+            regexes: std::cell::RefCell::new(HashMap::new()),
             duplicate_keys: std::cell::RefCell::new(Vec::new()),
             included_once: Vec::new(),
             expand_variables: self.variables,
@@ -2692,7 +2717,7 @@ Content-Type: multipart/mixed; boundary=\"b\"\r\n\r\n--b\r\nContent-Type: text/p
         assert!(String::from_utf8(one).unwrap().contains("X-Trace: two") );
         let by_value = run_in(r#"require "editheader"; deleteheader :contains "X-Trace" "tw";"#, MIXED, &c).edited.unwrap();
         assert!(String::from_utf8(by_value).unwrap().contains("X-Trace: one\r\nMIME"));
-        for protected in ["Received", "X-Unomail-Filter", "DKIM-Signature", "Return-Path"] {
+        for protected in ["Received", "X-Unomail-Filter", "X-Unomail-Trusted-Source", "DKIM-Signature", "Return-Path"] {
             assert!(compile(&format!(r#"require "editheader"; deleteheader "{protected}";"#)).is_err(), "{protected}");
             assert!(compile(&format!(r#"require "editheader"; addheader "{protected}" "x";"#)).is_err(), "{protected}");
         }

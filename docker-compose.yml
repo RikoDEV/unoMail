@@ -49,6 +49,7 @@ services:
       # Relay, required TLS and hourly limits: Administration > Server settings
       # UNOMAIL_QUEUE_MAX_AGE: "432000"                 # give up on delivery after, seconds
       # UNOMAIL_ALLOW_PRIVATE_DESTINATIONS: "false"     # tests and closed networks only
+      # UNOMAIL_IDENTITY_RELAY_ALLOW_PRIVATE: "false"   # lets a sending identity use plaintext SMTP
 
       # --- Storage ---
       # UNOMAIL_ENCRYPT_MAIL: "false"                   # encrypt stored mail with <data>/blob.key

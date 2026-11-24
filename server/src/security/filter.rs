@@ -373,7 +373,7 @@ async fn reputation_tests(app: &App, assessment: &mut Assessment) {
 
 /// Records a verdict on every key of a message.
 pub async fn learn(app: &App, keys: &[String], spam: bool) {
-    for key in keys.iter().take(8) {
+    for key in keys.iter().filter(|key| valid_key(key)).take(8) {
         let result = sqlx::query(
             "INSERT INTO sender_reputation (key, ham, spam, updated_at) VALUES (?, ?, ?, ?)
              ON CONFLICT(key) DO UPDATE SET ham = ham + excluded.ham, spam = spam + excluded.spam, updated_at = excluded.updated_at",
@@ -390,6 +390,20 @@ pub async fn learn(app: &App, keys: &[String], spam: bool) {
     }
 }
 
+/// The reputation keys the server can store: a network, an autonomous system or a domain.
+///
+/// Anything else is refused, so a header that was not written here cannot smuggle made-up
+/// keys into the shared reputation table.
+pub fn valid_key(key: &str) -> bool {
+    let Some((kind, value)) = key.split_once(':') else { return false };
+    match kind {
+        "ip" => value.parse::<ipnet::IpNet>().is_ok() || value.parse::<std::net::IpAddr>().is_ok(),
+        "asn" => !value.is_empty() && value.len() <= 10 && value.bytes().all(|b| b.is_ascii_digit()),
+        "domain" => crate::util::normalize_domain(value).is_some_and(|normalized| normalized == value),
+        _ => false,
+    }
+}
+
 /// The reputation keys recorded in a stored message's filter header, which the server wrote
 /// itself (any copy that came from outside is removed on arrival).
 pub fn keys_in(raw: &[u8]) -> Vec<String> {
@@ -400,7 +414,7 @@ pub fn keys_in(raw: &[u8]) -> Vec<String> {
         .lines()
         .find(|line| line.to_ascii_lowercase().starts_with(&prefix))
         .and_then(|line| line.split("keys=").nth(1))
-        .map(|keys| keys.trim().split(',').filter(|k| !k.is_empty()).take(8).map(str::to_owned).collect())
+        .map(|keys| keys.trim().split(',').filter(|k| valid_key(k)).take(8).map(str::to_owned).collect())
         .unwrap_or_default()
 }
 
@@ -410,6 +424,13 @@ pub async fn learn_from_message(app: &App, raw: &[u8], spam: bool) {
     if !keys.is_empty() {
         learn(app, &keys, spam).await;
     }
+}
+
+/// Whether the message carries a filter header at all (a cheap scan, before copying it).
+pub fn has_header(raw: &[u8]) -> bool {
+    let end = crate::security::authn::find_header_end(raw).min(raw.len());
+    let prefix = format!("{}:", HEADER.to_ascii_lowercase());
+    String::from_utf8_lossy(&raw[..end]).to_ascii_lowercase().contains(&prefix)
 }
 
 /// Drops filter headers that arrived with a message, so only the server's own is trusted.
@@ -594,5 +615,22 @@ mod tests {
         assert_eq!(keys_in(raw.as_bytes()), ["ip:192.0.2.0/24", "asn:64500"]);
         let forged = b"Subject: x\r\nX-Unomail-Filter: score=0.0; keys=domain:bank.example\r\n\tcontinued\r\nTo: y\r\n\r\nX-Unomail-Filter: in the body stays\r\n";
         assert_eq!(&*strip_header(forged), b"Subject: x\r\nTo: y\r\n\r\nX-Unomail-Filter: in the body stays\r\n".as_slice());
+    }
+
+    #[test]
+    fn only_the_keys_the_scorer_writes_are_accepted() {
+        for good in ["ip:192.0.2.0/24", "ip:2001:db8:1::/48", "asn:64500", "domain:example.org"] {
+            assert!(valid_key(good), "{good}");
+        }
+        for bad in [
+            "", "domain:", "domain:Bank.Example", "domain:two domains.example", "ip:not-an-address",
+            "ip:192.0.2.0/24,domain:victim.example", "asn:-1", "asn:64,500", "asn:99999999999999", "provider:evil",
+            "domain:victim.example\r", "domain:victim.example\nX-Evil: 1",
+        ] {
+            assert!(!valid_key(bad), "{bad:?}");
+        }
+        // A header written by a client keeps only the keys the server could have produced.
+        let forged = b"X-Unomail-Filter: score=0.0; keys=domain:victim.example,evil:1,asn:64500\r\nSubject: x\r\n\r\n";
+        assert_eq!(keys_in(forged), ["domain:victim.example", "asn:64500"]);
     }
 }
