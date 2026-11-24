@@ -8,7 +8,8 @@
     "labels": ["dependencies", "security"],
     "schedule": ["at any time"],
     "minimumReleaseAge": null,
-    "groupName": null
+    "groupName": null,
+    "dependencyDashboardApproval": false
   },
   "pinDigests": true,
   "lockFileMaintenance": { "enabled": true, "schedule": ["at any time"] },
@@ -35,7 +36,13 @@
       "description": "Below 1.0 a minor release is breaking (0.13 -> 0.14), so it gets a pull request of its own instead of joining a group",
       "matchCurrentVersion": "/^0[.]/",
       "matchUpdateTypes": ["minor"],
-      "groupName": null
+      "groupName": null,
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Major releases wait for approval on the Dependency Dashboard instead of arriving as pull requests that cannot build. Security fixes are not held back: they come from vulnerabilityAlerts.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
     },
     {
       "description": "The RustCrypto stack has to move together: rsa 0.9 (latest stable) is built on der 0.7, digest 0.10 (sha1/sha2 0.10) and rand_core 0.6 (rand 0.8), and cms 0.2 / x509-cert 0.2 share those types. Upgrade them in one change once rsa 0.10 and cms 0.3 are released.",

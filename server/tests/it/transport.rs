@@ -94,11 +94,15 @@ async fn reports_from_other_servers_are_stored_for_the_domains_they_concern() {
     env.domain("other.example").await;
     env.account("postmaster@example.org").await;
     env.account_with("admin@example.org", unomail::auth::Role::SuperAdmin, None).await;
+    // Yesterday: the list only shows recent reports, so a fixed date would age out of this test.
+    let yesterday = (std::time::SystemTime::now() - std::time::Duration::from_secs(86_400)).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    let date = |t: i64| chrono::DateTime::from_timestamp(t, 0).unwrap().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let (day_start, day_end) = (date(yesterday - yesterday % 86_400), date(yesterday - yesterday % 86_400 + 86_399));
     let report = json!({
         "organization-name": "Big Mail Inc.",
-        "date-range": { "start-datetime": "2026-10-13T00:00:00Z", "end-datetime": "2026-10-13T23:59:59Z" },
+        "date-range": { "start-datetime": day_start, "end-datetime": day_end },
         "contact-info": "smtp-tls-reporting@bigmail.example",
-        "report-id": "2026-10-13T00:00:00Z_example.org",
+        "report-id": format!("{day_start}_example.org"),
         "policies": [{
             "policy": { "policy-type": "sts", "policy-string": ["version: STSv1", "mode: testing", "mx: mail.test.example", "max_age: 86400"], "policy-domain": "example.org", "mx-host": ["mail.test.example"] },
             "summary": { "total-successful-session-count": 120, "total-failure-session-count": 2 },
