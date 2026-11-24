@@ -75,14 +75,14 @@ impl<'x> Feedback<'x> {
                     }
                 },
                 b"Auth-Failure" => {
-                    f.auth_failure = match hashify::tiny_map_ignore_case!(txt_value.as_bytes(),
+                    f.auth_failure = match hashify::map_ignore_case!(txt_value.as_bytes(), AuthFailureType,
                         b"adsp" => AuthFailureType::Adsp,
                         b"bodyhash" => AuthFailureType::BodyHash,
                         b"revoked" => AuthFailureType::Revoked,
                         b"signature" => AuthFailureType::Signature,
                         b"spf" => AuthFailureType::Spf,
                         b"dmarc" => AuthFailureType::Dmarc,
-                    ) {
+                    ).copied() {
                         Some(auth_failure) => auth_failure,
                         None => continue,
                     };
@@ -112,26 +112,26 @@ impl<'x> Feedback<'x> {
                     f.dkim_selector_dns = Some(txt_value.into());
                 },
                 b"Delivery-Result" => {
-                    f.delivery_result = match hashify::tiny_map_ignore_case!(txt_value.as_bytes(),
+                    f.delivery_result = match hashify::map_ignore_case!(txt_value.as_bytes(), DeliveryResult,
                         b"delivered" => DeliveryResult::Delivered,
                         b"spam" => DeliveryResult::Spam,
                         b"policy" => DeliveryResult::Policy,
                         b"reject" => DeliveryResult::Reject,
                         b"other" => DeliveryResult::Other,
-                    ) {
+                    ).copied() {
                         Some(delivery_result) => delivery_result,
                         None => continue,
                     };
                 },
                 b"Feedback-Type" => {
-                    f.feedback_type = match hashify::tiny_map_ignore_case!(txt_value.as_bytes(),
+                    f.feedback_type = match hashify::map_ignore_case!(txt_value.as_bytes(), FeedbackType,
                         b"abuse" => FeedbackType::Abuse,
                         b"auth-failure" => FeedbackType::AuthFailure,
                         b"fraud" => FeedbackType::Fraud,
                         b"not-spam" => FeedbackType::NotSpam,
                         b"other" => FeedbackType::Other,
                         b"virus" => FeedbackType::Virus,
-                    ) {
+                    ).copied() {
                         Some(feedback_type) => feedback_type,
                         None => continue,
                     };
