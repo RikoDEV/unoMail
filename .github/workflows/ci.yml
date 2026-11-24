@@ -179,8 +179,11 @@ jobs:
           retention-days: 7
 
   audit:
-    # Known-vulnerability scan of every dependency tree.
+    # Known-vulnerability scan of every dependency tree. It fails on main and on the weekly run,
+    # where it is the alarm. On a pull request it only reports: an advisory published against
+    # what main already uses would otherwise block every change, the fixes included.
     runs-on: ubuntu-latest
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2
